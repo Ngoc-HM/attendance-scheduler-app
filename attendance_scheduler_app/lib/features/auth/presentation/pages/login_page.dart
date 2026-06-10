@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/router/app_router.dart';
+import '../../../../i18n/app_localizations.dart';
 import '../providers/auth_provider.dart';
 
 /// F-02 — login screen.
@@ -35,6 +36,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
     final state = ref.watch(authControllerProvider);
     return Scaffold(
       body: Center(
@@ -50,24 +52,24 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      'Attendance & Scheduler',
+                      l.appTitle,
                       style: Theme.of(context).textTheme.titleLarge,
                     ),
                     const SizedBox(height: 24),
                     TextFormField(
                       controller: _username,
-                      decoration: const InputDecoration(labelText: 'Username'),
+                      decoration: InputDecoration(labelText: l.username),
                       validator: (v) =>
-                          (v == null || v.isEmpty) ? 'Required' : null,
+                          (v == null || v.isEmpty) ? l.fieldRequired : null,
                     ),
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: _password,
                       obscureText: true,
-                      decoration: const InputDecoration(labelText: 'Password'),
+                      decoration: InputDecoration(labelText: l.password),
                       onFieldSubmitted: (_) => _submit(),
                       validator: (v) =>
-                          (v == null || v.isEmpty) ? 'Required' : null,
+                          (v == null || v.isEmpty) ? l.fieldRequired : null,
                     ),
                     if (state.error != null)
                       Padding(
@@ -90,7 +92,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                                 width: 18,
                                 child: CircularProgressIndicator(strokeWidth: 2),
                               )
-                            : const Text('Log in'),
+                            : Text(l.login),
                       ),
                     ),
                   ],

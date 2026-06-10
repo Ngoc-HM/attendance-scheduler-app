@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
+import 'i18n/app_localizations.dart';
 
 /// Root widget. Wires routing, theming and localization.
 class AttendanceSchedulerApp extends ConsumerWidget {
@@ -20,9 +21,9 @@ class AttendanceSchedulerApp extends ConsumerWidget {
       darkTheme: AppTheme.dark,
       routerConfig: router,
       // English primary, Vietnamese optional (spec §2).
-      supportedLocales: const [Locale('en'), Locale('vi')],
+      supportedLocales: AppLocalizations.supportedLocales,
       localizationsDelegates: const [
-        // After `flutter gen-l10n`, also add: AppLocalizations.delegate
+        AppLocalizations.delegate,
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,

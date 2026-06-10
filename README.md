@@ -36,7 +36,7 @@ Flutter (Windows desktop)  ──HTTPS/JWT──►  FastAPI  ──►  Postgre
 - `core/` config, network (Dio), router (go_router), theme, secure storage
 - `features/<x>/{data,domain,presentation}` — `auth` is the full template;
   `schedule`, `flights`, `leaves`, `attendance`, `reports`, `users` follow it
-- `shared/` reusable widgets · `l10n/` English + Vietnamese ARB files
+- `shared/` reusable widgets · `i18n/` English + Vietnamese strings (custom `AppLocalizations`, no codegen)
 
 ## Feature map (spec §4)
 | Module | Features | Backend | Frontend |
@@ -62,7 +62,6 @@ docker compose up --build         # Postgres + API, or run uvicorn directly
 ```bash
 cd attendance_scheduler_app
 flutter pub get
-flutter gen-l10n                  # generates AppLocalizations from lib/l10n
 flutter run -d windows --dart-define=API_BASE_URL=http://localhost:8000/api/v1
 ```
 

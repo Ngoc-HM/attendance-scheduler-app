@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/router/app_router.dart';
+import '../../../../i18n/app_localizations.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 
 /// Navigation shell for the authenticated area (left navigation rail + content).
@@ -12,22 +13,33 @@ class HomeShell extends ConsumerWidget {
   final String location;
   final Widget child;
 
-  static const List<({String path, IconData icon, String label})> _destinations = [
-    (path: AppRoute.schedule, icon: Icons.calendar_month, label: 'Schedule'),
-    (path: AppRoute.flights, icon: Icons.flight_takeoff, label: 'Flights'),
-    (path: AppRoute.leaves, icon: Icons.beach_access, label: 'Leaves'),
-    (path: AppRoute.attendance, icon: Icons.fact_check, label: 'Attendance'),
-    (path: AppRoute.reports, icon: Icons.bar_chart, label: 'Reports'),
-    (path: AppRoute.users, icon: Icons.people, label: 'Users'),
+  /// Destination paths — index-aligned with the labels built in [build].
+  static const List<String> _paths = [
+    AppRoute.schedule,
+    AppRoute.flights,
+    AppRoute.leaves,
+    AppRoute.attendance,
+    AppRoute.reports,
+    AppRoute.users,
   ];
 
   int get _selectedIndex {
-    final index = _destinations.indexWhere((d) => location.startsWith(d.path));
+    final index = _paths.indexWhere((p) => location.startsWith(p));
     return index < 0 ? 0 : index;
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l = AppLocalizations.of(context);
+    final items = <({IconData icon, String label})>[
+      (icon: Icons.calendar_month, label: l.navSchedule),
+      (icon: Icons.flight_takeoff, label: l.navFlights),
+      (icon: Icons.beach_access, label: l.navLeaves),
+      (icon: Icons.fact_check, label: l.navAttendance),
+      (icon: Icons.bar_chart, label: l.navReports),
+      (icon: Icons.people, label: l.navUsers),
+    ];
+
     return Scaffold(
       body: Row(
         children: [
@@ -35,7 +47,7 @@ class HomeShell extends ConsumerWidget {
             extended: true,
             minExtendedWidth: 180,
             selectedIndex: _selectedIndex,
-            onDestinationSelected: (i) => context.go(_destinations[i].path),
+            onDestinationSelected: (i) => context.go(_paths[i]),
             leading: const Padding(
               padding: EdgeInsets.symmetric(vertical: 16),
               child: Icon(Icons.flight_class, size: 32),
@@ -46,7 +58,7 @@ class HomeShell extends ConsumerWidget {
                 child: Padding(
                   padding: const EdgeInsets.only(bottom: 16),
                   child: IconButton(
-                    tooltip: 'Log out',
+                    tooltip: l.logout,
                     icon: const Icon(Icons.logout),
                     onPressed: () async {
                       await ref.read(authControllerProvider.notifier).logout();
@@ -57,10 +69,10 @@ class HomeShell extends ConsumerWidget {
               ),
             ),
             destinations: [
-              for (final d in _destinations)
+              for (final it in items)
                 NavigationRailDestination(
-                  icon: Icon(d.icon),
-                  label: Text(d.label),
+                  icon: Icon(it.icon),
+                  label: Text(it.label),
                 ),
             ],
           ),

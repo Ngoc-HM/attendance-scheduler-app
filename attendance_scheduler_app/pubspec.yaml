@@ -35,8 +35,6 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
-  # Enables `flutter gen-l10n` from the ARB files in lib/l10n (see l10n.yaml).
-  generate: true
 
   # NOTE: add these when implementing the related features:
   #   file_picker   -> F-04 Excel flight import
