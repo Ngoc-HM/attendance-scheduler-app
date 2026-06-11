@@ -8,6 +8,8 @@ class ApiEndpoints {
   static const String register = '/auth/register';
   static const String me = '/users/me';
   static const String users = '/users';
+  static String userById(int id) => '/users/$id';
+  static String approveUser(int id) => '/auth/users/$id/approve';
 
   // Flights (F-04)
   static const String flightDays = '/flights/days';

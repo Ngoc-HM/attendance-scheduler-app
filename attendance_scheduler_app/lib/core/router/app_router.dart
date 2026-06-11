@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../features/attendance/presentation/pages/attendance_page.dart';
 import '../../features/auth/presentation/pages/login_page.dart';
+import '../../features/auth/presentation/pages/register_page.dart';
 import '../../features/flights/presentation/pages/flights_page.dart';
 import '../../features/home/presentation/pages/home_shell.dart';
 import '../../features/leaves/presentation/pages/leaves_page.dart';
@@ -19,6 +20,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoute.login,
         builder: (context, state) => const LoginPage(),
+      ),
+      GoRoute(
+        path: AppRoute.register,
+        builder: (context, state) => const RegisterPage(),
       ),
       ShellRoute(
         builder: (context, state, child) =>
@@ -59,6 +64,7 @@ class AppRoute {
   const AppRoute._();
 
   static const String login = '/login';
+  static const String register = '/register';
   static const String schedule = '/schedule';
   static const String flights = '/flights';
   static const String leaves = '/leaves';

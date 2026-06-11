@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/repositories/auth_repository_impl.dart';
@@ -14,7 +15,12 @@ class AuthState {
 
   bool get isAuthenticated => user != null;
 
-  AuthState copyWith({User? user, bool? isLoading, String? error, bool clearError = false}) {
+  AuthState copyWith({
+    User? user,
+    bool? isLoading,
+    String? error,
+    bool clearError = false,
+  }) {
     return AuthState(
       user: user ?? this.user,
       isLoading: isLoading ?? this.isLoading,
@@ -34,10 +40,27 @@ class AuthController extends StateNotifier<AuthState> {
       final user = await _repository.login(username, password);
       state = AuthState(user: user);
       return true;
-    } catch (_) {
-      state = const AuthState(error: 'Login failed. Check your credentials.');
+    } on DioException catch (e) {
+      state = AuthState(error: _messageFor(e));
+      return false;
+    } catch (e) {
+      // Surface the real error type/message to make non-network failures
+      // (e.g. secure-storage / Keychain) diagnosable instead of opaque.
+      state = AuthState(error: 'Login failed: ${e.runtimeType}: $e');
       return false;
     }
+  }
+
+  /// Distinguish "wrong credentials" from "can't reach the server" so the user
+  /// can tell a 401 apart from a backend/network problem.
+  String _messageFor(DioException e) {
+    if (e.response?.statusCode == 401) {
+      return 'Incorrect username or password.';
+    }
+    if (e.response == null) {
+      return 'Cannot reach the server. Is the backend running on the configured URL?';
+    }
+    return 'Login failed (HTTP ${e.response?.statusCode}).';
   }
 
   Future<void> logout() async {
@@ -46,7 +69,6 @@ class AuthController extends StateNotifier<AuthState> {
   }
 }
 
-final authControllerProvider =
-    StateNotifierProvider<AuthController, AuthState>(
+final authControllerProvider = StateNotifierProvider<AuthController, AuthState>(
   (ref) => AuthController(ref.watch(authRepositoryProvider)),
 );

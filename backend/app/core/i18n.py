@@ -14,12 +14,16 @@ MESSAGES: dict[str, dict[str, str]] = {
         "auth.invalid_credentials": "Incorrect username or password.",
         "auth.inactive_user": "User account is not active.",
         "auth.admin_required": "Admin privileges are required.",
+        "user.not_found": "User not found.",
+        "user.username_taken": "That username is already taken.",
         "schedule.infeasible": "No valid schedule could be found.",
     },
     "vi": {
         "auth.invalid_credentials": "Sai tên đăng nhập hoặc mật khẩu.",
         "auth.inactive_user": "Tài khoản chưa được kích hoạt.",
         "auth.admin_required": "Yêu cầu quyền quản trị.",
+        "user.not_found": "Không tìm thấy người dùng.",
+        "user.username_taken": "Tên đăng nhập đã tồn tại.",
         "schedule.infeasible": "Không tìm được lời giải hợp lệ cho lịch.",
     },
 }

@@ -16,12 +16,14 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1.router import api_router
+from app.core.bootstrap import run_startup_bootstrap
 from app.core.config import settings
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):  # noqa: ANN201
-    # Startup hooks (warm caches, etc.) go here. Schema = Alembic migrations.
+    # Startup: ensure tables (dev) and the seed admin exist (F-01).
+    run_startup_bootstrap()
     yield
     # Shutdown hooks go here.
 

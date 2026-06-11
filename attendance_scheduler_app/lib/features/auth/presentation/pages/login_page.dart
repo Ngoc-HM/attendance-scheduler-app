@@ -3,10 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/router/app_router.dart';
+import '../../../../design_system/design_system.dart';
 import '../../../../i18n/app_localizations.dart';
 import '../providers/auth_provider.dart';
 
-/// F-02 — login screen.
 class LoginPage extends ConsumerStatefulWidget {
   const LoginPage({super.key});
 
@@ -38,70 +38,21 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
     final state = ref.watch(authControllerProvider);
-    return Scaffold(
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 380),
-          child: Card(
-            margin: const EdgeInsets.all(24),
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      l.appTitle,
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                    const SizedBox(height: 24),
-                    TextFormField(
-                      controller: _username,
-                      decoration: InputDecoration(labelText: l.username),
-                      validator: (v) =>
-                          (v == null || v.isEmpty) ? l.fieldRequired : null,
-                    ),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      controller: _password,
-                      obscureText: true,
-                      decoration: InputDecoration(labelText: l.password),
-                      onFieldSubmitted: (_) => _submit(),
-                      validator: (v) =>
-                          (v == null || v.isEmpty) ? l.fieldRequired : null,
-                    ),
-                    if (state.error != null)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 12),
-                        child: Text(
-                          state.error!,
-                          style: TextStyle(
-                            color: Theme.of(context).colorScheme.error,
-                          ),
-                        ),
-                      ),
-                    const SizedBox(height: 20),
-                    SizedBox(
-                      width: double.infinity,
-                      child: FilledButton(
-                        onPressed: state.isLoading ? null : _submit,
-                        child: state.isLoading
-                            ? const SizedBox(
-                                height: 18,
-                                width: 18,
-                                child: CircularProgressIndicator(strokeWidth: 2),
-                              )
-                            : Text(l.login),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
+    return DsLoginView(
+      formKey: _formKey,
+      usernameController: _username,
+      passwordController: _password,
+      title: l.login,
+      subtitle: 'Use your approved account to continue.',
+      usernameLabel: l.username,
+      passwordLabel: l.password,
+      loginLabel: l.login,
+      registerLabel: l.createAccount,
+      requiredMessage: l.fieldRequired,
+      error: state.error,
+      loading: state.isLoading,
+      onLogin: _submit,
+      onRegister: () => context.go(AppRoute.register),
     );
   }
 }

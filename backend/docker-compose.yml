@@ -18,7 +18,7 @@ services:
     depends_on:
       - db
     ports:
-      - "8000:8000"
+      - "8035:8035"
     environment:
       DATABASE_URL: postgresql+psycopg2://postgres:postgres@db:5432/attendance
 

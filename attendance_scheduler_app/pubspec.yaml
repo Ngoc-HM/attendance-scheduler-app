@@ -27,14 +27,27 @@ dependencies:
   equatable: ^2.0.5
   # Date formatting / i18n
   intl: any
+  # Runtime config from a .env file (API base URL → backend)
+  flutter_dotenv: ^5.1.0
+  liquid_glass_bar: ^0.1.1
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
 
+dependency_overrides:
+  # Upstream is Impeller-only. Keep liquid_glass_bar and replace its renderer
+  # with the cross-platform compatibility implementation for Windows/web.
+  liquid_glass_renderer:
+    path: packages/liquid_glass_renderer_compat
+
 flutter:
   uses-material-design: true
+
+  # Runtime config — loaded by flutter_dotenv at startup (API base URL).
+  assets:
+    - .env
 
   # NOTE: add these when implementing the related features:
   #   file_picker   -> F-04 Excel flight import

@@ -10,6 +10,19 @@ extension UserRoleX on UserRole {
       this == UserRole.a2 ||
       this == UserRole.a3 ||
       this == UserRole.a4;
+
+  /// Backend enum value (e.g. `UserRole.a1` → `'A1'`, `UserRole.m` → `'M'`).
+  String get apiValue => name.toUpperCase();
+
+  /// Human label for dropdowns / tables.
+  String get label => switch (this) {
+    UserRole.m => 'M — Admin',
+    UserRole.t => 'T — Flexible',
+    UserRole.a1 => 'A1 — Fixed',
+    UserRole.a2 => 'A2 — Fixed',
+    UserRole.a3 => 'A3 — Fixed',
+    UserRole.a4 => 'A4 — Fixed',
+  };
 }
 
 /// Domain entity for an authenticated user.
