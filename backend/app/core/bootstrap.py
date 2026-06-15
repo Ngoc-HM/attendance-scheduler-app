@@ -22,6 +22,7 @@ from app.core.database import Base, SessionLocal, engine
 from app.core.security import get_password_hash
 from app.models.enums import Role, UserStatus
 from app.models.user import User
+from app.services.user_service import next_user_code
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +63,13 @@ def ensure_database_exists() -> None:
 
 
 def create_tables_if_enabled() -> None:
-    """Create all tables in dev (``AUTO_CREATE_TABLES``). No-op otherwise."""
+    """Create all tables in dev (``AUTO_CREATE_TABLES``). No-op otherwise.
+
+    FRESH-DB CONVENIENCE ONLY: ``create_all`` never ALTERs existing tables.
+    Schema changes are managed with Alembic (``alembic upgrade head``);
+    existing databases created this way are stamped at the baseline revision
+    (see ``alembic/versions/0001_baseline.py``).
+    """
     if settings.AUTO_CREATE_TABLES:
         Base.metadata.create_all(bind=engine)
         logger.info("Database tables ensured (AUTO_CREATE_TABLES=on).")
@@ -84,6 +91,7 @@ def ensure_first_admin(db: Session) -> User:
             hashed_password=hashed,
             role=Role.M,
             status=UserStatus.active,
+            code=next_user_code(db, Role.M),
         )
         db.add(admin)
         logger.info("Seed admin '%s' created.", settings.FIRST_ADMIN_USERNAME)
@@ -92,6 +100,9 @@ def ensure_first_admin(db: Session) -> User:
         admin.hashed_password = hashed
         admin.role = Role.M
         admin.status = UserStatus.active
+        # Backfill code if it was never set (e.g. pre-migration existing admin).
+        if admin.code is None:
+            admin.code = next_user_code(db, Role.M)
         logger.info(
             "Seed admin '%s' password reset to default.",
             settings.FIRST_ADMIN_USERNAME,

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 
 import '../core/constants/shift_codes.dart';
+import '../i18n/app_localizations.dart';
 import 'components.dart';
 import 'forms.dart';
 import 'states.dart';
@@ -21,6 +21,8 @@ class DsLoginView extends StatelessWidget {
     required this.loginLabel,
     required this.registerLabel,
     required this.requiredMessage,
+    required this.languageCode,
+    required this.onLanguageChanged,
     required this.onLogin,
     required this.onRegister,
     this.error,
@@ -37,6 +39,8 @@ class DsLoginView extends StatelessWidget {
   final String loginLabel;
   final String registerLabel;
   final String requiredMessage;
+  final String languageCode;
+  final ValueChanged<String> onLanguageChanged;
   final VoidCallback onLogin;
   final VoidCallback onRegister;
   final String? error;
@@ -44,9 +48,12 @@ class DsLoginView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
     return DsAuthPage(
       title: title,
       subtitle: subtitle,
+      languageCode: languageCode,
+      onLanguageChanged: onLanguageChanged,
       form: Form(
         key: formKey,
         child: Column(
@@ -71,7 +78,7 @@ class DsLoginView extends StatelessWidget {
             if (error != null) ...[
               const SizedBox(height: DsSpacing.x4),
               DsInlineAlert(
-                title: 'Login failed',
+                title: l.text('loginFailedTitle'),
                 message: error!,
                 tone: DsTone.danger,
               ),
@@ -111,6 +118,8 @@ class DsRegisterView<T> extends StatelessWidget {
     required this.minThreeMessage,
     required this.requiredMessage,
     required this.minSixMessage,
+    required this.languageCode,
+    required this.onLanguageChanged,
     required this.onRoleChanged,
     required this.onSubmit,
     required this.onBack,
@@ -135,6 +144,8 @@ class DsRegisterView<T> extends StatelessWidget {
   final String minThreeMessage;
   final String requiredMessage;
   final String minSixMessage;
+  final String languageCode;
+  final ValueChanged<String> onLanguageChanged;
   final ValueChanged<T> onRoleChanged;
   final VoidCallback onSubmit;
   final VoidCallback onBack;
@@ -143,9 +154,12 @@ class DsRegisterView<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
     return DsAuthPage(
       title: title,
       subtitle: subtitle,
+      languageCode: languageCode,
+      onLanguageChanged: onLanguageChanged,
       form: Form(
         key: formKey,
         child: Column(
@@ -194,7 +208,7 @@ class DsRegisterView<T> extends StatelessWidget {
             if (error != null) ...[
               const SizedBox(height: DsSpacing.x4),
               DsInlineAlert(
-                title: 'Registration failed',
+                title: l.text('registrationFailedTitle'),
                 message: error!,
                 tone: DsTone.danger,
               ),
@@ -234,6 +248,7 @@ class DsScheduleView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
     final arrivals = rows.fold<int>(0, (sum, row) => sum + row.arrivals);
     final departures = rows.fold<int>(0, (sum, row) => sum + row.departures);
     final doubleDuty = rows
@@ -243,16 +258,16 @@ class DsScheduleView extends StatelessWidget {
     final days = rows.isEmpty ? 0 : rows.first.shifts.length;
 
     return DsPage(
-      title: 'Schedule',
-      subtitle: 'Monthly roster for the Frankfurt team',
+      title: l.text('scheduleTitle'),
+      subtitle: l.text('scheduleSubtitle'),
       actions: [
         DsSecondaryButton(
-          label: 'Publish schedule',
+          label: l.text('publishSchedule'),
           icon: Icons.publish_outlined,
           onPressed: onPublish,
         ),
         DsPrimaryButton(
-          label: 'Generate schedule',
+          label: l.text('generateSchedule'),
           icon: Icons.auto_awesome_outlined,
           onPressed: onGenerate,
         ),
@@ -263,25 +278,25 @@ class DsScheduleView extends StatelessWidget {
           DsResponsiveGrid(
             children: [
               DsMetricCard(
-                label: 'Employees',
+                label: l.text('employees'),
                 value: '${rows.length}',
                 icon: Icons.people_outline,
                 tone: DsTone.primary,
               ),
               DsMetricCard(
-                label: 'ARR duties',
+                label: l.text('arrDuties'),
                 value: '$arrivals',
                 icon: Icons.flight_land_outlined,
                 tone: DsTone.success,
               ),
               DsMetricCard(
-                label: 'DEP duties',
+                label: l.text('depDuties'),
                 value: '$departures',
                 icon: Icons.flight_takeoff_outlined,
                 tone: DsTone.primary,
               ),
               DsMetricCard(
-                label: 'A/D duties',
+                label: l.text('doubleDuties'),
                 value: '$doubleDuty',
                 icon: Icons.warning_amber_outlined,
                 tone: DsTone.warning,
@@ -290,9 +305,8 @@ class DsScheduleView extends StatelessWidget {
           ),
           const SizedBox(height: DsSpacing.x6),
           DsInlineAlert(
-            title: 'Ready for review',
-            message:
-                'Hard constraints pass. Review shift balance before publishing.',
+            title: l.text('readyForReview'),
+            message: l.text('scheduleReviewMessage'),
             tone: DsTone.success,
           ),
           const SizedBox(height: DsSpacing.x6),
@@ -304,7 +318,7 @@ class DsScheduleView extends StatelessWidget {
                   padding: const EdgeInsets.all(DsSpacing.x4),
                   child: Row(
                     children: [
-                      const Expanded(child: DsSectionHeader('Monthly roster')),
+                      Expanded(child: DsSectionHeader(l.text('monthlyRoster'))),
                       DsMonthSwitcher(
                         month: month,
                         onPrevious: onPreviousMonth,
@@ -339,19 +353,20 @@ class _DsRosterTable extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: DataTable(
         columns: [
-          const DataColumn(label: Text('Employee')),
-          const DataColumn(label: Text('Role')),
+          DataColumn(label: Text(l.text('employee'))),
+          DataColumn(label: Text(l.role)),
           for (var day = 1; day <= days; day++)
             DataColumn(
               label: _DsDayHeader(date: DateTime(month.year, month.month, day)),
             ),
           const DataColumn(label: Text('A')),
           const DataColumn(label: Text('D')),
-          const DataColumn(label: Text('Off')),
+          DataColumn(label: Text(l.text('off'))),
         ],
         rows: [
           for (final row in rows)
@@ -388,6 +403,7 @@ class _DsDayHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
     return SizedBox(
       width: 30,
       child: Column(
@@ -395,7 +411,7 @@ class _DsDayHeader extends StatelessWidget {
         children: [
           Text('${date.day}'),
           Text(
-            DateFormat('E').format(date).substring(0, 2),
+            l.shortWeekday(date),
             style: Theme.of(context).textTheme.bodySmall,
           ),
         ],
@@ -409,14 +425,19 @@ class _DsShiftLegend extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const items = [
-      (ShiftCode.a, 'ARR'),
-      (ShiftCode.d, 'DEP'),
-      (ShiftCode.aD, 'Double duty'),
-      (ShiftCode.x, 'Off'),
-      (ShiftCode.cd, 'Compensation'),
-      (ShiftCode.al, 'Leave'),
-      (ShiftCode.s, 'Sick'),
+    final l = AppLocalizations.of(context);
+    final items = [
+      (ShiftCode.a, l.text('arrDuties')),
+      (ShiftCode.d, l.text('depDuties')),
+      (ShiftCode.aD, l.text('doubleDuty')),
+      (ShiftCode.ad, l.text('doubleDutyNoComp')),
+      (ShiftCode.oD, l.text('officeDuty')),
+      (ShiftCode.t, l.text('training')),
+      (ShiftCode.b, l.text('businessTrip')),
+      (ShiftCode.x, l.text('off')),
+      (ShiftCode.cd, l.text('compensation')),
+      (ShiftCode.al, l.text('leave')),
+      (ShiftCode.s, l.text('sick')),
     ];
     return Wrap(
       spacing: DsSpacing.x4,
@@ -456,21 +477,26 @@ class DsFlightsView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
     final pairCount = rows.fold<int>(
       0,
       (total, row) => total + row.flightPairs,
     );
     final busyDays = rows.where((row) => row.flightPairs == 2).length;
     return DsPage(
-      title: 'Flights',
-      subtitle: 'STA and STD use Frankfurt local time',
+      title: l.text('flightsTitle'),
+      subtitle: l.text('flightsSubtitle'),
       actions: [
         DsSecondaryButton(
-          label: 'Import Excel',
+          label: l.text('importExcel'),
           icon: Icons.upload_file_outlined,
           onPressed: onImport,
         ),
-        DsPrimaryButton(label: 'Add flight', icon: Icons.add, onPressed: onAdd),
+        DsPrimaryButton(
+          label: l.text('addFlight'),
+          icon: Icons.add,
+          onPressed: onAdd,
+        ),
       ],
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -478,19 +504,19 @@ class DsFlightsView extends StatelessWidget {
           DsResponsiveGrid(
             children: [
               DsMetricCard(
-                label: 'Flight days',
+                label: l.text('flightDays'),
                 value: '${rows.length}',
                 icon: Icons.calendar_today_outlined,
                 tone: DsTone.primary,
               ),
               DsMetricCard(
-                label: 'Flight pairs',
+                label: l.text('flightPairs'),
                 value: '$pairCount',
                 icon: Icons.sync_alt_outlined,
                 tone: DsTone.success,
               ),
               DsMetricCard(
-                label: 'Two-pair days',
+                label: l.text('twoPairDays'),
                 value: '$busyDays',
                 icon: Icons.warning_amber_outlined,
                 tone: DsTone.warning,
@@ -506,7 +532,7 @@ class DsFlightsView extends StatelessWidget {
                   padding: const EdgeInsets.all(DsSpacing.x4),
                   child: Row(
                     children: [
-                      const Expanded(child: DsSectionHeader('Flight plan')),
+                      Expanded(child: DsSectionHeader(l.text('flightPlan'))),
                       DsMonthSwitcher(
                         month: month,
                         onPrevious: onPreviousMonth,
@@ -516,55 +542,99 @@ class DsFlightsView extends StatelessWidget {
                   ),
                 ),
                 const Divider(height: 1),
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: DataTable(
-                    columns: const [
-                      DataColumn(label: Text('Date')),
-                      DataColumn(label: Text('Pairs')),
-                      DataColumn(label: Text('Flights')),
-                      DataColumn(label: Text('STA')),
-                      DataColumn(label: Text('STD')),
-                      DataColumn(label: Text('Status')),
-                    ],
-                    rows: [
-                      for (final row in rows)
-                        DataRow(
-                          cells: [
-                            DataCell(Text(row.date)),
-                            DataCell(Text('${row.flightPairs}')),
-                            DataCell(
-                              SizedBox(width: 180, child: Text(row.flights)),
-                            ),
-                            DataCell(Text(row.arrival)),
-                            DataCell(Text(row.departure)),
-                            DataCell(
-                              DsBadge(
-                                label: row.status,
-                                tone: row.status == 'Complete'
-                                    ? DsTone.success
-                                    : DsTone.warning,
-                              ),
-                            ),
-                          ],
-                        ),
-                    ],
-                  ),
-                ),
+                _FlightsTable(rows: rows),
               ],
             ),
           ),
           const SizedBox(height: DsSpacing.x6),
           DsUploadZone(
-            title: 'Import monthly flights',
-            hint: 'Excel files up to 10 MB',
-            buttonLabel: 'Choose file',
+            title: l.text('importMonthlyFlights'),
+            hint: l.text('excelFileHint'),
+            buttonLabel: l.text('chooseFile'),
             onPressed: onImport,
           ),
         ],
       ),
     );
   }
+}
+
+/// Full-width, evenly distributed flights table.
+class _FlightsTable extends StatelessWidget {
+  const _FlightsTable({required this.rows});
+
+  final List<DsFlightRowData> rows;
+
+  // date | pairs | flights | STA | STD | status
+  static const _flex = [2, 1, 4, 2, 2, 2];
+
+  @override
+  Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    return Column(
+      children: [
+        _row(
+          [
+            _header(l.text('date')),
+            _header(l.text('pairs')),
+            _header(l.text('flights')),
+            _header('STA'),
+            _header('STD'),
+            _header(l.status),
+          ],
+          background: DsColors.surfaceSubtle,
+        ),
+        for (final row in rows) ...[
+          const Divider(height: 1, color: DsColors.border),
+          _row([
+            _text(l.flightDate(row.date)),
+            _text('${row.flightPairs}'),
+            _text(row.flights),
+            _text(row.arrival),
+            _text(row.departure),
+            _leading(
+              DsBadge(
+                label: l.statusLabel(row.status),
+                tone: row.status == 'Complete' ? DsTone.success : DsTone.warning,
+              ),
+            ),
+          ]),
+        ],
+      ],
+    );
+  }
+
+  Widget _row(List<Widget> cells, {Color? background}) => Container(
+    color: background,
+    padding: const EdgeInsets.symmetric(
+      horizontal: DsSpacing.x5,
+      vertical: DsSpacing.x4,
+    ),
+    child: Row(
+      children: [
+        for (var i = 0; i < cells.length; i++)
+          Expanded(flex: _flex[i], child: cells[i]),
+      ],
+    ),
+  );
+
+  Widget _header(String label) => Text(
+    label,
+    style: const TextStyle(
+      fontSize: 13,
+      fontWeight: FontWeight.w600,
+      color: DsColors.textMuted,
+    ),
+  );
+
+  Widget _text(String value) => Text(
+    value,
+    style: const TextStyle(fontSize: 14, color: DsColors.textPrimary),
+    overflow: TextOverflow.ellipsis,
+  );
+
+  Widget _leading(Widget child) =>
+      Align(alignment: Alignment.centerLeft, child: child);
 }
 
 class DsUploadZone extends StatelessWidget {
@@ -636,15 +706,16 @@ class DsLeavesView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
     final pending = rows.where((row) => row.status == 'Pending').length;
     final approved = rows.where((row) => row.status == 'Approved').length;
     final carry = rows.fold<int>(0, (sum, row) => sum + row.carryComp);
     return DsPage(
-      title: 'Leave requests',
-      subtitle: 'Monthly requests close on the 20th',
+      title: l.text('leaveRequests'),
+      subtitle: l.text('leaveSubtitle'),
       actions: [
         DsPrimaryButton(
-          label: 'Request leave',
+          label: l.text('requestLeave'),
           icon: Icons.add,
           onPressed: onNewRequest,
         ),
@@ -655,19 +726,19 @@ class DsLeavesView extends StatelessWidget {
           DsResponsiveGrid(
             children: [
               DsMetricCard(
-                label: 'Pending',
+                label: l.text('pending'),
                 value: '$pending',
                 icon: Icons.schedule_outlined,
                 tone: DsTone.warning,
               ),
               DsMetricCard(
-                label: 'Approved',
+                label: l.text('approved'),
                 value: '$approved',
                 icon: Icons.check_circle_outline,
                 tone: DsTone.success,
               ),
               DsMetricCard(
-                label: 'Comp days',
+                label: l.text('compDays'),
                 value: '$carry',
                 icon: Icons.event_repeat_outlined,
                 tone: DsTone.primary,
@@ -675,10 +746,9 @@ class DsLeavesView extends StatelessWidget {
             ],
           ),
           const SizedBox(height: DsSpacing.x6),
-          const DsInlineAlert(
-            title: 'Registration open',
-            message:
-                'Short leave is under 5 consecutive days. Longer leave uses the annual request.',
+          DsInlineAlert(
+            title: l.text('registrationOpen'),
+            message: l.text('shortLeaveMessage'),
             tone: DsTone.primary,
           ),
           const SizedBox(height: DsSpacing.x6),
@@ -686,69 +756,15 @@ class DsLeavesView extends StatelessWidget {
             padding: EdgeInsets.zero,
             child: Column(
               children: [
-                const Padding(
-                  padding: EdgeInsets.all(DsSpacing.x4),
-                  child: DsSectionHeader('Requests'),
+                Padding(
+                  padding: const EdgeInsets.all(DsSpacing.x4),
+                  child: DsSectionHeader(l.text('requests')),
                 ),
                 const Divider(height: 1),
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: DataTable(
-                    columns: const [
-                      DataColumn(label: Text('Employee')),
-                      DataColumn(label: Text('Role')),
-                      DataColumn(label: Text('Type')),
-                      DataColumn(label: Text('Dates')),
-                      DataColumn(label: Text('Days')),
-                      DataColumn(label: Text('Carry')),
-                      DataColumn(label: Text('Status')),
-                      DataColumn(label: Text('Actions')),
-                    ],
-                    rows: [
-                      for (var index = 0; index < rows.length; index++)
-                        DataRow(
-                          cells: [
-                            DataCell(Text(rows[index].employee)),
-                            DataCell(DsBadge(label: rows[index].role)),
-                            DataCell(Text(rows[index].type)),
-                            DataCell(Text(rows[index].range)),
-                            DataCell(Text('${rows[index].days}')),
-                            DataCell(Text('${rows[index].carryComp}')),
-                            DataCell(
-                              DsBadge(
-                                label: rows[index].status,
-                                tone: switch (rows[index].status) {
-                                  'Approved' => DsTone.success,
-                                  'Rejected' => DsTone.danger,
-                                  _ => DsTone.warning,
-                                },
-                              ),
-                            ),
-                            DataCell(
-                              rows[index].status == 'Pending'
-                                  ? Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        DsTextAction(
-                                          label: 'Approve',
-                                          icon: Icons.check,
-                                          tone: DsTone.success,
-                                          onPressed: () => onApprove(index),
-                                        ),
-                                        DsTextAction(
-                                          label: 'Reject',
-                                          icon: Icons.close,
-                                          tone: DsTone.danger,
-                                          onPressed: () => onReject(index),
-                                        ),
-                                      ],
-                                    )
-                                  : const SizedBox.shrink(),
-                            ),
-                          ],
-                        ),
-                    ],
-                  ),
+                _LeavesTable(
+                  rows: rows,
+                  onApprove: onApprove,
+                  onReject: onReject,
                 ),
               ],
             ),
@@ -757,6 +773,118 @@ class DsLeavesView extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Full-width, evenly distributed leaves table.
+class _LeavesTable extends StatelessWidget {
+  const _LeavesTable({
+    required this.rows,
+    required this.onApprove,
+    required this.onReject,
+  });
+
+  final List<DsLeaveRowData> rows;
+  final ValueChanged<int> onApprove;
+  final ValueChanged<int> onReject;
+
+  // employee | role | type | dates | days | carry | status | actions
+  static const _flex = [3, 2, 2, 3, 1, 1, 2, 3];
+
+  @override
+  Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    return Column(
+      children: [
+        _row(
+          [
+            _header(l.text('employee')),
+            _header(l.role),
+            _header(l.text('type')),
+            _header(l.text('dates')),
+            _header(l.text('days')),
+            _header(l.text('carry')),
+            _header(l.status),
+            _header(l.actions),
+          ],
+          background: DsColors.surfaceSubtle,
+        ),
+        for (var index = 0; index < rows.length; index++) ...[
+          const Divider(height: 1, color: DsColors.border),
+          _row([
+            _text(rows[index].employee),
+            _leading(DsBadge(label: rows[index].role)),
+            _text(l.leaveTypeLabel(rows[index].type)),
+            _text(rows[index].range),
+            _text('${rows[index].days}'),
+            _text('${rows[index].carryComp}'),
+            _leading(
+              DsBadge(
+                label: l.statusLabel(rows[index].status),
+                tone: switch (rows[index].status) {
+                  'Approved' => DsTone.success,
+                  'Rejected' => DsTone.danger,
+                  _ => DsTone.warning,
+                },
+              ),
+            ),
+            _leading(
+              rows[index].status == 'Pending'
+                  ? Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        DsTextAction(
+                          label: l.approve,
+                          icon: Icons.check,
+                          tone: DsTone.success,
+                          onPressed: () => onApprove(index),
+                        ),
+                        DsTextAction(
+                          label: l.text('reject'),
+                          icon: Icons.close,
+                          tone: DsTone.danger,
+                          onPressed: () => onReject(index),
+                        ),
+                      ],
+                    )
+                  : const SizedBox.shrink(),
+            ),
+          ]),
+        ],
+      ],
+    );
+  }
+
+  Widget _row(List<Widget> cells, {Color? background}) => Container(
+    color: background,
+    padding: const EdgeInsets.symmetric(
+      horizontal: DsSpacing.x5,
+      vertical: DsSpacing.x4,
+    ),
+    child: Row(
+      children: [
+        for (var i = 0; i < cells.length; i++)
+          Expanded(flex: _flex[i], child: cells[i]),
+      ],
+    ),
+  );
+
+  Widget _header(String label) => Text(
+    label,
+    style: const TextStyle(
+      fontSize: 13,
+      fontWeight: FontWeight.w600,
+      color: DsColors.textMuted,
+    ),
+  );
+
+  Widget _text(String value) => Text(
+    value,
+    style: const TextStyle(fontSize: 14, color: DsColors.textPrimary),
+    overflow: TextOverflow.ellipsis,
+  );
+
+  Widget _leading(Widget child) =>
+      Align(alignment: Alignment.centerLeft, child: child);
 }
 
 class DsAttendanceView extends StatelessWidget {
@@ -779,6 +907,7 @@ class DsAttendanceView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
     final workdays = rows.fold<int>(0, (sum, row) => sum + row.workdays);
     final absences = rows.fold<int>(0, (sum, row) => sum + row.absences);
     final sickDays = rows
@@ -787,16 +916,16 @@ class DsAttendanceView extends StatelessWidget {
         .length;
     final days = rows.isEmpty ? 0 : rows.first.shifts.length;
     return DsPage(
-      title: 'Attendance',
-      subtitle: 'Actual daily status and public holidays',
+      title: l.text('attendanceTitle'),
+      subtitle: l.text('attendanceSubtitle'),
       actions: [
         DsSecondaryButton(
-          label: 'Public holidays',
+          label: l.text('publicHolidays'),
           icon: Icons.event_outlined,
           onPressed: onHolidays,
         ),
         DsPrimaryButton(
-          label: 'Update attendance',
+          label: l.text('updateAttendance'),
           icon: Icons.edit_outlined,
           onPressed: onUpdate,
         ),
@@ -807,19 +936,19 @@ class DsAttendanceView extends StatelessWidget {
           DsResponsiveGrid(
             children: [
               DsMetricCard(
-                label: 'Workdays',
+                label: l.text('workdays'),
                 value: '$workdays',
                 icon: Icons.work_outline,
                 tone: DsTone.primary,
               ),
               DsMetricCard(
-                label: 'Absences',
+                label: l.text('absences'),
                 value: '$absences',
                 icon: Icons.event_busy_outlined,
                 tone: DsTone.warning,
               ),
               DsMetricCard(
-                label: 'Sick days',
+                label: l.text('sickDays'),
                 value: '$sickDays',
                 icon: Icons.medical_information_outlined,
                 tone: DsTone.danger,
@@ -827,10 +956,9 @@ class DsAttendanceView extends StatelessWidget {
             ],
           ),
           const SizedBox(height: DsSpacing.x6),
-          const DsInlineAlert(
-            title: 'Restricted health data',
-            message:
-                'Sick status is visible to administrators only. Do not record medical details.',
+          DsInlineAlert(
+            title: l.text('restrictedHealthData'),
+            message: l.text('healthDataMessage'),
             tone: DsTone.warning,
           ),
           const SizedBox(height: DsSpacing.x6),
@@ -842,8 +970,8 @@ class DsAttendanceView extends StatelessWidget {
                   padding: const EdgeInsets.all(DsSpacing.x4),
                   child: Row(
                     children: [
-                      const Expanded(
-                        child: DsSectionHeader('Attendance board'),
+                      Expanded(
+                        child: DsSectionHeader(l.text('attendanceBoard')),
                       ),
                       DsMonthSwitcher(
                         month: month,
@@ -858,16 +986,16 @@ class DsAttendanceView extends StatelessWidget {
                   scrollDirection: Axis.horizontal,
                   child: DataTable(
                     columns: [
-                      const DataColumn(label: Text('Employee')),
-                      const DataColumn(label: Text('Role')),
+                      DataColumn(label: Text(l.text('employee'))),
+                      DataColumn(label: Text(l.role)),
                       for (var day = 1; day <= days; day++)
                         DataColumn(
                           label: _DsDayHeader(
                             date: DateTime(month.year, month.month, day),
                           ),
                         ),
-                      const DataColumn(label: Text('Work')),
-                      const DataColumn(label: Text('Absent')),
+                      DataColumn(label: Text(l.text('work'))),
+                      DataColumn(label: Text(l.text('absent'))),
                     ],
                     rows: [
                       for (final row in rows)
@@ -924,17 +1052,18 @@ class DsReportsView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
     return DsPage(
-      title: 'Reports',
-      subtitle: 'Attendance exports by month and year',
+      title: l.text('reportsTitle'),
+      subtitle: l.text('reportsSubtitle'),
       actions: [
         DsSecondaryButton(
-          label: 'Export year',
+          label: l.text('exportYear'),
           icon: Icons.calendar_view_month_outlined,
           onPressed: onExportYearly,
         ),
         DsPrimaryButton(
-          label: 'Export month',
+          label: l.text('exportMonth'),
           icon: Icons.download_outlined,
           onPressed: onExportMonthly,
         ),
@@ -945,19 +1074,19 @@ class DsReportsView extends StatelessWidget {
           DsResponsiveGrid(
             children: [
               DsMetricCard(
-                label: 'Reports',
+                label: l.text('reports'),
                 value: '${rows.length}',
                 icon: Icons.description_outlined,
                 tone: DsTone.primary,
               ),
-              const DsMetricCard(
-                label: 'Formats',
+              DsMetricCard(
+                label: l.text('formats'),
                 value: '2',
                 icon: Icons.file_present_outlined,
                 tone: DsTone.success,
               ),
-              const DsMetricCard(
-                label: 'Retention',
+              DsMetricCard(
+                label: l.text('retention'),
                 value: 'EU',
                 icon: Icons.shield_outlined,
                 tone: DsTone.neutral,
@@ -965,62 +1094,21 @@ class DsReportsView extends StatelessWidget {
             ],
           ),
           const SizedBox(height: DsSpacing.x6),
-          const DsInlineAlert(
-            title: 'Flexible export format',
-            message:
-                'The final customer report layout is not fixed yet. Exports remain modular.',
+          DsInlineAlert(
+            title: l.text('flexibleExportFormat'),
+            message: l.text('exportFormatMessage'),
           ),
           const SizedBox(height: DsSpacing.x6),
           DsSurface(
             padding: EdgeInsets.zero,
             child: Column(
               children: [
-                const Padding(
-                  padding: EdgeInsets.all(DsSpacing.x4),
-                  child: DsSectionHeader('Recent exports'),
+                Padding(
+                  padding: const EdgeInsets.all(DsSpacing.x4),
+                  child: DsSectionHeader(l.text('recentExports')),
                 ),
                 const Divider(height: 1),
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: DataTable(
-                    columns: const [
-                      DataColumn(label: Text('Report')),
-                      DataColumn(label: Text('Period')),
-                      DataColumn(label: Text('Updated')),
-                      DataColumn(label: Text('Status')),
-                      DataColumn(label: Text('Action')),
-                    ],
-                    rows: [
-                      for (var index = 0; index < rows.length; index++)
-                        DataRow(
-                          cells: [
-                            DataCell(
-                              SizedBox(
-                                width: 240,
-                                child: Text(rows[index].name),
-                              ),
-                            ),
-                            DataCell(Text(rows[index].period)),
-                            DataCell(Text(rows[index].updated)),
-                            DataCell(
-                              DsBadge(
-                                label: rows[index].status,
-                                tone: DsTone.success,
-                                icon: Icons.check_circle_outline,
-                              ),
-                            ),
-                            DataCell(
-                              DsTextAction(
-                                label: 'Download',
-                                icon: Icons.download_outlined,
-                                onPressed: () => onDownload(index),
-                              ),
-                            ),
-                          ],
-                        ),
-                    ],
-                  ),
-                ),
+                _ReportsTable(rows: rows, onDownload: onDownload),
               ],
             ),
           ),
@@ -1028,6 +1116,90 @@ class DsReportsView extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Full-width, evenly distributed reports table.
+class _ReportsTable extends StatelessWidget {
+  const _ReportsTable({required this.rows, required this.onDownload});
+
+  final List<DsReportRowData> rows;
+  final ValueChanged<int> onDownload;
+
+  // report name | period | updated | status | action
+  static const _flex = [4, 2, 2, 2, 2];
+
+  @override
+  Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    return Column(
+      children: [
+        _row(
+          [
+            _header(l.text('report')),
+            _header(l.text('period')),
+            _header(l.text('updated')),
+            _header(l.status),
+            _header(l.text('action')),
+          ],
+          background: DsColors.surfaceSubtle,
+        ),
+        for (var index = 0; index < rows.length; index++) ...[
+          const Divider(height: 1, color: DsColors.border),
+          _row([
+            _text(rows[index].name),
+            _text(rows[index].period),
+            _text(rows[index].updated),
+            _leading(
+              DsBadge(
+                label: l.statusLabel(rows[index].status),
+                tone: DsTone.success,
+                icon: Icons.check_circle_outline,
+              ),
+            ),
+            _leading(
+              DsTextAction(
+                label: l.text('download'),
+                icon: Icons.download_outlined,
+                onPressed: () => onDownload(index),
+              ),
+            ),
+          ]),
+        ],
+      ],
+    );
+  }
+
+  Widget _row(List<Widget> cells, {Color? background}) => Container(
+    color: background,
+    padding: const EdgeInsets.symmetric(
+      horizontal: DsSpacing.x5,
+      vertical: DsSpacing.x4,
+    ),
+    child: Row(
+      children: [
+        for (var i = 0; i < cells.length; i++)
+          Expanded(flex: _flex[i], child: cells[i]),
+      ],
+    ),
+  );
+
+  Widget _header(String label) => Text(
+    label,
+    style: const TextStyle(
+      fontSize: 13,
+      fontWeight: FontWeight.w600,
+      color: DsColors.textMuted,
+    ),
+  );
+
+  Widget _text(String value) => Text(
+    value,
+    style: const TextStyle(fontSize: 14, color: DsColors.textPrimary),
+    overflow: TextOverflow.ellipsis,
+  );
+
+  Widget _leading(Widget child) =>
+      Align(alignment: Alignment.centerLeft, child: child);
 }
 
 class DsUsersView extends StatelessWidget {
@@ -1054,20 +1226,21 @@ class DsUsersView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
     final active = users.where((user) => user.status == 'active').length;
     final pending = users.where((user) => user.status == 'pending').length;
     final fixed = users.where((user) => user.role.startsWith('A')).length;
     return DsPage(
-      title: 'Users',
-      subtitle: 'Accounts, roles and approvals',
+      title: l.text('usersTitle'),
+      subtitle: l.text('usersSubtitle'),
       actions: [
         DsSecondaryButton(
-          label: 'Refresh',
+          label: l.refresh,
           icon: Icons.refresh,
           onPressed: onRefresh,
         ),
         DsPrimaryButton(
-          label: 'Create user',
+          label: l.createUser,
           icon: Icons.person_add_outlined,
           onPressed: onCreate,
         ),
@@ -1078,19 +1251,19 @@ class DsUsersView extends StatelessWidget {
           DsResponsiveGrid(
             children: [
               DsMetricCard(
-                label: 'Active',
+                label: l.text('active'),
                 value: '$active',
                 icon: Icons.check_circle_outline,
                 tone: DsTone.success,
               ),
               DsMetricCard(
-                label: 'Pending',
+                label: l.text('pending'),
                 value: '$pending',
                 icon: Icons.schedule_outlined,
                 tone: DsTone.warning,
               ),
               DsMetricCard(
-                label: 'Fixed team',
+                label: l.text('fixedTeam'),
                 value: '$fixed',
                 icon: Icons.lock_outline,
                 tone: DsTone.primary,
@@ -1102,80 +1275,146 @@ class DsUsersView extends StatelessWidget {
             const DsLoadingState()
           else if (error != null)
             DsErrorState(
-              title: 'Could not load users',
+              title: l.text('couldNotLoadUsers'),
               message: error!,
-              actionLabel: 'Retry',
+              actionLabel: l.text('retry'),
               onRetry: onRefresh,
             )
           else if (users.isEmpty)
             DsEmptyState(
               icon: Icons.people_outline,
-              title: 'No users yet',
-              message: 'Create the first account and assign a role.',
-              actionLabel: 'Create user',
+              title: l.noUsers,
+              message: l.text('createFirstAccount'),
+              actionLabel: l.createUser,
               onAction: onCreate,
             )
           else
             DsSurface(
               padding: EdgeInsets.zero,
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: DataTable(
-                  columns: const [
-                    DataColumn(label: Text('Username')),
-                    DataColumn(label: Text('Full name')),
-                    DataColumn(label: Text('Role')),
-                    DataColumn(label: Text('Status')),
-                    DataColumn(label: Text('Actions')),
-                  ],
-                  rows: [
-                    for (final user in users)
-                      DataRow(
-                        cells: [
-                          DataCell(Text(user.username)),
-                          DataCell(
-                            SizedBox(width: 180, child: Text(user.fullName)),
-                          ),
-                          DataCell(DsBadge(label: user.role)),
-                          DataCell(
-                            DsBadge(
-                              label: user.status,
-                              tone: switch (user.status) {
-                                'active' => DsTone.success,
-                                'pending' => DsTone.warning,
-                                _ => DsTone.neutral,
-                              },
-                            ),
-                          ),
-                          DataCell(switch (user.status) {
-                            'pending' => DsTextAction(
-                              label: 'Approve',
-                              icon: Icons.check,
-                              tone: DsTone.success,
-                              onPressed: () => onApprove(user.id),
-                            ),
-                            'active' => DsTextAction(
-                              label: 'Disable',
-                              icon: Icons.block,
-                              tone: DsTone.danger,
-                              onPressed: () => onDisable(user.id),
-                            ),
-                            _ => DsTextAction(
-                              label: 'Enable',
-                              icon: Icons.lock_open,
-                              onPressed: () => onEnable(user.id),
-                            ),
-                          }),
-                        ],
-                      ),
-                  ],
-                ),
+              child: _UsersTable(
+                users: users,
+                onApprove: onApprove,
+                onDisable: onDisable,
+                onEnable: onEnable,
               ),
             ),
         ],
       ),
     );
   }
+}
+
+/// Full-width, evenly distributed users table (replaces a content-hugging
+/// DataTable so columns stay balanced and aligned across the surface).
+class _UsersTable extends StatelessWidget {
+  const _UsersTable({
+    required this.users,
+    required this.onApprove,
+    required this.onDisable,
+    required this.onEnable,
+  });
+
+  final List<DsUserRowData> users;
+  final ValueChanged<int> onApprove;
+  final ValueChanged<int> onDisable;
+  final ValueChanged<int> onEnable;
+
+  // Column flex weights — header and body cells must stay in sync.
+  static const _flex = [2, 3, 2, 2, 2, 2];
+
+  @override
+  Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    return Column(
+      children: [
+        _row(
+          [
+            _header(l.username),
+            _header(l.fullName),
+            _header(l.role),
+            _header('Code'),
+            _header(l.status),
+            _header(l.actions),
+          ],
+          background: DsColors.surfaceSubtle,
+        ),
+        for (final user in users) ...[
+          const Divider(height: 1, color: DsColors.border),
+          _row([
+            _text(user.username),
+            _text(user.fullName),
+            _leading(DsBadge(label: l.roleLabel(user.role))),
+            _leading(
+              user.code.isEmpty
+                  ? const SizedBox.shrink()
+                  : DsBadge(label: user.code, tone: DsTone.neutral),
+            ),
+            _leading(
+              DsBadge(
+                label: l.statusLabel(user.status),
+                tone: switch (user.status) {
+                  'active' => DsTone.success,
+                  'pending' => DsTone.warning,
+                  _ => DsTone.neutral,
+                },
+              ),
+            ),
+            _leading(switch (user.status) {
+              'pending' => DsTextAction(
+                label: l.approve,
+                icon: Icons.check,
+                tone: DsTone.success,
+                onPressed: () => onApprove(user.id),
+              ),
+              'active' => DsTextAction(
+                label: l.disable,
+                icon: Icons.block,
+                tone: DsTone.danger,
+                onPressed: () => onDisable(user.id),
+              ),
+              _ => DsTextAction(
+                label: l.enable,
+                icon: Icons.lock_open,
+                onPressed: () => onEnable(user.id),
+              ),
+            }),
+          ]),
+        ],
+      ],
+    );
+  }
+
+  Widget _row(List<Widget> cells, {Color? background}) => Container(
+    color: background,
+    padding: const EdgeInsets.symmetric(
+      horizontal: DsSpacing.x5,
+      vertical: DsSpacing.x4,
+    ),
+    child: Row(
+      children: [
+        for (var i = 0; i < cells.length; i++)
+          Expanded(flex: _flex[i], child: cells[i]),
+      ],
+    ),
+  );
+
+  Widget _header(String label) => Text(
+    label,
+    style: const TextStyle(
+      fontSize: 13,
+      fontWeight: FontWeight.w600,
+      color: DsColors.textMuted,
+    ),
+  );
+
+  Widget _text(String value) => Text(
+    value,
+    style: const TextStyle(fontSize: 14, color: DsColors.textPrimary),
+    overflow: TextOverflow.ellipsis,
+  );
+
+  Widget _leading(Widget child) =>
+      Align(alignment: Alignment.centerLeft, child: child);
 }
 
 class DsCreateUserDialog<T> extends StatelessWidget {
@@ -1226,8 +1465,9 @@ class DsCreateUserDialog<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
     return DsFormDialog(
-      title: 'Create user',
+      title: l.createUser,
       content: Form(
         key: formKey,
         child: Column(
@@ -1274,7 +1514,7 @@ class DsCreateUserDialog<T> extends StatelessWidget {
             if (error != null) ...[
               const SizedBox(height: DsSpacing.x4),
               DsInlineAlert(
-                title: 'Could not create user',
+                title: l.text('couldNotCreateUser'),
                 message: error!,
                 tone: DsTone.danger,
               ),
@@ -1306,34 +1546,35 @@ class DsLeaveRequestDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
     return DsFormDialog(
-      title: 'Request leave',
-      content: const Column(
+      title: l.text('requestLeave'),
+      content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           TextField(
             decoration: InputDecoration(
-              labelText: 'Leave type',
-              prefixIcon: Icon(Icons.event_available_outlined, size: 20),
+              labelText: l.text('leaveType'),
+              prefixIcon: const Icon(Icons.event_available_outlined, size: 20),
             ),
           ),
-          SizedBox(height: DsSpacing.x4),
+          const SizedBox(height: DsSpacing.x4),
           TextField(
             decoration: InputDecoration(
-              labelText: 'Date range',
-              prefixIcon: Icon(Icons.date_range_outlined, size: 20),
+              labelText: l.text('dateRange'),
+              prefixIcon: const Icon(Icons.date_range_outlined, size: 20),
             ),
           ),
-          SizedBox(height: DsSpacing.x4),
+          const SizedBox(height: DsSpacing.x4),
           TextField(
             maxLines: 3,
-            decoration: InputDecoration(labelText: 'Note'),
+            decoration: InputDecoration(labelText: l.text('note')),
           ),
         ],
       ),
       actions: [
-        DsTextAction(label: 'Cancel', onPressed: onCancel),
-        DsPrimaryButton(label: 'Submit request', onPressed: onSubmit),
+        DsTextAction(label: l.cancel, onPressed: onCancel),
+        DsPrimaryButton(label: l.text('submitRequest'), onPressed: onSubmit),
       ],
     );
   }

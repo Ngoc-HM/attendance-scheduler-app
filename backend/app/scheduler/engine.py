@@ -1,13 +1,18 @@
-"""CP-SAT scheduling engine (spec §5).
+"""CP-SAT scheduling engine (spec §5) — rule-based, NO ML/AI (§9.6).
 
 ``SchedulerEngine.solve`` builds the model (decision variables → hard
-constraints §5.3 → soft objectives §5.4), runs OR-Tools with a time limit, and
-returns a ``SolverOutput``. On infeasibility it reports back so the admin can
-adjust / edit manually (§5.6).
+constraints §5.3 → soft objectives §5.4 → slack penalties), runs OR-Tools
+with a time limit and returns a ``SolverOutput``.
 
-Scope note: the engine auto-assigns only the core codes in
-``ASSIGNABLE_CODES``. Other codes (B, T, O/D, AD, AL, CD, S) are admin-entered
-or pre-pinned via ``SolverInput.approved_off``.
+Always-feasible architecture (locked decision #2): staffing and off-day rules
+carry penalized slack, so a solution is returned even when rules cannot all
+hold — each broken rule comes back as a ``Violation`` (§5.6 #12–14) for the
+admin to resolve (A/D fallback suggestion, manual edit F-09).
+
+Scope note: the engine auto-assigns only ``ASSIGNABLE_CODES``. O/D lets
+flexible roles (M/T) default to office duty on working days (decision #3).
+Other codes (B, T, AD, AL, CD, S) are admin-entered or pre-pinned via
+``SolverInput.approved_off``.
 """
 
 from __future__ import annotations
@@ -19,12 +24,15 @@ from ortools.sat.python import cp_model
 from app.models.enums import AttendanceCode
 from app.scheduler import constraints, objectives
 from app.scheduler.domain import AssignmentResult, SolverInput, SolverOutput, Violation
+from app.scheduler.slack_registry import SlackRegistry
 
 ASSIGNABLE_CODES: tuple[AttendanceCode, ...] = (
     AttendanceCode.A,
     AttendanceCode.D,
     AttendanceCode.A_D,
+    AttendanceCode.O_D,
     AttendanceCode.X,
+    AttendanceCode.CD,   # auto comp-day off — forced from carry_comp (§5.3 #6)
 )
 
 
@@ -35,25 +43,38 @@ class SchedulerEngine:
     def solve(self, inp: SolverInput) -> SolverOutput:
         model = cp_model.CpModel()
         x = self._build_vars(model, inp)
+        registry = SlackRegistry()
 
-        constraints.add_all(model, x, inp, self.assignable_codes)
-        objectives.add_all(model, x, inp, self.assignable_codes)
+        constraints.add_all(model, x, inp, self.assignable_codes, registry)
+        soft_terms = objectives.add_all(model, x, inp, self.assignable_codes)
+        model.Minimize(sum(registry.penalty_terms()) + sum(soft_terms))
 
         solver = cp_model.CpSolver()
         solver.parameters.max_time_in_seconds = inp.max_solve_seconds
+        # Determinism for tests/reproducibility (§5.6 — same input, same plan).
+        solver.parameters.random_seed = 42
         status = solver.Solve(model)
 
         if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
-            return SolverOutput(feasible=True, assignments=self._extract(solver, x))
+            return SolverOutput(
+                feasible=True,
+                assignments=self._extract(solver, x),
+                # Slack > 0 → rule could not hold; admin resolves (§5.6).
+                violations=registry.violations(solver),
+            )
 
-        # §5.6 — report infeasibility; the service can suggest A/D fallback and
-        # the admin can finish the schedule manually (F-09).
+        # With the slack architecture this only happens on contradictory
+        # PINS (e.g. approved-off cell that another hard rule forbids) or a
+        # too-small time limit (§5.6 #12).
         return SolverOutput(
             feasible=False,
             violations=[
                 Violation(
                     rule="infeasible",
-                    message="No valid schedule found for the given constraints (§5.6).",
+                    message=(
+                        "No schedule found: contradictory pinned inputs or "
+                        "solver time limit reached (§5.6)."
+                    ),
                 )
             ],
         )

@@ -63,3 +63,13 @@ def require_admin(current_user: ActiveUser) -> User:
 
 
 AdminUser = Annotated[User, Depends(require_admin)]
+
+
+def ensure_self_or_admin(current_user: User, target_user_id: int) -> None:
+    """Authorize access to ``target_user_id``'s data (§9.5 data minimization).
+
+    A normal user may only touch their own records; admins may touch anyone's.
+    Call from handlers that take a path/query user id.
+    """
+    if current_user.role is not Role.M and current_user.id != target_user_id:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail=t("auth.forbidden_other_user"))

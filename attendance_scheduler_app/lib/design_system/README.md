@@ -10,5 +10,7 @@ All reusable UI belongs in this directory.
 - Add or extend a component here before using a new visual pattern.
 - Keep tokens in `tokens.dart` and global Material defaults in `theme.dart`.
 - Import `liquid_glass_bar` only in `src/liquid_navigation_native.dart`.
+- Reuse `DsLiquidGlassBackdrop` and `DsLiquidGlassSurface`; do not recreate
+  blur, glass borders, highlights, or glass tints in feature code.
 
 `test/design_system_boundary_test.dart` enforces the feature boundary.

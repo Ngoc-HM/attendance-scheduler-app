@@ -43,7 +43,7 @@ class _DsSkeletonRowState extends State<_DsSkeletonRow>
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 900),
+      duration: DsDuration.shimmer,
     )..repeat(reverse: true);
   }
 

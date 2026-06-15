@@ -64,7 +64,7 @@ class _CreateUserDialogState extends ConsumerState<CreateUserDialog> {
       role: _role,
       roleOptions: [
         for (final role in UserRole.values)
-          DsSelectOption(value: role, label: role.label),
+          DsSelectOption(value: role, label: l.roleLabel(role.apiValue)),
       ],
       onRoleChanged: (role) => setState(() => _role = role),
       onCancel: () => Navigator.of(context).pop(false),

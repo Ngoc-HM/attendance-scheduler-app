@@ -16,7 +16,7 @@ from app.scheduler.calendar_utils import build_weeks, month_days
 def test_engine_returns_one_status_per_cell() -> None:
     days = month_days(2026, 6)
     people = [
-        PersonInput(user_id=1, role=Role.A1),
+        PersonInput(user_id=1, role=Role.A),
         PersonInput(user_id=2, role=Role.T),
     ]
     inp = SolverInput(

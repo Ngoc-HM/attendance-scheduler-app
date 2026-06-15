@@ -43,10 +43,8 @@ class AuthController extends StateNotifier<AuthState> {
     } on DioException catch (e) {
       state = AuthState(error: _messageFor(e));
       return false;
-    } catch (e) {
-      // Surface the real error type/message to make non-network failures
-      // (e.g. secure-storage / Keychain) diagnosable instead of opaque.
-      state = AuthState(error: 'Login failed: ${e.runtimeType}: $e');
+    } catch (_) {
+      state = const AuthState(error: 'unknown_failure');
       return false;
     }
   }
@@ -55,12 +53,12 @@ class AuthController extends StateNotifier<AuthState> {
   /// can tell a 401 apart from a backend/network problem.
   String _messageFor(DioException e) {
     if (e.response?.statusCode == 401) {
-      return 'Incorrect username or password.';
+      return 'incorrect_credentials';
     }
     if (e.response == null) {
-      return 'Cannot reach the server. Is the backend running on the configured URL?';
+      return 'server_unavailable';
     }
-    return 'Login failed (HTTP ${e.response?.statusCode}).';
+    return 'http_failure';
   }
 
   Future<void> logout() async {

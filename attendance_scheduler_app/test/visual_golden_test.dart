@@ -1,10 +1,38 @@
 import 'package:attendance_scheduler_app/design_system/design_system.dart';
 import 'package:attendance_scheduler_app/features/auth/presentation/pages/login_page.dart';
 import 'package:attendance_scheduler_app/features/home/presentation/pages/home_shell.dart';
+import 'package:attendance_scheduler_app/features/schedule/data/datasources/schedule_remote_datasource.dart';
 import 'package:attendance_scheduler_app/features/schedule/presentation/pages/schedule_page.dart';
+import 'package:attendance_scheduler_app/features/schedule/presentation/providers/schedule_provider.dart';
+import 'package:attendance_scheduler_app/features/schedule/presentation/providers/shift_change_provider.dart';
+import 'package:attendance_scheduler_app/features/users/data/user_management_datasource.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+/// The wired SchedulePage fires a network load() on first frame; in a widget
+/// test there is no backend, so we override its controllers with no-op fakes
+/// that hold a deterministic settled (empty) state. The golden then captures
+/// the data-driven page's empty state — its valid visual baseline.
+class _FakeScheduleController extends ScheduleController {
+  _FakeScheduleController()
+      : super(ScheduleRemoteDataSource(Dio()), UserManagementDataSource(Dio()));
+  @override
+  Future<void> load(int year, int month, {bool isAdmin = false}) async {}
+}
+
+class _FakeShiftChangeController extends ShiftChangeController {
+  _FakeShiftChangeController() : super(ScheduleRemoteDataSource(Dio()));
+  @override
+  Future<void> load({bool all = false}) async {}
+}
+
+List<Override> _scheduleOverrides() => [
+      scheduleControllerProvider.overrideWith((ref) => _FakeScheduleController()),
+      shiftChangeControllerProvider
+          .overrideWith((ref) => _FakeShiftChangeController()),
+    ];
 
 void main() {
   testWidgets('login desktop visual', (tester) async {
@@ -36,6 +64,7 @@ void main() {
 
     await tester.pumpWidget(
       ProviderScope(
+        overrides: _scheduleOverrides(),
         child: MaterialApp(
           theme: AppTheme.light,
           home: const RepaintBoundary(
@@ -59,6 +88,7 @@ void main() {
 
     await tester.pumpWidget(
       ProviderScope(
+        overrides: _scheduleOverrides(),
         child: MaterialApp(
           theme: AppTheme.light,
           home: const RepaintBoundary(

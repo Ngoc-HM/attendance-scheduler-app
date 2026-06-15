@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/router/app_router.dart';
 import '../../../../design_system/design_system.dart';
 import '../../../../i18n/app_localizations.dart';
+import '../../../../i18n/locale_provider.dart';
 import '../../data/repositories/auth_repository_impl.dart';
 import '../../domain/entities/user.dart';
 
@@ -21,13 +22,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
   final _fullName = TextEditingController();
   final _password = TextEditingController();
 
-  static const _selectableRoles = [
-    UserRole.t,
-    UserRole.a1,
-    UserRole.a2,
-    UserRole.a3,
-    UserRole.a4,
-  ];
+  static const _selectableRoles = [UserRole.t, UserRole.a];
 
   UserRole _role = UserRole.t;
   bool _isLoading = false;
@@ -70,6 +65,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
+    final locale = ref.watch(localeControllerProvider);
     return DsRegisterView<UserRole>(
       formKey: _formKey,
       usernameController: _username,
@@ -78,10 +74,10 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
       role: _role,
       roleOptions: [
         for (final role in _selectableRoles)
-          DsSelectOption(value: role, label: role.label),
+          DsSelectOption(value: role, label: l.roleLabel(role.apiValue)),
       ],
       title: l.register,
-      subtitle: 'New accounts require administrator approval.',
+      subtitle: l.text('registerSubtitle'),
       usernameLabel: l.username,
       fullNameLabel: l.fullName,
       passwordLabel: l.password,
@@ -93,6 +89,10 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
       minSixMessage: l.minSixChars,
       error: _error,
       loading: _isLoading,
+      languageCode: locale.languageCode,
+      onLanguageChanged: ref
+          .read(localeControllerProvider.notifier)
+          .setLanguage,
       onRoleChanged: (role) => setState(() => _role = role),
       onSubmit: _submit,
       onBack: () => context.go(AppRoute.login),

@@ -24,8 +24,13 @@ from app.core.config import settings
 async def lifespan(app: FastAPI):  # noqa: ANN201
     # Startup: ensure tables (dev) and the seed admin exist (F-01).
     run_startup_bootstrap()
+    # Day-20 autorun: close registration + generate next month's draft (#9).
+    from app.services.schedule_autorun import start_scheduler
+
+    scheduler = start_scheduler()
     yield
-    # Shutdown hooks go here.
+    if scheduler is not None:
+        scheduler.shutdown(wait=False)
 
 
 app = FastAPI(

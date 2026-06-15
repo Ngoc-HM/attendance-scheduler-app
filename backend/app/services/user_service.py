@@ -7,9 +7,26 @@ from sqlalchemy.orm import Session
 
 from app.core.i18n import t
 from app.core.security import get_password_hash
-from app.models.enums import UserStatus
+from app.models.enums import Role, UserStatus
+from app.models.role_code_counter import RoleCodeCounter
 from app.models.user import User
 from app.schemas.user import UserCreate, UserUpdate
+
+
+def next_user_code(db: Session, role: Role) -> str:
+    """Allocate the next never-reused code for a role (e.g. 'A1', 'T2'). Caller commits."""
+    counter = (
+        db.query(RoleCodeCounter)
+        .filter(RoleCodeCounter.role == role.value)
+        .with_for_update()
+        .one_or_none()
+    )
+    if counter is None:
+        counter = RoleCodeCounter(role=role.value, next_seq=0)
+        db.add(counter)
+        db.flush()
+    counter.next_seq += 1
+    return f"{role.value}{counter.next_seq}"
 
 
 def _get_or_404(db: Session, user_id: int) -> User:
@@ -33,6 +50,7 @@ def _persist_new(db: Session, payload: UserCreate, status_: UserStatus) -> User:
         role=payload.role,
         hashed_password=get_password_hash(payload.password),
         status=status_,
+        code=next_user_code(db, payload.role),
     )
     db.add(user)
     db.commit()
@@ -64,7 +82,11 @@ def update(db: Session, user_id: int, payload: UserUpdate) -> User:
     user = _get_or_404(db, user_id)
     if payload.full_name is not None:
         user.full_name = payload.full_name
-    if payload.role is not None:
+    if payload.role is not None and payload.role != user.role:
+        user.role = payload.role
+        # Reassign a new code that matches the new role letter; old code not reused.
+        user.code = next_user_code(db, payload.role)
+    elif payload.role is not None:
         user.role = payload.role
     if payload.status is not None:
         user.status = payload.status

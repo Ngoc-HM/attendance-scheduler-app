@@ -1,21 +1,26 @@
-"""Automatic calculations (F-14 — overtime / carry-over comp days)."""
+"""Automatic calculations (F-14 — comp days / carry-over)."""
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter
 
 from app.api.deps import AdminUser, DbSession
+from app.services import calculation_service
 
 router = APIRouter()
 
 
 @router.post("/{year}/{month}/close")
 def close_month(db: DbSession, year: int, month: int, _admin: AdminUser):
-    """F-14 — close a month: compute comp days (CD) and carry-over values
-    (``carry_comp`` / ``carry_streak``, §5.5) into the next month.
+    """F-14 — close a month: recompute carry_comp / carry_streak /
+    carry_premium_off for the next month (§5.5, §5.3 #6, decision #6).
 
-    Per F-14, only the current comp-day logic is handled — no complex annual
-    leave accrual.
+    Idempotent: values are absolute recomputations from the record history.
     """
-    # TODO: delegate to calculation_service.close_month(db, year, month)
-    raise HTTPException(status.HTTP_501_NOT_IMPLEMENTED, "Not implemented yet")
+    return calculation_service.close_month(db, year, month)
+
+
+@router.get("/summary")
+def carry_summary(db: DbSession, _admin: AdminUser):
+    """Current per-user carry values (comp / streak / premium-off / AL balance)."""
+    return calculation_service.summary(db)

@@ -13,7 +13,8 @@ from app.schemas.common import ORMModel
 class LeaveCreate(BaseModel):
     start_date: date
     end_date: date
-    leave_type: LeaveType
+    # leave_type is accepted from caller but overridden by auto-classification
+    leave_type: LeaveType | None = None
     note: str | None = None
 
 
@@ -31,3 +32,17 @@ class LeaveRead(ORMModel):
     leave_type: LeaveType
     status: LeaveStatus
     note: str | None
+
+
+class ConflictEntry(ORMModel):
+    """Single ranked entry returned by GET /leaves/conflicts."""
+
+    id: int
+    user_id: int
+    start_date: date
+    end_date: date
+    leave_type: LeaveType
+    status: LeaveStatus
+    note: str | None
+    # Rank position (1 = highest priority).
+    rank: int

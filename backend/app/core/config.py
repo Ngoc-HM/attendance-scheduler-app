@@ -60,8 +60,24 @@ class Settings(BaseSettings):
     # --- Frankfurt local time (STA/STD LT FRA, spec §8) --------------------
     TIMEZONE: str = "Europe/Berlin"
 
+    # --- GDPR / BDSG compliance posture (spec §9) --------------------------
+    # Deploy in an EU region (Frankfurt) — keep personnel data inside the
+    # EU/EEA (§9.4). Sign a DPA with the cloud provider (Art. 28 GDPR).
+    DATA_REGION: str = "eu-central-1"  # Frankfurt
+    # The scheduler is rule-based (OR-Tools CP-SAT). It performs NO AI/ML
+    # performance evaluation of staff (§9.6 / EU AI Act). Do not introduce
+    # ML scoring of employees without a fresh legal review.
+    SCHEDULER_IS_RULE_BASED: bool = True
+
     # --- Scheduler engine (OR-Tools) limits --------------------------------
     SOLVER_MAX_TIME_SECONDS: float = 30.0
+
+    # --- Day-20 autorun (locked decision #9, F-05/F-07) --------------------
+    # On AUTORUN_DAY the background job closes registration and generates the
+    # next month's DRAFT (skips if a schedule already exists). Manual generate
+    # stays available regardless.
+    AUTORUN_ENABLED: bool = True
+    AUTORUN_DAY: int = 20
 
     @field_validator("BACKEND_CORS_ORIGINS", mode="before")
     @classmethod

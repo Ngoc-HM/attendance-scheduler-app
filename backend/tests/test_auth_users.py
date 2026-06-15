@@ -43,7 +43,7 @@ def test_admin_creates_active_user_who_can_login(client: TestClient) -> None:
     created = client.post(
         f"{V}/users",
         headers=admin,
-        json={"username": "agne", "full_name": "Agne", "password": "secret1", "role": "A1"},
+        json={"username": "agne", "full_name": "Agne", "password": "secret1", "role": "A"},
     )
     assert created.status_code == 201
     assert created.json()["status"] == "active"
@@ -52,7 +52,7 @@ def test_admin_creates_active_user_who_can_login(client: TestClient) -> None:
 
 def test_duplicate_username_conflicts(client: TestClient) -> None:
     admin = _bearer(_token(client, "admin", "admin123"))
-    body = {"username": "joachim", "full_name": "J", "password": "secret1", "role": "A2"}
+    body = {"username": "joachim", "full_name": "J", "password": "secret1", "role": "A"}
     assert client.post(f"{V}/users", headers=admin, json=body).status_code == 201
     assert client.post(f"{V}/users", headers=admin, json=body).status_code == 409
 
@@ -61,7 +61,7 @@ def test_self_register_then_approve_flow(client: TestClient) -> None:
     # Self-registration lands in `pending` and cannot log in yet.
     reg = client.post(
         f"{V}/auth/register",
-        json={"username": "longg", "full_name": "Long", "password": "secret1", "role": "A3"},
+        json={"username": "longg", "full_name": "Long", "password": "secret1", "role": "A"},
     )
     assert reg.status_code == 201
     assert reg.json()["status"] == "pending"
@@ -81,7 +81,7 @@ def test_non_admin_cannot_list_users(client: TestClient) -> None:
     client.post(
         f"{V}/users",
         headers=admin,
-        json={"username": "thomas", "full_name": "T", "password": "secret1", "role": "A4"},
+        json={"username": "thomas", "full_name": "T", "password": "secret1", "role": "A"},
     )
     thomas = _bearer(_token(client, "thomas", "secret1"))
     assert client.get(f"{V}/users", headers=thomas).status_code == 403

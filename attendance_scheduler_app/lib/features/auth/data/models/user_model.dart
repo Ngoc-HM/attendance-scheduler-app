@@ -8,6 +8,7 @@ class UserModel extends User {
     required super.fullName,
     required super.role,
     required super.status,
+    required super.code,
   });
 
   factory UserModel.fromJson(Map<String, dynamic> json) => UserModel(
@@ -16,14 +17,12 @@ class UserModel extends User {
     fullName: json['full_name'] as String? ?? '',
     role: _roleFromApi(json['role'] as String? ?? 'T'),
     status: json['status'] as String? ?? 'pending',
+    code: json['code'] as String? ?? '',
   );
 
   static UserRole _roleFromApi(String role) => switch (role) {
     'M' => UserRole.m,
-    'A1' => UserRole.a1,
-    'A2' => UserRole.a2,
-    'A3' => UserRole.a3,
-    'A4' => UserRole.a4,
+    'A' => UserRole.a,
     _ => UserRole.t,
   };
 }

@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/router/app_router.dart';
 import '../../../../design_system/design_system.dart';
 import '../../../../i18n/app_localizations.dart';
+import '../../../../i18n/locale_provider.dart';
 import '../providers/auth_provider.dart';
 
 class LoginPage extends ConsumerStatefulWidget {
@@ -16,8 +17,10 @@ class LoginPage extends ConsumerStatefulWidget {
 
 class _LoginPageState extends ConsumerState<LoginPage> {
   final _formKey = GlobalKey<FormState>();
-  final _username = TextEditingController();
-  final _password = TextEditingController();
+  // Pre-filled with the seed-admin defaults (config FIRST_ADMIN_*) so login
+  // is one click during development.
+  final _username = TextEditingController(text: 'admin');
+  final _password = TextEditingController(text: 'admin123');
 
   @override
   void dispose() {
@@ -37,20 +40,25 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
+    final locale = ref.watch(localeControllerProvider);
     final state = ref.watch(authControllerProvider);
     return DsLoginView(
       formKey: _formKey,
       usernameController: _username,
       passwordController: _password,
       title: l.login,
-      subtitle: 'Use your approved account to continue.',
+      subtitle: l.text('loginSubtitle'),
       usernameLabel: l.username,
       passwordLabel: l.password,
       loginLabel: l.login,
       registerLabel: l.createAccount,
       requiredMessage: l.fieldRequired,
-      error: state.error,
+      error: state.error == null ? null : l.authError(state.error),
       loading: state.isLoading,
+      languageCode: locale.languageCode,
+      onLanguageChanged: ref
+          .read(localeControllerProvider.notifier)
+          .setLanguage,
       onLogin: _submit,
       onRegister: () => context.go(AppRoute.register),
     );

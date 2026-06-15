@@ -16,6 +16,7 @@ class User(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     username: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    code: Mapped[str] = mapped_column(String(8), unique=True, index=True)
     full_name: Mapped[str] = mapped_column(String(128))
     hashed_password: Mapped[str] = mapped_column(String(255))
 
@@ -34,6 +35,9 @@ class User(Base, TimestampMixin):
     # Consecutive working days at the end of the previous month — feeds the
     # "max 5 consecutive" constraint across the month boundary (§5.5).
     carry_streak: Mapped[int] = mapped_column(Integer, default=0)
+    # Premium OFF days (off landing on Sat/Sun/holiday) already received —
+    # balanced across months so the perk rotates fairly (locked decision #6).
+    carry_premium_off: Mapped[int] = mapped_column(Integer, default=0)
 
     def __repr__(self) -> str:  # pragma: no cover
         return f"<User {self.username} role={self.role.value}>"

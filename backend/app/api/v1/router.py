@@ -13,6 +13,7 @@ from app.api.v1.endpoints import (
     leaves,
     reports,
     schedules,
+    shift_changes,
     users,
 )
 
@@ -28,3 +29,4 @@ api_router.include_router(
     calculations.router, prefix="/calculations", tags=["calculations"]
 )
 api_router.include_router(reports.router, prefix="/reports", tags=["reports"])
+api_router.include_router(shift_changes.router, prefix="/shift-changes", tags=["shift-changes"])

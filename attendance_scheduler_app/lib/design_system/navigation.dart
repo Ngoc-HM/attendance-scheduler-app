@@ -1,5 +1,8 @@
+import 'package:animations/animations.dart';
 import 'package:flutter/material.dart';
 
+import '../i18n/app_localizations.dart';
+import 'components.dart';
 import 'liquid_navigation.dart';
 import 'navigation_models.dart';
 import 'tokens.dart';
@@ -15,6 +18,8 @@ class DsNavigationShell extends StatelessWidget {
     required this.onSelected,
     required this.onLogout,
     required this.logoutLabel,
+    required this.languageCode,
+    required this.onLanguageChanged,
     this.userName,
     this.userRole,
   });
@@ -27,6 +32,8 @@ class DsNavigationShell extends StatelessWidget {
   final ValueChanged<int> onSelected;
   final VoidCallback onLogout;
   final String logoutLabel;
+  final String languageCode;
+  final ValueChanged<String> onLanguageChanged;
   final String? userName;
   final String? userRole;
 
@@ -38,28 +45,51 @@ class DsNavigationShell extends StatelessWidget {
         final isTablet = constraints.maxWidth >= DsBreakpoints.mobile;
         if (isDesktop || isTablet) {
           return Scaffold(
-            body: Row(
-              children: [
-                _DsSideNavigation(
-                  productName: productName,
-                  destinations: destinations,
-                  selectedIndex: selectedIndex,
-                  extended: isDesktop,
-                  userName: userName,
-                  userRole: userRole,
-                  logoutLabel: logoutLabel,
-                  onSelected: onSelected,
-                  onLogout: onLogout,
-                ),
-                Expanded(child: child),
-              ],
+            backgroundColor: Colors.transparent,
+            body: DsLiquidGlassBackdrop(
+              padding: const EdgeInsets.all(DsSpacing.x3),
+              child: Row(
+                children: [
+                  DsLiquidGlassSurface(
+                    padding: EdgeInsets.zero,
+                    borderRadius: DsRadius.xxLarge,
+                    tint: DsColors.surface.withValues(alpha: 0.68),
+                    child: _DsSideNavigation(
+                      productName: productName,
+                      destinations: destinations,
+                      selectedIndex: selectedIndex,
+                      extended: isDesktop,
+                      userName: userName,
+                      userRole: userRole,
+                      logoutLabel: logoutLabel,
+                      languageCode: languageCode,
+                      onLanguageChanged: onLanguageChanged,
+                      onSelected: onSelected,
+                      onLogout: onLogout,
+                    ),
+                  ),
+                  const SizedBox(width: DsSpacing.x3),
+                  Expanded(
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(DsRadius.xxLarge),
+                      child: _DsDirectionalTabTransition(
+                        index: selectedIndex,
+                        child: child,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           );
         }
 
         return Scaffold(
           extendBody: true,
+          backgroundColor: Colors.transparent,
           appBar: AppBar(
+            backgroundColor: DsColors.surface.withValues(alpha: 0.76),
+            surfaceTintColor: Colors.transparent,
             titleSpacing: DsSpacing.x2,
             title: Row(
               children: [
@@ -69,6 +99,12 @@ class DsNavigationShell extends StatelessWidget {
               ],
             ),
             actions: [
+              DsLanguageSelector(
+                languageCode: languageCode,
+                onChanged: onLanguageChanged,
+                compact: true,
+              ),
+              const SizedBox(width: DsSpacing.x1),
               IconButton(
                 tooltip: logoutLabel,
                 onPressed: onLogout,
@@ -81,9 +117,14 @@ class DsNavigationShell extends StatelessWidget {
               child: Divider(height: 1),
             ),
           ),
-          body: Padding(
-            padding: const EdgeInsets.only(bottom: 88),
-            child: child,
+          body: DsLiquidGlassBackdrop(
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 92),
+              child: _DsDirectionalTabTransition(
+                index: selectedIndex,
+                child: child,
+              ),
+            ),
           ),
           bottomNavigationBar: DsLiquidNavigationBar(
             destinations: destinations,
@@ -93,6 +134,148 @@ class DsNavigationShell extends StatelessWidget {
         );
       },
     );
+  }
+}
+
+class _DsDirectionalTabTransition extends StatefulWidget {
+  const _DsDirectionalTabTransition({required this.index, required this.child});
+
+  final int index;
+  final Widget child;
+
+  @override
+  State<_DsDirectionalTabTransition> createState() =>
+      _DsDirectionalTabTransitionState();
+}
+
+class _DsDirectionalTabTransitionState
+    extends State<_DsDirectionalTabTransition> {
+  late int _previousIndex;
+  // false → forward (selected a LOWER tab): new content slides in from the
+  // RIGHT, old fades-through out to the left (right→left).
+  // true  → reverse (selected a HIGHER tab): left→right.
+  bool _reverse = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _previousIndex = widget.index;
+  }
+
+  @override
+  void didUpdateWidget(covariant _DsDirectionalTabTransition oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.index == _previousIndex) return;
+    _reverse = widget.index < _previousIndex; // going up the nav order
+    _previousIndex = widget.index;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Full-page directional slide: the whole page moves as one block.
+    // Forward (selected a LOWER tab → higher index): new page slides in from
+    // the RIGHT, old page exits LEFT (right→left). ``reverse`` flips it so
+    // going UP (to a higher tab) slides left→right. A light fade smooths the
+    // hand-off without the "zoom" of a shared-axis scale.
+    return PageTransitionSwitcher(
+      duration: DsDuration.pageTransition,
+      reverse: _reverse,
+      transitionBuilder: (child, primary, secondary) {
+        final entering = Tween<Offset>(
+          begin: const Offset(1, 0),
+          end: Offset.zero,
+        ).animate(CurvedAnimation(parent: primary, curve: DsCurve.standard));
+        final leaving = Tween<Offset>(
+          begin: Offset.zero,
+          end: const Offset(-1, 0),
+        ).animate(CurvedAnimation(parent: secondary, curve: DsCurve.standard));
+        // Pure slide, no fade: each page is an opaque block that travels as a
+        // single unit — the incoming page fully covers what it slides over.
+        // While sliding we rasterize the page into ONE flat image so the
+        // `BackdropFilter` blur inside glass surfaces is baked in and travels
+        // WITH its frame; otherwise the blur re-samples the screen each frame
+        // and visually lags behind the moving panels ("each element on its
+        // own"). Live blur returns the moment the slide settles.
+        return SlideTransition(
+          position: leaving,
+          child: SlideTransition(
+            position: entering,
+            child: _RasterWhileAnimating(
+              primary: primary,
+              secondary: secondary,
+              child: child,
+            ),
+          ),
+        );
+      },
+      child: KeyedSubtree(
+        key: ValueKey(widget.index),
+        // Opaque page-background travels WITH the content so the whole page
+        // reads as one solid block, not loose widgets over a static backdrop.
+        child: RepaintBoundary(
+          child: DecoratedBox(
+            decoration: const BoxDecoration(
+              gradient: DsGradients.appBackground,
+            ),
+            child: widget.child,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Flattens [child] into a single rasterized image while either transition
+/// animation is running, then drops back to the live widget tree once both
+/// settle. This keeps the whole page moving as one block during the slide —
+/// crucially baking the `BackdropFilter` blur of glass surfaces into the
+/// snapshot so it can't lag behind its own frame.
+class _RasterWhileAnimating extends StatefulWidget {
+  const _RasterWhileAnimating({
+    required this.primary,
+    required this.secondary,
+    required this.child,
+  });
+
+  final Animation<double> primary;
+  final Animation<double> secondary;
+  final Widget child;
+
+  @override
+  State<_RasterWhileAnimating> createState() => _RasterWhileAnimatingState();
+}
+
+class _RasterWhileAnimatingState extends State<_RasterWhileAnimating> {
+  final SnapshotController _controller = SnapshotController();
+
+  @override
+  void initState() {
+    super.initState();
+    widget.primary.addStatusListener(_sync);
+    widget.secondary.addStatusListener(_sync);
+    _sync(AnimationStatus.dismissed);
+  }
+
+  @override
+  void dispose() {
+    widget.primary.removeStatusListener(_sync);
+    widget.secondary.removeStatusListener(_sync);
+    _controller.dispose();
+    super.dispose();
+  }
+
+  bool _isMoving(Animation<double> a) =>
+      a.status == AnimationStatus.forward ||
+      a.status == AnimationStatus.reverse;
+
+  void _sync(AnimationStatus _) {
+    _controller.allowSnapshotting =
+        _isMoving(widget.primary) || _isMoving(widget.secondary);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SnapshotWidget(controller: _controller, child: widget.child);
   }
 }
 
@@ -128,6 +311,8 @@ class _DsSideNavigation extends StatelessWidget {
     required this.onSelected,
     required this.onLogout,
     required this.logoutLabel,
+    required this.languageCode,
+    required this.onLanguageChanged,
     this.userName,
     this.userRole,
   });
@@ -139,14 +324,16 @@ class _DsSideNavigation extends StatelessWidget {
   final ValueChanged<int> onSelected;
   final VoidCallback onLogout;
   final String logoutLabel;
+  final String languageCode;
+  final ValueChanged<String> onLanguageChanged;
   final String? userName;
   final String? userRole;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    final l = AppLocalizations.of(context);
+    return SizedBox(
       width: extended ? 240 : 80,
-      color: DsColors.surface,
       child: Column(
         children: [
           Container(
@@ -195,8 +382,19 @@ class _DsSideNavigation extends StatelessWidget {
             decoration: const BoxDecoration(
               border: Border(top: BorderSide(color: DsColors.border)),
             ),
-            child: extended
-                ? Row(
+            child: Column(
+              children: [
+                Align(
+                  alignment: Alignment.center,
+                  child: DsLanguageSelector(
+                    languageCode: languageCode,
+                    onChanged: onLanguageChanged,
+                    compact: !extended,
+                  ),
+                ),
+                const SizedBox(height: DsSpacing.x3),
+                if (extended)
+                  Row(
                     children: [
                       DsUserAvatar(name: userName),
                       const SizedBox(width: 10),
@@ -205,7 +403,7 @@ class _DsSideNavigation extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              userName ?? 'Signed in',
+                              userName ?? l.text('signedIn'),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: Theme.of(context).textTheme.bodyMedium
@@ -215,7 +413,7 @@ class _DsSideNavigation extends StatelessWidget {
                                   ),
                             ),
                             Text(
-                              userRole ?? 'User',
+                              userRole ?? l.text('user'),
                               style: Theme.of(context).textTheme.bodySmall,
                             ),
                           ],
@@ -228,13 +426,16 @@ class _DsSideNavigation extends StatelessWidget {
                       ),
                     ],
                   )
-                : Tooltip(
+                else
+                  Tooltip(
                     message: logoutLabel,
                     child: IconButton(
                       onPressed: onLogout,
                       icon: const Icon(Icons.logout, size: 20),
                     ),
                   ),
+              ],
+            ),
           ),
         ],
       ),

@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/router/app_router.dart';
 import '../../../../design_system/design_system.dart';
 import '../../../../i18n/app_localizations.dart';
+import '../../../../i18n/locale_provider.dart';
 import '../../../auth/domain/entities/user.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 
@@ -17,6 +18,7 @@ class HomeShell extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l = AppLocalizations.of(context);
+    final locale = ref.watch(localeControllerProvider);
     final auth = ref.watch(authControllerProvider);
     final destinations = [
       DsNavigationDestination(
@@ -57,12 +59,18 @@ class HomeShell extends ConsumerWidget {
 
     return DsNavigationShell(
       appTitle: l.appTitle,
-      productName: 'Roster FRA',
+      productName: l.productName,
       destinations: destinations,
       selectedIndex: selected < 0 ? 0 : selected,
       userName: auth.user?.fullName,
-      userRole: auth.user?.role.apiValue,
+      userRole: auth.user == null
+          ? null
+          : l.roleLabel(auth.user!.role.apiValue),
       logoutLabel: l.logout,
+      languageCode: locale.languageCode,
+      onLanguageChanged: ref
+          .read(localeControllerProvider.notifier)
+          .setLanguage,
       onSelected: (index) => context.go(destinations[index].path),
       onLogout: () async {
         await ref.read(authControllerProvider.notifier).logout();

@@ -1,8 +1,231 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 
 import '../core/constants/shift_codes.dart';
+import '../i18n/app_localizations.dart';
 import 'tokens.dart';
+
+class DsLiquidGlassBackdrop extends StatelessWidget {
+  const DsLiquidGlassBackdrop({
+    super.key,
+    required this.child,
+    this.padding = EdgeInsets.zero,
+  });
+
+  final Widget child;
+  final EdgeInsetsGeometry padding;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: const BoxDecoration(gradient: DsGradients.appBackground),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          const Positioned(
+            top: -120,
+            right: -70,
+            child: _DsGlassGlow(
+              size: 340,
+              colors: [Color(0x667DD3FC), Color(0x007DD3FC)],
+            ),
+          ),
+          const Positioned(
+            bottom: -160,
+            left: -90,
+            child: _DsGlassGlow(
+              size: 400,
+              colors: [Color(0x4DC4B5FD), Color(0x00C4B5FD)],
+            ),
+          ),
+          Padding(padding: padding, child: child),
+        ],
+      ),
+    );
+  }
+}
+
+class _DsGlassGlow extends StatelessWidget {
+  const _DsGlassGlow({required this.size, required this.colors});
+
+  final double size;
+  final List<Color> colors;
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: RadialGradient(colors: colors),
+        ),
+      ),
+    );
+  }
+}
+
+class DsLiquidGlassSurface extends StatelessWidget {
+  const DsLiquidGlassSurface({
+    super.key,
+    required this.child,
+    this.padding = const EdgeInsets.all(DsSpacing.x5),
+    this.borderRadius = DsRadius.xLarge,
+    this.blur = 22,
+    this.tint = DsColors.glassBase,
+  });
+
+  final Widget child;
+  final EdgeInsetsGeometry padding;
+  final double borderRadius;
+  final double blur;
+  final Color tint;
+
+  @override
+  Widget build(BuildContext context) {
+    final radius = BorderRadius.circular(borderRadius);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: radius,
+        boxShadow: [
+          BoxShadow(
+            color: DsColors.primary.withValues(alpha: 0.12),
+            blurRadius: 32,
+            offset: const Offset(0, 14),
+            spreadRadius: -10,
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: radius,
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: tint,
+              borderRadius: radius,
+              border: Border.all(color: DsColors.glassBorder, width: 1.4),
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [DsColors.glassStrong, tint, DsColors.glassHighlight],
+                stops: const [0, 0.5, 1],
+              ),
+            ),
+            child: Stack(
+              children: [
+                Positioned(
+                  top: 0,
+                  left: 18,
+                  right: 18,
+                  child: IgnorePointer(
+                    child: Container(
+                      height: 1,
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            Color(0x00FFFFFF),
+                            Color(0xFFFFFFFF),
+                            Color(0x00FFFFFF),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                Padding(padding: padding, child: child),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class DsLanguageSelector extends StatelessWidget {
+  const DsLanguageSelector({
+    super.key,
+    required this.languageCode,
+    required this.onChanged,
+    this.compact = false,
+  });
+
+  final String languageCode;
+  final ValueChanged<String> onChanged;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    final selectedLabel = languageCode == 'vi' ? l.vietnamese : l.english;
+
+    return MenuAnchor(
+      menuChildren: [
+        MenuItemButton(
+          leadingIcon: languageCode == 'en'
+              ? const Icon(Icons.check, size: 18)
+              : const SizedBox(width: 18),
+          onPressed: () => onChanged('en'),
+          child: Text(l.english),
+        ),
+        MenuItemButton(
+          leadingIcon: languageCode == 'vi'
+              ? const Icon(Icons.check, size: 18)
+              : const SizedBox(width: 18),
+          onPressed: () => onChanged('vi'),
+          child: Text(l.vietnamese),
+        ),
+      ],
+      builder: (context, controller, child) {
+        return Tooltip(
+          message: l.language,
+          child: DsLiquidGlassSurface(
+            padding: EdgeInsets.zero,
+            borderRadius: DsRadius.medium,
+            blur: 14,
+            tint: DsColors.surface.withValues(alpha: 0.56),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                key: const Key('language-selector'),
+                onTap: controller.open,
+                borderRadius: BorderRadius.circular(DsRadius.medium),
+                child: Padding(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: compact ? 10 : 12,
+                    vertical: 9,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.language_outlined,
+                        size: 18,
+                        color: DsColors.primaryHover,
+                      ),
+                      if (!compact) ...[
+                        const SizedBox(width: DsSpacing.x2),
+                        Text(
+                          selectedLabel,
+                          style: Theme.of(context).textTheme.labelLarge,
+                        ),
+                      ],
+                      const SizedBox(width: DsSpacing.x1),
+                      const Icon(Icons.expand_more, size: 16),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
 
 class DsPage extends StatelessWidget {
   const DsPage({
@@ -23,7 +246,7 @@ class DsPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: DsColors.background,
+      backgroundColor: Colors.transparent,
       body: LayoutBuilder(
         builder: (context, constraints) {
           final horizontal = constraints.maxWidth < DsBreakpoints.mobile
@@ -303,6 +526,7 @@ class DsMonthSwitcher extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
     return Container(
       height: DsControlHeight.medium,
       decoration: BoxDecoration(
@@ -314,20 +538,20 @@ class DsMonthSwitcher extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           IconButton(
-            tooltip: 'Previous month',
+            tooltip: l.text('previousMonth'),
             onPressed: onPrevious,
             icon: const Icon(Icons.chevron_left, size: 20),
           ),
           SizedBox(
             width: 112,
             child: Text(
-              DateFormat('MMMM yyyy').format(month),
+              l.monthYear(month),
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.labelLarge,
             ),
           ),
           IconButton(
-            tooltip: 'Next month',
+            tooltip: l.text('nextMonth'),
             onPressed: onNext,
             icon: const Icon(Icons.chevron_right, size: 20),
           ),

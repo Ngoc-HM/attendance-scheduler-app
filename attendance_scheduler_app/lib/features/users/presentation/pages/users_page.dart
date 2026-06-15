@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../design_system/design_system.dart';
+import '../../../../i18n/app_localizations.dart';
 import '../../../auth/domain/entities/user.dart';
 import '../providers/users_provider.dart';
 import '../widgets/create_user_dialog.dart';
@@ -11,6 +12,7 @@ class UsersPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l = AppLocalizations.of(context);
     final usersAsync = ref.watch(usersControllerProvider);
     final controller = ref.read(usersControllerProvider.notifier);
     final users = usersAsync.asData?.value ?? const [];
@@ -24,10 +26,11 @@ class UsersPage extends ConsumerWidget {
             fullName: user.fullName,
             role: user.role.apiValue,
             status: user.status,
+            code: user.code,
           ),
       ],
       loading: usersAsync.isLoading,
-      error: usersAsync.hasError ? usersAsync.error.toString() : null,
+      error: usersAsync.hasError ? l.loadFailed : null,
       onRefresh: controller.load,
       onCreate: () => showDialog<bool>(
         context: context,

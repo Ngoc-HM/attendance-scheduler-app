@@ -16,23 +16,29 @@ def month_days(year: int, month: int) -> list[date]:
 
 
 def build_weeks(days: list[date]) -> list[list[date]]:
-    """Partition consecutive ``days`` into Monday–Sunday weeks (§5.1).
+    """Partition ``days`` into 7-day blocks anchored at day 1 (decision #7).
 
-    A single, consistent week definition is used everywhere so the "2 days off
-    per week" rule (§5.3 #2) is applied uniformly. Partial weeks at the month
-    boundaries are kept as their own groups.
+    A "week" for the 2-days-off rule (§5.3 #2) is days 1–7, 8–14, 15–21,
+    22–28, 29–end of the month — NOT calendar Mon–Sun weeks. Only the final
+    block can be partial; its off-day target is pro-rated via
+    ``partial_block_off_target``. Confirm-with-customer flag in plan.md.
     """
-    weeks: list[list[date]] = []
-    current: list[date] = []
-    for d in sorted(days):
-        # Monday (weekday() == 0) starts a new week.
-        if current and d.weekday() == 0:
-            weeks.append(current)
-            current = []
-        current.append(d)
-    if current:
-        weeks.append(current)
-    return weeks
+    ordered = sorted(days)
+    blocks: dict[int, list[date]] = {}
+    for d in ordered:
+        blocks.setdefault((d.day - 1) // 7, []).append(d)
+    return [blocks[k] for k in sorted(blocks)]
+
+
+def partial_block_off_target(block_len: int) -> int:
+    """Required OFF (X) days for a block of ``block_len`` days (decision #7).
+
+    Full 7-day block → 2; partial final block pro-rates: round(len/7*2).
+    E.g. 2-day tail → 1, 3-day tail → 1, 1-day tail → 0.
+    """
+    if block_len >= 7:
+        return 2
+    return round(block_len / 7 * 2)
 
 
 def trailing_work_streak(working_flags: list[bool]) -> int:

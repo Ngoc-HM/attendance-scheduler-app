@@ -1,7 +1,10 @@
-"""Public holidays (spec §4.5 / F-13).
+"""Public holidays (spec §4.5 / F-13 — OVERRIDDEN by locked decision #5).
 
-A holiday counts as an OFF day (code ``X``). Admin maintains this list; the
-scheduler treats these days like approved time off (§5.3 #5).
+A holiday is a NORMAL WORKING DAY (owner decision 2026-06-11, diverges from
+spec §7 "PH = X"). Holiday rows are *premium-off markers* only: an OFF day
+landing on a holiday (like Sat/Sun) counts as a "premium off" and is balanced
+fairly across people over months (decision #6). The scheduler never pins
+these days off. See docs/design-decisions.md.
 """
 
 from __future__ import annotations

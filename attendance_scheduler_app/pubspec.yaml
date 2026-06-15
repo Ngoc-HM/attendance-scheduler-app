@@ -30,6 +30,12 @@ dependencies:
   # Runtime config from a .env file (API base URL → backend)
   flutter_dotenv: ^5.1.0
   liquid_glass_bar: ^0.1.1
+  # Material motion (shared-axis tab transitions in the design system)
+  animations: ^2.0.11
+  # F-04 Excel flight import (pick file) + F-15 report export (save file)
+  file_picker: ^8.1.2
+  # Resolve a writable directory for saved report exports
+  path_provider: ^2.1.4
 
 dev_dependencies:
   flutter_test:

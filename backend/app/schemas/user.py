@@ -30,6 +30,7 @@ class UserUpdate(BaseModel):
 class UserRead(ORMModel):
     id: int
     username: str
+    code: str
     full_name: str
     role: Role
     status: UserStatus

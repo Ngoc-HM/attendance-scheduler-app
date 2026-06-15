@@ -28,7 +28,7 @@ class DsFlightRowData {
     required this.status,
   });
 
-  final String date;
+  final DateTime date;
   final int flightPairs;
   final String flights;
   final String arrival;
@@ -105,6 +105,7 @@ class DsUserRowData {
     required this.fullName,
     required this.role,
     required this.status,
+    required this.code,
   });
 
   final int id;
@@ -112,4 +113,7 @@ class DsUserRowData {
   final String fullName;
   final String role;
   final String status;
+
+  /// Confidential per-person identifier auto-assigned by the server (e.g. "A3").
+  final String code;
 }

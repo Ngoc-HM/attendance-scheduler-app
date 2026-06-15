@@ -26,6 +26,15 @@ class AttendanceRead(ORMModel):
     note: str | None
 
 
+class SickCoverResult(BaseModel):
+    """F-10 — outcome of marking a sick day with A/D backfill (§6)."""
+
+    sick: AttendanceRead
+    cover: AttendanceRead | None = None  # the colleague assigned A/D, if any
+    forced: bool = False                 # recently-sick rule applied
+    message: str | None = None           # reason / "no cover available"
+
+
 class HolidayUpsert(BaseModel):
     day: date
     name: str

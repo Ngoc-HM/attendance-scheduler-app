@@ -13,6 +13,8 @@ from app.schemas.common import ORMModel
 class GenerateScheduleRequest(BaseModel):
     year: int = Field(ge=2000, le=2100)
     month: int = Field(ge=1, le=12)
+    # Overrides the published/manual-edit regenerate guards (admin intent).
+    force: bool = False
 
 
 class ShiftAssignmentRead(ORMModel):

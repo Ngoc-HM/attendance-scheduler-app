@@ -76,18 +76,34 @@ flutter run -d macos            # or windows / linux
 ```
 
 ## Status
-Foundation in place: full folder structure, data models, and API contract.
-**Implemented & tested:** auth + user management (F-01/02/03) — login (JWT),
-self-register → admin approval, role guards; the seed admin is bootstrapped
-from env on startup, and the DB + tables are auto-created if missing. The
-Flutter login / register / Users-management screens are wired to these.
-The scheduler engine wiring + calendar helpers exist; remaining endpoints/
-services (flights, leave, schedule generation, attendance, reports) still
-return `501` / raise `NotImplementedError` with spec-cited TODOs.
+**Backend: feature-complete & tested — F-01..F-15 all implemented (99/99 tests).**
+The OR-Tools CP-SAT engine enforces every §5.3 hard rule (via an always-feasible
+slack model that reports violations instead of failing — §5.6) and the §5.4
+objectives (A/D balance, weekend pairing, cross-month premium-off fairness).
+Schedule generate / manual-override / publish, day-20 autorun, leave +
+shift-change requests, attendance with sick A/D backfill, holiday CRUD,
+month-close calculations, and CSV/XLSX export are all live. GDPR hardening is in
+place (RBAC, audit log on every admin mutation, sick `S` admin-only). Schema is
+managed by Alembic (`alembic upgrade head`).
+
+**Frontend:** auth + user management wired; the flights / leaves / schedule /
+attendance / reports screens are being wired to the live API (replacing the
+earlier mockups). See `docs/development-roadmap.md` for current phase status.
+
+> **Spec overrides** (owner-approved — see `docs/design-decisions.md`):
+> holidays are **working days** (not auto-off, diverges from F-13/§7); a "week"
+> for the 2-days-off rule is a **7-day block from day 1** (not Mon–Sun).
+
+## Documentation
+Full docs live in [`docs/`](./docs): architecture, design decisions (incl. spec
+overrides), code standards, deployment/GDPR guide, roadmap, changelog,
+codebase summary.
 
 ## Compliance (spec §9 — GDPR / BDSG)
 Deploy in an EU/Frankfurt region; sick data (`S`) is special-category
 (admin-only, no medical detail); TLS + encryption at rest; role-based access;
-audit log; rule-based scheduling (no AI performance evaluation). Final legal
-sign-off rests with the customer's DPO. **Open question:** does the customer
-have a Betriebsrat (works council)? If so, an agreement is needed before rollout.
+audit log on admin actions; rule-based scheduling (no AI performance
+evaluation, §9.6). Details: [`docs/deployment-guide.md`](./docs/deployment-guide.md).
+Final legal sign-off rests with the customer's DPO. **Open question:** does the
+customer have a Betriebsrat (works council)? If so, an agreement is needed
+before rollout.

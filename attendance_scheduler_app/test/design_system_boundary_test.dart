@@ -53,6 +53,34 @@ void main() {
     expect(violations, isEmpty);
   });
 
+  test('feature presentation code does not recreate glass effects', () {
+    final forbidden = RegExp(
+      r'\b(?:BackdropFilter|ImageFilter\.blur|LiquidGlassBar|'
+      r'DsLiquidGlassSurface|DsLiquidGlassBackdrop)\b',
+    );
+    final violations = <String>[];
+    final presentationFiles = Directory('lib/features')
+        .listSync(recursive: true)
+        .whereType<File>()
+        .where(
+          (file) =>
+              file.path.endsWith('.dart') &&
+              file.path.contains('${Platform.pathSeparator}presentation'),
+        );
+
+    for (final file in presentationFiles) {
+      if (forbidden.hasMatch(file.readAsStringSync())) {
+        violations.add(file.path);
+      }
+    }
+
+    expect(
+      violations,
+      isEmpty,
+      reason: 'Glass is owned and composed only inside lib/design_system.',
+    );
+  });
+
   test('dark text tokens are never used as structural surfaces', () {
     const darkToken =
         r'(?:DsColors\.textPrimary|Colors\.black|Color\(0xFF0F172A\))';

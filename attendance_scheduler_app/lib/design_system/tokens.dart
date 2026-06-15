@@ -15,6 +15,10 @@ abstract final class DsColors {
   static const primary = Color(0xFF0284C7);
   static const primaryHover = Color(0xFF0369A1);
   static const primarySoft = Color(0xFFF0F9FF);
+  static const glassBase = Color(0xBFFFFFFF);
+  static const glassStrong = Color(0xE6FFFFFF);
+  static const glassBorder = Color(0xF2FFFFFF);
+  static const glassHighlight = Color(0x99FFFFFF);
   static const success = Color(0xFF15803D);
   static const successSoft = Color(0xFFF0FDF4);
   static const warning = Color(0xFFB45309);
@@ -60,4 +64,36 @@ abstract final class DsDuration {
   static const base = Duration(milliseconds: 160);
   static const medium = Duration(milliseconds: 220);
   static const slow = Duration(milliseconds: 280);
+  static const navigation = Duration(milliseconds: 320);
+  static const pageTransition = Duration(milliseconds: 480); // full-page slide
+  static const shimmer = Duration(milliseconds: 900);
+}
+
+/// Shared gradients so the page-background reads identically whether it is the
+/// static window backdrop or an individual page sliding as one opaque block.
+abstract final class DsGradients {
+  static const appBackground = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [
+      Color(0xFFF8FCFF),
+      Color(0xFFEAF7FF),
+      Color(0xFFF7F5FF),
+      Color(0xFFFFFFFF),
+    ],
+    stops: [0, 0.38, 0.72, 1],
+  );
+}
+
+/// Single source of truth for motion easing — every animation in the design
+/// system uses one of these so transitions feel coordinated, not ad-hoc.
+abstract final class DsCurve {
+  /// Default for enter/move motion (Material "emphasized decelerate").
+  static const standard = Cubic(0.2, 0.0, 0.0, 1.0);
+
+  /// Symmetric ease for reversible motion (e.g. shimmer, nav pill).
+  static const smooth = Curves.easeOutCubic;
+
+  /// Accelerate-out for elements leaving the screen.
+  static const exit = Cubic(0.4, 0.0, 1.0, 1.0);
 }

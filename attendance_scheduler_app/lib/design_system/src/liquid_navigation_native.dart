@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:liquid_glass_bar/liquid_glass_bar.dart';
 
@@ -27,24 +29,30 @@ class DsLiquidNavigationBar extends StatelessWidget {
       onTap: onSelected,
       style: LiquidGlassBarStyle(
         activeColor: DsColors.primary,
-        inactiveColor: DsColors.textMuted,
-        borderRadius: DsRadius.xxLarge,
-        height: 58,
-        padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
-        animationDuration: DsDuration.base,
-        animationCurve: Curves.easeOutCubic,
-        iconSize: 20,
-        selectedIconScale: 1.06,
+        inactiveColor: DsColors.textPrimary,
+        borderRadius: 32,
+        height: 60,
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 24),
+        animationDuration: DsDuration.navigation,
+        animationCurve: DsCurve.smooth,
+        iconSize: 22,
+        selectedIconScale: 1.2,
         labelStyle: Theme.of(context).textTheme.bodySmall?.copyWith(
-          fontSize: 10,
-          fontWeight: FontWeight.w600,
+          color: DsColors.textPrimary,
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
         ),
         liquidGlassSettings: LiquidGlassSettings(
-          thickness: 12,
-          blur: 12,
-          glassColor: DsColors.surface.withValues(alpha: 0.82),
-          lightIntensity: 0.35,
+          visibility: 1,
+          glassColor: DsColors.surface.withValues(alpha: 0.18),
+          thickness: 18,
+          blur: 6,
+          chromaticAberration: 0.012,
+          lightAngle: 0.45 * math.pi,
+          lightIntensity: 0.6,
+          ambientStrength: 0.25,
           refractiveIndex: 1.25,
+          saturation: 1.15,
         ),
       ),
     );

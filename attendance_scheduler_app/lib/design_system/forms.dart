@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../i18n/app_localizations.dart';
 import 'components.dart';
 import 'navigation.dart';
 import 'tokens.dart';
@@ -194,75 +195,93 @@ class DsAuthPage extends StatelessWidget {
     required this.subtitle,
     required this.form,
     required this.footer,
+    required this.languageCode,
+    required this.onLanguageChanged,
   });
 
   final String title;
   final String subtitle;
   final Widget form;
   final Widget footer;
+  final String languageCode;
+  final ValueChanged<String> onLanguageChanged;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: DsColors.background,
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(DsSpacing.x6),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 1040),
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final showContext =
-                      constraints.maxWidth >= DsBreakpoints.desktop;
-                  return DsSurface(
-                    padding: EdgeInsets.zero,
-                    child: IntrinsicHeight(
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          if (showContext)
-                            const Expanded(child: _DsAuthContextPanel()),
-                          Expanded(
-                            child: Padding(
-                              padding: const EdgeInsets.all(DsSpacing.x8),
-                              child: ConstrainedBox(
-                                constraints: const BoxConstraints(
-                                  maxWidth: 420,
-                                ),
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    const DsBrandMark(size: 44),
-                                    const SizedBox(height: DsSpacing.x6),
-                                    Text(
-                                      title,
-                                      style: Theme.of(
-                                        context,
-                                      ).textTheme.headlineMedium,
-                                    ),
-                                    const SizedBox(height: DsSpacing.x2),
-                                    Text(
-                                      subtitle,
-                                      style: Theme.of(
-                                        context,
-                                      ).textTheme.bodyMedium,
-                                    ),
-                                    const SizedBox(height: DsSpacing.x8),
-                                    form,
-                                    const SizedBox(height: DsSpacing.x4),
-                                    Center(child: footer),
-                                  ],
+      backgroundColor: Colors.transparent,
+      body: DsLiquidGlassBackdrop(
+        child: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(DsSpacing.x6),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1040),
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final showContext =
+                        constraints.maxWidth >= DsBreakpoints.desktop;
+                    return DsLiquidGlassSurface(
+                      padding: EdgeInsets.zero,
+                      borderRadius: DsRadius.xxLarge,
+                      tint: DsColors.surface.withValues(alpha: 0.62),
+                      child: IntrinsicHeight(
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            if (showContext)
+                              const Expanded(child: _DsAuthContextPanel()),
+                            Expanded(
+                              child: Padding(
+                                padding: const EdgeInsets.all(DsSpacing.x8),
+                                child: ConstrainedBox(
+                                  constraints: const BoxConstraints(
+                                    maxWidth: 420,
+                                  ),
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          const DsBrandMark(size: 44),
+                                          const Spacer(),
+                                          DsLanguageSelector(
+                                            languageCode: languageCode,
+                                            onChanged: onLanguageChanged,
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: DsSpacing.x6),
+                                      Text(
+                                        title,
+                                        style: Theme.of(
+                                          context,
+                                        ).textTheme.headlineMedium,
+                                      ),
+                                      const SizedBox(height: DsSpacing.x2),
+                                      Text(
+                                        subtitle,
+                                        style: Theme.of(
+                                          context,
+                                        ).textTheme.bodyMedium,
+                                      ),
+                                      const SizedBox(height: DsSpacing.x8),
+                                      form,
+                                      const SizedBox(height: DsSpacing.x4),
+                                      Center(child: footer),
+                                    ],
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
-                  );
-                },
+                    );
+                  },
+                ),
               ),
             ),
           ),
@@ -277,8 +296,19 @@ class _DsAuthContextPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ColoredBox(
-      color: DsColors.primarySoft,
+    final l = AppLocalizations.of(context);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            DsColors.primarySoft.withValues(alpha: 0.88),
+            DsColors.surface.withValues(alpha: 0.36),
+          ],
+        ),
+        border: const Border(right: BorderSide(color: DsColors.glassBorder)),
+      ),
       child: Padding(
         padding: const EdgeInsets.all(DsSpacing.x8),
         child: Column(
@@ -286,32 +316,32 @@ class _DsAuthContextPanel extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Text(
-              'Roster FRA',
+              l.productName,
               style: Theme.of(
                 context,
               ).textTheme.headlineMedium?.copyWith(color: DsColors.textPrimary),
             ),
             const SizedBox(height: DsSpacing.x3),
             Text(
-              'Monthly flight staffing and attendance for the Frankfurt team.',
+              l.text('authPanelSubtitle'),
               style: Theme.of(
                 context,
               ).textTheme.bodyLarge?.copyWith(color: DsColors.textSecondary),
             ),
             const SizedBox(height: DsSpacing.x8),
-            const _DsFeatureLine(
+            _DsFeatureLine(
               icon: Icons.auto_awesome_outlined,
-              label: 'Automatic monthly roster',
+              label: l.text('authFeatureSchedule'),
             ),
             const SizedBox(height: DsSpacing.x4),
-            const _DsFeatureLine(
+            _DsFeatureLine(
               icon: Icons.balance_outlined,
-              label: 'Balanced ARR and DEP duties',
+              label: l.text('authFeatureBalance'),
             ),
             const SizedBox(height: DsSpacing.x4),
-            const _DsFeatureLine(
+            _DsFeatureLine(
               icon: Icons.fact_check_outlined,
-              label: 'Attendance and leave control',
+              label: l.text('authFeatureAttendance'),
             ),
           ],
         ),

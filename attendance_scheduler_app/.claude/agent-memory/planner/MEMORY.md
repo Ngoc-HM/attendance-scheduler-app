@@ -1,0 +1,2 @@
+- [Seed admin reset on restart](seed-admin-reset-on-restart.md) — intentional: admin password resets to .env default every backend startup; F-01 uses both create + self-register flows
+- [Locked scheduling decisions](project-locked-scheduling-decisions.md) — owner-locked decisions that OVERRIDE spec (holiday=workday, always-feasible slack, 7-day week blocks, premium-off); don't revert to spec

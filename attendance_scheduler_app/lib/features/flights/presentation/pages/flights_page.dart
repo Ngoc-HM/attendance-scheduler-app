@@ -1,74 +1,169 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/network/api_exception.dart';
 import '../../../../design_system/design_system.dart';
+import '../../../../i18n/app_localizations.dart';
+import '../../../auth/presentation/providers/auth_provider.dart';
+import '../providers/flights_provider.dart';
 
-class FlightsPage extends StatefulWidget {
+/// Flights page (F-04) — live data from GET /flights/days.
+///
+/// Admin actions: manual add/upsert, Excel import.
+/// All users: month navigation + table view.
+class FlightsPage extends ConsumerWidget {
   const FlightsPage({super.key});
 
   @override
-  State<FlightsPage> createState() => _FlightsPageState();
-}
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(flightsControllerProvider);
+    final ctrl = ref.read(flightsControllerProvider.notifier);
+    final isAdmin =
+        ref.watch(authControllerProvider).user?.isAdmin ?? false;
+    final l = AppLocalizations.of(context);
 
-class _FlightsPageState extends State<FlightsPage> {
-  DateTime _month = DateTime(2026, 6);
-
-  static const _rows = [
-    DsFlightRowData(
-      date: '01 Jun, Mon',
-      flightPairs: 2,
-      flights: 'VN37 / VN36 · VN31 / VN30',
-      arrival: '06:20 · 07:10',
-      departure: '13:55 · 14:40',
-      status: 'Complete',
-    ),
-    DsFlightRowData(
-      date: '02 Jun, Tue',
-      flightPairs: 1,
-      flights: 'VN37 / VN36',
-      arrival: '06:20',
-      departure: '13:55',
-      status: 'Complete',
-    ),
-    DsFlightRowData(
-      date: '04 Jun, Thu',
-      flightPairs: 2,
-      flights: 'VN37 / VN36 · VN31 / VN30',
-      arrival: '06:15 · 07:05',
-      departure: '13:45 · 14:35',
-      status: 'Complete',
-    ),
-    DsFlightRowData(
-      date: '06 Jun, Sat',
-      flightPairs: 1,
-      flights: 'VN31 / VN30',
-      arrival: '07:10',
-      departure: '14:40',
-      status: 'Review',
-    ),
-    DsFlightRowData(
-      date: '08 Jun, Mon',
-      flightPairs: 2,
-      flights: 'VN37 / VN36 · VN31 / VN30',
-      arrival: '06:20 · 07:10',
-      departure: '13:55 · 14:40',
-      status: 'Complete',
-    ),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    return DsFlightsView(
-      month: _month,
-      rows: _rows,
-      onPreviousMonth: () =>
-          setState(() => _month = DateTime(_month.year, _month.month - 1)),
-      onNextMonth: () =>
-          setState(() => _month = DateTime(_month.year, _month.month + 1)),
-      onImport: () => DsFeedback.show(
-        context,
-        'Excel import will be connected to the flight API.',
+    return state.rows.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (err, _) => Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              err is ApiException ? err.message : l.text('flightsLoadFailed'),
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 12),
+            DsPrimaryButton(
+              label: l.text('retry'),
+              onPressed: ctrl.load,
+            ),
+          ],
+        ),
       ),
-      onAdd: () => DsFeedback.show(context, 'Flight entry form opened.'),
+      data: (rows) => DsFlightsView(
+        month: state.month,
+        rows: rows,
+        onPreviousMonth: ctrl.previousMonth,
+        onNextMonth: ctrl.nextMonth,
+        onImport: isAdmin ? () => _pickAndImport(context, ref, l) : () {},
+        onAdd: isAdmin
+            ? () => _showAddDialog(context, ref, state.month, l)
+            : () {},
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Excel import
+  // ---------------------------------------------------------------------------
+
+  Future<void> _pickAndImport(
+    BuildContext context,
+    WidgetRef ref,
+    AppLocalizations l,
+  ) async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['xlsx'],
+      withData: true,
+    );
+    if (result == null || result.files.isEmpty) return;
+
+    final ctrl = ref.read(flightsControllerProvider.notifier);
+    try {
+      await ctrl.importExcel(result.files.first);
+      if (context.mounted) {
+        DsFeedback.show(
+          context,
+          l.text('flightsImportSuccess'),
+          tone: DsTone.success,
+        );
+      }
+    } on ApiException catch (e) {
+      if (context.mounted) {
+        DsFeedback.show(
+          context,
+          e.message,
+          tone: DsTone.danger,
+        );
+      }
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Manual add/upsert dialog
+  // ---------------------------------------------------------------------------
+
+  Future<void> _showAddDialog(
+    BuildContext context,
+    WidgetRef ref,
+    DateTime month,
+    AppLocalizations l,
+  ) async {
+    final dayCtrl = TextEditingController();
+    final pairsCtrl = TextEditingController(text: '1');
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => DsFormDialog(
+        title: l.text('addFlightDay'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: dayCtrl,
+              decoration: InputDecoration(
+                labelText: l.text('dayOfMonth'),
+                hintText: '1–31',
+              ),
+              keyboardType: TextInputType.number,
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: pairsCtrl,
+              decoration: InputDecoration(
+                labelText: l.text('flightPairsCount'),
+                hintText: '0 / 1 / 2',
+              ),
+              keyboardType: TextInputType.number,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text(l.cancel),
+          ),
+          DsPrimaryButton(
+            label: l.create,
+            onPressed: () async {
+              final day = int.tryParse(dayCtrl.text.trim());
+              final pairs = int.tryParse(pairsCtrl.text.trim());
+              if (day == null || pairs == null || pairs < 0 || pairs > 2) {
+                return;
+              }
+              Navigator.of(ctx).pop();
+              final date = DateTime(month.year, month.month, day);
+              final ctrl = ref.read(flightsControllerProvider.notifier);
+              try {
+                await ctrl.upsertDay(date, pairs);
+                if (context.mounted) {
+                  DsFeedback.show(
+                    context,
+                    l.text('flightDaySaved'),
+                    tone: DsTone.success,
+                  );
+                }
+              } on ApiException catch (e) {
+                if (context.mounted) {
+                  DsFeedback.show(context, e.message, tone: DsTone.danger);
+                }
+              }
+            },
+          ),
+        ],
+      ),
     );
   }
 }

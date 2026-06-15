@@ -12,12 +12,9 @@ import enum
 class Role(str, enum.Enum):
     """Personnel roles (spec §3)."""
 
-    M = "M"    # Admin + flexible
-    T = "T"    # Flexible (may request changes; not forced)
-    A1 = "A1"  # Fixed / mandatory
-    A2 = "A2"
-    A3 = "A3"
-    A4 = "A4"
+    M = "M"  # Admin + flexible
+    T = "T"  # Flexible (may request changes; not forced)
+    A = "A"  # Fixed / mandatory (must follow system schedule strictly)
 
     @property
     def is_admin(self) -> bool:
@@ -25,8 +22,8 @@ class Role(str, enum.Enum):
 
     @property
     def is_fixed(self) -> bool:
-        """A1–A4 must follow the system schedule strictly (spec §3)."""
-        return self in {Role.A1, Role.A2, Role.A3, Role.A4}
+        """A must follow the system schedule strictly (spec §3)."""
+        return self is Role.A
 
     @property
     def is_flexible(self) -> bool:
@@ -91,6 +88,18 @@ class LeaveStatus(str, enum.Enum):
     pending = "pending"
     approved = "approved"
     rejected = "rejected"
+
+
+class SwapKind(str, enum.Enum):
+    """Shift-change request kinds (locked decision #8, spec §3).
+
+    Flexible roles (M, T) request freely; fixed roles (A) may request but
+    the admin decides strictly (the ``strict_review`` flag is derived from the
+    requester's role at read time).
+    """
+
+    change_code = "change_code"  # change the code of one own cell
+    swap_with = "swap_with"      # exchange that day's codes with a colleague
 
 
 class ScheduleStatus(str, enum.Enum):
