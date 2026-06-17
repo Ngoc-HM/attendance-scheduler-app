@@ -304,12 +304,6 @@ class DsScheduleView extends StatelessWidget {
             ],
           ),
           const SizedBox(height: DsSpacing.x6),
-          DsInlineAlert(
-            title: l.text('readyForReview'),
-            message: l.text('scheduleReviewMessage'),
-            tone: DsTone.success,
-          ),
-          const SizedBox(height: DsSpacing.x6),
           DsSurface(
             padding: EdgeInsets.zero,
             child: Column(
@@ -956,12 +950,6 @@ class DsAttendanceView extends StatelessWidget {
             ],
           ),
           const SizedBox(height: DsSpacing.x6),
-          DsInlineAlert(
-            title: l.text('restrictedHealthData'),
-            message: l.text('healthDataMessage'),
-            tone: DsTone.warning,
-          ),
-          const SizedBox(height: DsSpacing.x6),
           DsSurface(
             padding: EdgeInsets.zero,
             child: Column(
@@ -982,54 +970,87 @@ class DsAttendanceView extends StatelessWidget {
                   ),
                 ),
                 const Divider(height: 1),
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: DataTable(
-                    columns: [
-                      DataColumn(label: Text(l.text('employee'))),
-                      DataColumn(label: Text(l.role)),
-                      for (var day = 1; day <= days; day++)
-                        DataColumn(
-                          label: _DsDayHeader(
-                            date: DateTime(month.year, month.month, day),
+                if (rows.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      vertical: DsSpacing.x10,
+                      horizontal: DsSpacing.x4,
+                    ),
+                    child: Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.event_note_outlined,
+                            size: 32,
+                            color: DsColors.textDisabled,
                           ),
-                        ),
-                      DataColumn(label: Text(l.text('work'))),
-                      DataColumn(label: Text(l.text('absent'))),
-                    ],
-                    rows: [
-                      for (final row in rows)
-                        DataRow(
-                          cells: [
-                            DataCell(
-                              SizedBox(
-                                width: 110,
-                                child: Text(
-                                  row.name,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w600,
+                          const SizedBox(height: DsSpacing.x3),
+                          Text(
+                            l.text('attendanceEmptyTitle'),
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                          const SizedBox(height: DsSpacing.x2),
+                          Text(
+                            l.text('attendanceEmptyMessage'),
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(color: DsColors.textMuted),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                else
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: DataTable(
+                      columns: [
+                        DataColumn(label: Text(l.text('employee'))),
+                        DataColumn(label: Text(l.role)),
+                        for (var day = 1; day <= days; day++)
+                          DataColumn(
+                            label: _DsDayHeader(
+                              date: DateTime(month.year, month.month, day),
+                            ),
+                          ),
+                        DataColumn(label: Text(l.text('work'))),
+                        DataColumn(label: Text(l.text('absent'))),
+                      ],
+                      rows: [
+                        for (final row in rows)
+                          DataRow(
+                            cells: [
+                              DataCell(
+                                SizedBox(
+                                  width: 110,
+                                  child: Text(
+                                    row.name,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                    ),
                                   ),
                                 ),
                               ),
-                            ),
-                            DataCell(DsBadge(label: row.role)),
-                            for (final shift in row.shifts)
-                              DataCell(
-                                DsShiftBadge(code: shift, compact: true),
-                              ),
-                            DataCell(Text('${row.workdays}')),
-                            DataCell(Text('${row.absences}')),
-                          ],
-                        ),
-                    ],
+                              DataCell(DsBadge(label: row.role)),
+                              for (final shift in row.shifts)
+                                DataCell(
+                                  DsShiftBadge(code: shift, compact: true),
+                                ),
+                              DataCell(Text('${row.workdays}')),
+                              DataCell(Text('${row.absences}')),
+                            ],
+                          ),
+                      ],
+                    ),
                   ),
-                ),
               ],
             ),
           ),
-          const SizedBox(height: DsSpacing.x4),
-          const _DsShiftLegend(),
+          if (rows.isNotEmpty) ...[
+            const SizedBox(height: DsSpacing.x4),
+            const _DsShiftLegend(),
+          ],
         ],
       ),
     );
@@ -1092,11 +1113,6 @@ class DsReportsView extends StatelessWidget {
                 tone: DsTone.neutral,
               ),
             ],
-          ),
-          const SizedBox(height: DsSpacing.x6),
-          DsInlineAlert(
-            title: l.text('flexibleExportFormat'),
-            message: l.text('exportFormatMessage'),
           ),
           const SizedBox(height: DsSpacing.x6),
           DsSurface(
@@ -1212,6 +1228,7 @@ class DsUsersView extends StatelessWidget {
     required this.onApprove,
     required this.onDisable,
     required this.onEnable,
+    required this.onChangeRole,
     this.error,
   });
 
@@ -1223,6 +1240,10 @@ class DsUsersView extends StatelessWidget {
   final ValueChanged<int> onApprove;
   final ValueChanged<int> onDisable;
   final ValueChanged<int> onEnable;
+
+  /// Change a user's role (e.g. promote to admin `M`); the backend reassigns a
+  /// matching code. Called with the user id and the new role letter.
+  final void Function(int id, String role) onChangeRole;
 
   @override
   Widget build(BuildContext context) {
@@ -1296,6 +1317,7 @@ class DsUsersView extends StatelessWidget {
                 onApprove: onApprove,
                 onDisable: onDisable,
                 onEnable: onEnable,
+                onChangeRole: onChangeRole,
               ),
             ),
         ],
@@ -1312,15 +1334,17 @@ class _UsersTable extends StatelessWidget {
     required this.onApprove,
     required this.onDisable,
     required this.onEnable,
+    required this.onChangeRole,
   });
 
   final List<DsUserRowData> users;
   final ValueChanged<int> onApprove;
   final ValueChanged<int> onDisable;
   final ValueChanged<int> onEnable;
+  final void Function(int id, String role) onChangeRole;
 
   // Column flex weights — header and body cells must stay in sync.
-  static const _flex = [2, 3, 2, 2, 2, 2];
+  static const _flex = [2, 3, 2, 2, 2, 3];
 
   @override
   Widget build(BuildContext context) {
@@ -1360,21 +1384,32 @@ class _UsersTable extends StatelessWidget {
               ),
             ),
             _leading(switch (user.status) {
-              'pending' => DsTextAction(
+              'pending' => _ActionButton(
                 label: l.approve,
-                icon: Icons.check,
                 tone: DsTone.success,
                 onPressed: () => onApprove(user.id),
               ),
-              'active' => DsTextAction(
-                label: l.disable,
-                icon: Icons.block,
-                tone: DsTone.danger,
-                onPressed: () => onDisable(user.id),
+              // Active users can be disabled AND have their role changed
+              // (e.g. promoted to admin `M`); both actions wrap if cramped.
+              'active' => Wrap(
+                spacing: DsSpacing.x2,
+                runSpacing: DsSpacing.x1,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  _RoleChangeMenu(
+                    currentRole: user.role,
+                    onSelected: (role) => onChangeRole(user.id, role),
+                  ),
+                  _ActionButton(
+                    label: l.disable,
+                    tone: DsTone.danger,
+                    onPressed: () => onDisable(user.id),
+                  ),
+                ],
               ),
-              _ => DsTextAction(
+              _ => _ActionButton(
                 label: l.enable,
-                icon: Icons.lock_open,
+                tone: DsTone.primary,
                 onPressed: () => onEnable(user.id),
               ),
             }),
@@ -1415,6 +1450,116 @@ class _UsersTable extends StatelessWidget {
 
   Widget _leading(Widget child) =>
       Align(alignment: Alignment.centerLeft, child: child);
+}
+
+/// Compact, clearly-bordered tonal button for a single row action (approve /
+/// disable / enable). Text-only — no leading icon — so the actions column stays
+/// clean and the tap target reads unmistakably as a button.
+class _ActionButton extends StatelessWidget {
+  const _ActionButton({
+    required this.label,
+    required this.onPressed,
+    this.tone = DsTone.primary,
+  });
+
+  final String label;
+  final VoidCallback onPressed;
+  final DsTone tone;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = dsToneColors(tone);
+    return TextButton(
+      onPressed: onPressed,
+      style: TextButton.styleFrom(
+        backgroundColor: colors.background,
+        foregroundColor: colors.foreground,
+        padding: const EdgeInsets.symmetric(
+          horizontal: DsSpacing.x3,
+          vertical: DsSpacing.x2,
+        ),
+        minimumSize: Size.zero,
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(DsRadius.medium),
+          side: BorderSide(color: colors.foreground.withValues(alpha: 0.30)),
+        ),
+      ),
+      child: Text(label),
+    );
+  }
+}
+
+/// Bordered button that opens a small menu to switch a user's role between
+/// M / T / A. Current role is checked + disabled; selecting another fires
+/// [onSelected] with the new role letter (the caller confirms + persists).
+class _RoleChangeMenu extends StatelessWidget {
+  const _RoleChangeMenu({required this.currentRole, required this.onSelected});
+
+  final String currentRole;
+  final ValueChanged<String> onSelected;
+
+  static const _roles = ['M', 'T', 'A'];
+
+  @override
+  Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    return PopupMenuButton<String>(
+      tooltip: l.text('changeRole'),
+      onSelected: onSelected,
+      position: PopupMenuPosition.under,
+      itemBuilder: (_) => [
+        for (final role in _roles)
+          PopupMenuItem<String>(
+            value: role,
+            enabled: role != currentRole,
+            child: Row(
+              children: [
+                if (role == currentRole) ...[
+                  const Icon(Icons.check, size: 16, color: DsColors.primary),
+                  const SizedBox(width: DsSpacing.x2),
+                ],
+                Text(l.roleLabel(role)),
+              ],
+            ),
+          ),
+      ],
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(
+          DsSpacing.x3,
+          DsSpacing.x2,
+          DsSpacing.x1,
+          DsSpacing.x2,
+        ),
+        decoration: BoxDecoration(
+          color: DsColors.primarySoft,
+          borderRadius: BorderRadius.circular(DsRadius.medium),
+          border: Border.all(
+            color: DsColors.primaryHover.withValues(alpha: 0.30),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              l.text('changeRole'),
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: DsColors.primaryHover,
+              ),
+            ),
+            const Icon(
+              Icons.arrow_drop_down,
+              size: 18,
+              color: DsColors.primaryHover,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class DsCreateUserDialog<T> extends StatelessWidget {

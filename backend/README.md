@@ -64,6 +64,14 @@ uvicorn app.main:app --reload
 ```
 Docs: http://localhost:8000/docs · Health: http://localhost:8000/health
 
+### Seed demo users
+```bash
+python scripts/seed_demo_users.py
+```
+This creates 10 active demo users with usernames `nguyenvana` through
+`nguyenvanj` and roles `T x4` / `A x6`. Re-running the tool skips existing
+usernames.
+
 ## Test & lint
 ```bash
 pytest

@@ -54,6 +54,11 @@ class AppLocalizations {
       'approve': 'Approve',
       'disable': 'Disable',
       'enable': 'Enable',
+      'changeRole': 'Change role',
+      'changeRoleMessage':
+          'The account code will be reassigned to match the new role '
+          '(e.g. T2 → M3). The old code is never reused. Continue?',
+      'confirm': 'Confirm',
       'reject': 'Reject',
       'retry': 'Retry',
       'download': 'Download',
@@ -143,6 +148,9 @@ class AppLocalizations {
       'healthDataMessage':
           'Sick status is visible to administrators only. Do not record medical details.',
       'attendanceBoard': 'Attendance board',
+      'attendanceEmptyTitle': 'No attendance yet',
+      'attendanceEmptyMessage':
+          'No records for this month. Tap "Update attendance" to get started.',
       'work': 'Work',
       'absent': 'Absent',
       'reportsTitle': 'Reports',
@@ -268,6 +276,11 @@ class AppLocalizations {
       'approve': 'Phê duyệt',
       'disable': 'Vô hiệu hóa',
       'enable': 'Kích hoạt',
+      'changeRole': 'Đổi vai trò',
+      'changeRoleMessage':
+          'Mã tài khoản sẽ được cấp lại theo vai trò mới '
+          '(vd: T2 → M3). Mã cũ không dùng lại. Tiếp tục?',
+      'confirm': 'Xác nhận',
       'reject': 'Từ chối',
       'retry': 'Thử lại',
       'download': 'Tải xuống',
@@ -357,6 +370,9 @@ class AppLocalizations {
       'healthDataMessage':
           'Trạng thái nghỉ ốm chỉ hiển thị cho quản trị viên. Không ghi chi tiết y tế.',
       'attendanceBoard': 'Bảng chấm công',
+      'attendanceEmptyTitle': 'Chưa có chấm công',
+      'attendanceEmptyMessage':
+          'Chưa có dữ liệu cho tháng này. Bấm "Cập nhật chấm công" để bắt đầu.',
       'work': 'Đi làm',
       'absent': 'Vắng',
       'reportsTitle': 'Báo cáo',

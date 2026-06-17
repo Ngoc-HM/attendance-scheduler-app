@@ -1,4 +1,3 @@
-import 'package:animations/animations.dart';
 import 'package:flutter/material.dart';
 
 import '../i18n/app_localizations.dart';
@@ -72,10 +71,7 @@ class DsNavigationShell extends StatelessWidget {
                   Expanded(
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(DsRadius.xxLarge),
-                      child: _DsDirectionalTabTransition(
-                        index: selectedIndex,
-                        child: child,
-                      ),
+                      child: _DsTabPageBackground(child: child),
                     ),
                   ),
                 ],
@@ -120,10 +116,7 @@ class DsNavigationShell extends StatelessWidget {
           body: DsLiquidGlassBackdrop(
             child: Padding(
               padding: const EdgeInsets.only(bottom: 92),
-              child: _DsDirectionalTabTransition(
-                index: selectedIndex,
-                child: child,
-              ),
+              child: _DsTabPageBackground(child: child),
             ),
           ),
           bottomNavigationBar: DsLiquidNavigationBar(
@@ -137,145 +130,25 @@ class DsNavigationShell extends StatelessWidget {
   }
 }
 
-class _DsDirectionalTabTransition extends StatefulWidget {
-  const _DsDirectionalTabTransition({required this.index, required this.child});
+/// Wraps the active tab page in the opaque app-background so the page reads as
+/// one solid block over the liquid-glass backdrop. Tab switches are
+/// instantaneous on purpose: an AnimatedSwitcher/PageTransitionSwitcher here
+/// would briefly keep TWO copies of go_router's ShellRoute `child` mounted, and
+/// that child carries a stable `GlobalObjectKey` (go_router builder.dart) →
+/// "Duplicate GlobalKey detected in widget tree". A static wrapper avoids it.
+class _DsTabPageBackground extends StatelessWidget {
+  const _DsTabPageBackground({required this.child});
 
-  final int index;
   final Widget child;
 
   @override
-  State<_DsDirectionalTabTransition> createState() =>
-      _DsDirectionalTabTransitionState();
-}
-
-class _DsDirectionalTabTransitionState
-    extends State<_DsDirectionalTabTransition> {
-  late int _previousIndex;
-  // false → forward (selected a LOWER tab): new content slides in from the
-  // RIGHT, old fades-through out to the left (right→left).
-  // true  → reverse (selected a HIGHER tab): left→right.
-  bool _reverse = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _previousIndex = widget.index;
-  }
-
-  @override
-  void didUpdateWidget(covariant _DsDirectionalTabTransition oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.index == _previousIndex) return;
-    _reverse = widget.index < _previousIndex; // going up the nav order
-    _previousIndex = widget.index;
-  }
-
-  @override
   Widget build(BuildContext context) {
-    // Full-page directional slide: the whole page moves as one block.
-    // Forward (selected a LOWER tab → higher index): new page slides in from
-    // the RIGHT, old page exits LEFT (right→left). ``reverse`` flips it so
-    // going UP (to a higher tab) slides left→right. A light fade smooths the
-    // hand-off without the "zoom" of a shared-axis scale.
-    return PageTransitionSwitcher(
-      duration: DsDuration.pageTransition,
-      reverse: _reverse,
-      transitionBuilder: (child, primary, secondary) {
-        final entering = Tween<Offset>(
-          begin: const Offset(1, 0),
-          end: Offset.zero,
-        ).animate(CurvedAnimation(parent: primary, curve: DsCurve.standard));
-        final leaving = Tween<Offset>(
-          begin: Offset.zero,
-          end: const Offset(-1, 0),
-        ).animate(CurvedAnimation(parent: secondary, curve: DsCurve.standard));
-        // Pure slide, no fade: each page is an opaque block that travels as a
-        // single unit — the incoming page fully covers what it slides over.
-        // While sliding we rasterize the page into ONE flat image so the
-        // `BackdropFilter` blur inside glass surfaces is baked in and travels
-        // WITH its frame; otherwise the blur re-samples the screen each frame
-        // and visually lags behind the moving panels ("each element on its
-        // own"). Live blur returns the moment the slide settles.
-        return SlideTransition(
-          position: leaving,
-          child: SlideTransition(
-            position: entering,
-            child: _RasterWhileAnimating(
-              primary: primary,
-              secondary: secondary,
-              child: child,
-            ),
-          ),
-        );
-      },
-      child: KeyedSubtree(
-        key: ValueKey(widget.index),
-        // Opaque page-background travels WITH the content so the whole page
-        // reads as one solid block, not loose widgets over a static backdrop.
-        child: RepaintBoundary(
-          child: DecoratedBox(
-            decoration: const BoxDecoration(
-              gradient: DsGradients.appBackground,
-            ),
-            child: widget.child,
-          ),
-        ),
+    return RepaintBoundary(
+      child: DecoratedBox(
+        decoration: const BoxDecoration(gradient: DsGradients.appBackground),
+        child: child,
       ),
     );
-  }
-}
-
-/// Flattens [child] into a single rasterized image while either transition
-/// animation is running, then drops back to the live widget tree once both
-/// settle. This keeps the whole page moving as one block during the slide —
-/// crucially baking the `BackdropFilter` blur of glass surfaces into the
-/// snapshot so it can't lag behind its own frame.
-class _RasterWhileAnimating extends StatefulWidget {
-  const _RasterWhileAnimating({
-    required this.primary,
-    required this.secondary,
-    required this.child,
-  });
-
-  final Animation<double> primary;
-  final Animation<double> secondary;
-  final Widget child;
-
-  @override
-  State<_RasterWhileAnimating> createState() => _RasterWhileAnimatingState();
-}
-
-class _RasterWhileAnimatingState extends State<_RasterWhileAnimating> {
-  final SnapshotController _controller = SnapshotController();
-
-  @override
-  void initState() {
-    super.initState();
-    widget.primary.addStatusListener(_sync);
-    widget.secondary.addStatusListener(_sync);
-    _sync(AnimationStatus.dismissed);
-  }
-
-  @override
-  void dispose() {
-    widget.primary.removeStatusListener(_sync);
-    widget.secondary.removeStatusListener(_sync);
-    _controller.dispose();
-    super.dispose();
-  }
-
-  bool _isMoving(Animation<double> a) =>
-      a.status == AnimationStatus.forward ||
-      a.status == AnimationStatus.reverse;
-
-  void _sync(AnimationStatus _) {
-    _controller.allowSnapshotting =
-        _isMoving(widget.primary) || _isMoving(widget.secondary);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return SnapshotWidget(controller: _controller, child: widget.child);
   }
 }
 

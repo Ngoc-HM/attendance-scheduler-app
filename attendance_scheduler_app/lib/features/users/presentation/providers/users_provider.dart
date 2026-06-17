@@ -13,8 +13,13 @@ class UsersController extends StateNotifier<AsyncValue<List<User>>> {
   final UserManagementDataSource _ds;
 
   Future<void> load() async {
+    // Guard against the autoDispose lifecycle: navigating away (or the page
+    // transition tearing down) can dispose this notifier mid-flight, so never
+    // touch `state` once unmounted.
+    if (!mounted) return;
     state = const AsyncValue.loading();
-    state = await AsyncValue.guard(() async => await _ds.list());
+    final result = await AsyncValue.guard(() async => await _ds.list());
+    if (mounted) state = result;
   }
 
   Future<void> create({
@@ -48,7 +53,10 @@ class UsersController extends StateNotifier<AsyncValue<List<User>>> {
   }
 }
 
+/// `autoDispose` so the list reloads from the backend every time the Users
+/// page is opened — otherwise newly self-registered (pending) accounts stay
+/// hidden behind a stale cached list until a manual refresh (F-01).
 final usersControllerProvider =
-    StateNotifierProvider<UsersController, AsyncValue<List<User>>>(
+    StateNotifierProvider.autoDispose<UsersController, AsyncValue<List<User>>>(
       (ref) => UsersController(ref.watch(userManagementDataSourceProvider)),
     );

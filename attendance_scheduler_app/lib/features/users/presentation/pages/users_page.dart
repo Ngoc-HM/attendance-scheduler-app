@@ -39,6 +39,38 @@ class UsersPage extends ConsumerWidget {
       onApprove: controller.approve,
       onDisable: (id) => controller.setStatus(id, 'disabled'),
       onEnable: (id) => controller.setStatus(id, 'active'),
+      onChangeRole: (id, role) => _confirmChangeRole(context, controller, id, role),
     );
+  }
+
+  /// Confirm before changing a role: the backend reassigns the account code to
+  /// match the new role (e.g. T2 → M3), so we warn the admin first.
+  Future<void> _confirmChangeRole(
+    BuildContext context,
+    UsersController controller,
+    int id,
+    String role,
+  ) async {
+    final l = AppLocalizations.of(context);
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('${l.text('changeRole')} → ${l.roleLabel(role)}'),
+        content: Text(l.text('changeRoleMessage')),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(l.cancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(l.text('confirm')),
+          ),
+        ],
+      ),
+    );
+    if (ok ?? false) {
+      await controller.setRole(id, UserRoleX.fromApi(role));
+    }
   }
 }

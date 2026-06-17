@@ -10,6 +10,14 @@ extension UserRoleX on UserRole {
 
   /// Backend enum value: `UserRole.m` → `'M'`, `UserRole.t` → `'T'`, `UserRole.a` → `'A'`.
   String get apiValue => name.toUpperCase();
+
+  /// Parse a backend role letter (`'M'`/`'T'`/`'A'`) back into a [UserRole];
+  /// anything unrecognised falls back to the flexible `T` role.
+  static UserRole fromApi(String value) => switch (value.toUpperCase()) {
+    'M' => UserRole.m,
+    'A' => UserRole.a,
+    _ => UserRole.t,
+  };
 }
 
 /// Domain entity for an authenticated user.

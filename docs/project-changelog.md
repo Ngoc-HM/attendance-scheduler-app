@@ -1,5 +1,12 @@
 # Project Changelog
 
+## 2026-06-17 — Demo user seed tool
+
+- Added a small backend CLI tool to seed 10 deterministic active demo users.
+- Usernames are `nguyenvana` through `nguyenvanj`; roles are split as 4 `T`
+  users and 6 `A` users.
+- The seed is idempotent: reruns skip usernames that already exist.
+
 ## 2026-06-11 — Full backend implementation (F-01..F-15) + GDPR
 
 Brought the app from "scaffold + auth only" to a feature-complete, tested

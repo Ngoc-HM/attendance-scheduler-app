@@ -28,30 +28,39 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ShellRoute(
         builder: (context, state, child) =>
             HomeShell(location: state.uri.path, child: child),
+        // `NoTransitionPage` on every tab route: switching tabs is instantaneous
+        // with zero slide/fade. go_router would otherwise apply the default
+        // platform page transition (a slide on macOS) between these sub-routes.
         routes: [
           GoRoute(
             path: AppRoute.schedule,
-            builder: (context, state) => const SchedulePage(),
+            pageBuilder: (context, state) =>
+                const NoTransitionPage(child: SchedulePage()),
           ),
           GoRoute(
             path: AppRoute.flights,
-            builder: (context, state) => const FlightsPage(),
+            pageBuilder: (context, state) =>
+                const NoTransitionPage(child: FlightsPage()),
           ),
           GoRoute(
             path: AppRoute.leaves,
-            builder: (context, state) => const LeavesPage(),
+            pageBuilder: (context, state) =>
+                const NoTransitionPage(child: LeavesPage()),
           ),
           GoRoute(
             path: AppRoute.attendance,
-            builder: (context, state) => const AttendancePage(),
+            pageBuilder: (context, state) =>
+                const NoTransitionPage(child: AttendancePage()),
           ),
           GoRoute(
             path: AppRoute.reports,
-            builder: (context, state) => const ReportsPage(),
+            pageBuilder: (context, state) =>
+                const NoTransitionPage(child: ReportsPage()),
           ),
           GoRoute(
             path: AppRoute.users,
-            builder: (context, state) => const UsersPage(),
+            pageBuilder: (context, state) =>
+                const NoTransitionPage(child: UsersPage()),
           ),
         ],
       ),
