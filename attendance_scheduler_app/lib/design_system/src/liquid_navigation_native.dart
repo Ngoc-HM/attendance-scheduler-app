@@ -32,14 +32,14 @@ class DsLiquidNavigationBar extends StatelessWidget {
         inactiveColor: DsColors.textPrimary,
         borderRadius: 32,
         height: 60,
-        padding: const EdgeInsets.fromLTRB(16, 10, 16, 24),
+        padding: const EdgeInsets.fromLTRB(DsSpacing.x4, 10, DsSpacing.x4, DsSpacing.x6),
         animationDuration: DsDuration.navigation,
         animationCurve: DsCurve.smooth,
         iconSize: 22,
         selectedIconScale: 1.2,
         labelStyle: Theme.of(context).textTheme.bodySmall?.copyWith(
           color: DsColors.textPrimary,
-          fontSize: 11,
+          fontSize: DsFontSize.micro,
           fontWeight: FontWeight.w700,
         ),
         liquidGlassSettings: LiquidGlassSettings(

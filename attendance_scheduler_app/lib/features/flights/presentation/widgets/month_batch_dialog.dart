@@ -146,8 +146,8 @@ class _MonthBatchDialogState extends ConsumerState<MonthBatchDialog> {
     final l = AppLocalizations.of(context);
 
     return Dialog(
-      insetPadding: const EdgeInsets.symmetric(horizontal: 40, vertical: 40),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      insetPadding: const EdgeInsets.symmetric(horizontal: DsSpacing.x10, vertical: DsSpacing.x10),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(DsRadius.xLarge)),
       clipBehavior: Clip.antiAlias,
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 660),
@@ -175,11 +175,11 @@ class _MonthBatchDialogState extends ConsumerState<MonthBatchDialog> {
                               .titleLarge
                               ?.copyWith(fontWeight: FontWeight.w700),
                         ),
-                        const SizedBox(height: 4),
+                        const SizedBox(height: DsSpacing.x1),
                         Text(
                           l.text('monthFlightsHint'),
                           style: const TextStyle(
-                            fontSize: 13,
+                            fontSize: DsFontSize.footnote,
                             color: DsColors.textMuted,
                           ),
                         ),
@@ -418,14 +418,10 @@ class _HeaderRow extends StatelessWidget {
   }
 
   Widget _headerLabel(String label) => Padding(
-        padding: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.only(bottom: DsSpacing.x3),
         child: Text(
           label,
-          style: const TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: DsColors.textMuted,
-          ),
+          style: DsType.tableHeader.copyWith(fontSize: DsFontSize.caption),
           overflow: TextOverflow.ellipsis,
         ),
       );
@@ -459,11 +455,7 @@ class _PresetColumnHeader extends StatelessWidget {
       children: [
         Text(
           preset.label,
-          style: const TextStyle(
-            fontSize: 12.5,
-            fontWeight: FontWeight.w700,
-            color: DsColors.textPrimary,
-          ),
+          style: DsType.gridHeader,
           overflow: TextOverflow.ellipsis,
           maxLines: 1,
           textAlign: TextAlign.center,
@@ -471,7 +463,7 @@ class _PresetColumnHeader extends StatelessWidget {
         const SizedBox(height: 1),
         Text(
           '${preset.sta} · ${preset.std}',
-          style: const TextStyle(fontSize: 11, color: DsColors.textMuted),
+          style: DsType.micro,
           textAlign: TextAlign.center,
         ),
         Checkbox(
@@ -537,7 +529,7 @@ class _DayRow extends StatelessWidget {
           dayCell: Text(
             '${date.day}',
             style: TextStyle(
-              fontSize: 14,
+              fontSize: DsFontSize.body,
               fontWeight: FontWeight.w600,
               color: labelColor,
             ),
@@ -545,7 +537,7 @@ class _DayRow extends StatelessWidget {
           wdCell: Text(
             l.shortWeekday(date),
             style: TextStyle(
-              fontSize: 12.5,
+              fontSize: DsFontSize.small,
               color: isWeekend ? DsColors.primary : DsColors.textMuted,
             ),
           ),

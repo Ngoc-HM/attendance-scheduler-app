@@ -85,6 +85,77 @@ abstract final class DsGradients {
   );
 }
 
+/// Font-size scale — single source of truth for every numeric fontSize literal.
+/// Values mirror the textTheme in theme.dart (those stay as-is; they're the
+/// authoritative source). Add here any size that recurs in inline TextStyles.
+abstract final class DsFontSize {
+  static const double micro = 11;
+  static const double caption = 12;
+  static const double small = 12.5;
+  static const double footnote = 13;
+  static const double body = 14;
+  static const double bodyLarge = 16;
+  static const double title = 20;
+  static const double headingSmall = 24;
+  static const double headingMedium = 30;
+  static const double display = 36;
+}
+
+/// Semantic const TextStyles for the recurring patterns found across the
+/// design-system and feature files. Only styles that share a fixed color
+/// everywhere they appear have color baked in; others rely on context.
+abstract final class DsType {
+  /// Table/grid header cell: footnote size, semibold, muted colour.
+  static const tableHeader = TextStyle(
+    fontSize: DsFontSize.footnote,
+    fontWeight: FontWeight.w600,
+    color: DsColors.textMuted,
+  );
+
+  /// Standard table data cell: body size, primary text colour.
+  static const tableCell = TextStyle(
+    fontSize: DsFontSize.body,
+    color: DsColors.textPrimary,
+  );
+
+  /// Bold table data cell (e.g. row actions, prominent data).
+  static const tableCellStrong = TextStyle(
+    fontSize: DsFontSize.footnote,
+    fontWeight: FontWeight.w600,
+  );
+
+  /// Caption / helper text: caption size, muted colour.
+  static const caption = TextStyle(
+    fontSize: DsFontSize.caption,
+    color: DsColors.textMuted,
+  );
+
+  /// Micro label (nav-bar labels, tiny helpers): micro size, muted colour.
+  static const micro = TextStyle(
+    fontSize: DsFontSize.micro,
+    color: DsColors.textMuted,
+  );
+
+  /// Footnote / secondary hint text: footnote size, secondary colour.
+  static const footnote = TextStyle(
+    fontSize: DsFontSize.footnote,
+    color: DsColors.textSecondary,
+  );
+
+  /// Grid small label (batch-dialog weekday/day): small size, muted colour.
+  static const gridSmall = TextStyle(
+    fontSize: DsFontSize.small,
+    color: DsColors.textMuted,
+  );
+
+  /// Grid column header in batch-dialog preset columns.
+  static const gridHeader = TextStyle(
+    fontSize: DsFontSize.small,
+    fontWeight: FontWeight.w700,
+    color: DsColors.textPrimary,
+  );
+}
+
 /// Single source of truth for motion easing — every animation in the design
 /// system uses one of these so transitions feel coordinated, not ad-hoc.
 abstract final class DsCurve {

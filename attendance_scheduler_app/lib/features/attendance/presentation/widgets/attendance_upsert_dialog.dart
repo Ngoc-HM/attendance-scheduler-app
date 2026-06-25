@@ -95,7 +95,7 @@ class _AttendanceUpsertDialogState
                   .toList(),
               onChanged: (v) => setState(() => _userId = v),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: DsSpacing.x3),
             // Date picker
             OutlinedButton.icon(
               icon: const Icon(Icons.calendar_today, size: 16),
@@ -108,7 +108,7 @@ class _AttendanceUpsertDialogState
               ),
               onPressed: () => _pickDate(context),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: DsSpacing.x3),
             // Code selector
             DropdownButton<ShiftCode>(
               value: _code,
@@ -132,7 +132,7 @@ class _AttendanceUpsertDialogState
               },
             ),
             if (_code == ShiftCode.s) ...[
-              const SizedBox(height: 8),
+              const SizedBox(height: DsSpacing.x2),
               CheckboxListTile(
                 value: _sickCoverMode,
                 title: Text(l.text('autoAssignCover')),
@@ -142,7 +142,7 @@ class _AttendanceUpsertDialogState
                     setState(() => _sickCoverMode = v ?? true),
               ),
             ],
-            const SizedBox(height: 12),
+            const SizedBox(height: DsSpacing.x3),
             TextField(
               controller: _noteCtrl,
               decoration: InputDecoration(
@@ -152,10 +152,10 @@ class _AttendanceUpsertDialogState
               ),
             ),
             if (state.error != null) ...[
-              const SizedBox(height: 8),
+              const SizedBox(height: DsSpacing.x2),
               Text(
                 state.error!,
-                style: const TextStyle(color: DsColors.danger, fontSize: 12),
+                style: const TextStyle(color: DsColors.danger, fontSize: DsFontSize.caption),
               ),
             ],
           ],

@@ -31,7 +31,7 @@ class LeavesPage extends ConsumerWidget {
               err is ApiException ? err.message : l.text('leavesLoadFailed'),
               style: Theme.of(context).textTheme.bodyMedium,
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: DsSpacing.x3),
             DsPrimaryButton(label: l.text('retry'), onPressed: ctrl.load),
           ],
         ),
@@ -136,7 +136,7 @@ class LeavesPage extends ConsumerWidget {
                   }
                 },
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: DsSpacing.x3),
               // End date picker
               TextField(
                 controller: endCtrl,
@@ -160,7 +160,7 @@ class LeavesPage extends ConsumerWidget {
                   }
                 },
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: DsSpacing.x3),
               TextField(
                 controller: noteCtrl,
                 maxLines: 2,

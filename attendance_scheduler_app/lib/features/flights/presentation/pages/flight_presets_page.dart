@@ -45,7 +45,7 @@ class FlightPresetsPage extends ConsumerWidget {
                     : l.text('flightsLoadFailed'),
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: DsSpacing.x3),
               DsPrimaryButton(
                 label: l.text('retry'),
                 onPressed: ctrl.load,
@@ -172,109 +172,65 @@ class _PresetsTable extends StatelessWidget {
   final ValueChanged<FlightPresetModel> onEdit;
   final ValueChanged<FlightPresetModel> onDelete;
 
-  // label | route | flt arr | flt dep | STA | STD | active | actions
-  static const _flex = [3, 2, 1, 1, 2, 2, 2, 3];
-
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
+    // label | route | flt arr | flt dep | STA | STD | active | actions
+    final columns = [
+      DsTableColumn(header: l.text('presetLabel'), flex: 3),
+      DsTableColumn(header: l.text('presetRoute'), flex: 2),
+      DsTableColumn(header: l.text('fltArr'), flex: 1),
+      DsTableColumn(header: l.text('fltDep'), flex: 1),
+      DsTableColumn(header: l.text('sta'), flex: 2),
+      DsTableColumn(header: l.text('std'), flex: 2),
+      DsTableColumn(header: l.text('isActive'), flex: 2),
+      DsTableColumn(header: l.actions, flex: 3),
+    ];
+
     return DsSurface(
       padding: EdgeInsets.zero,
-      child: Column(
-        children: [
-          _row(
+      child: DsDataTable(
+        columns: columns,
+        rows: [
+          for (final p in presets)
             [
-              _header(l.text('presetLabel')),
-              _header(l.text('presetRoute')),
-              _header(l.text('fltArr')),
-              _header(l.text('fltDep')),
-              _header(l.text('sta')),
-              _header(l.text('std')),
-              _header(l.text('isActive')),
-              _header(l.actions),
-            ],
-            background: DsColors.surfaceSubtle,
-          ),
-          for (final p in presets) ...[
-            const Divider(height: 1, color: DsColors.border),
-            _row([
-              _text(p.label),
-              _text(p.route ?? '—'),
-              _text('${p.fltArr}'),
-              _text('${p.fltDep}'),
-              _text(p.sta),
-              _text(p.std),
-              _leading(
-                DsBadge(
-                  label: p.isActive
-                      ? l.text('active')
-                      : l.text('disabled'),
-                  tone: p.isActive ? DsTone.success : DsTone.neutral,
-                ),
+              Text(p.label, style: DsType.tableCell, overflow: TextOverflow.ellipsis),
+              Text(p.route ?? '—', style: DsType.tableCell, overflow: TextOverflow.ellipsis),
+              Text('${p.fltArr}', style: DsType.tableCell),
+              Text('${p.fltDep}', style: DsType.tableCell),
+              Text(p.sta, style: DsType.tableCell),
+              Text(p.std, style: DsType.tableCell),
+              DsBadge(
+                label: p.isActive ? l.text('active') : l.text('disabled'),
+                tone: p.isActive ? DsTone.success : DsTone.neutral,
               ),
               // FittedBox guards against horizontal overflow: when the column
               // is too narrow for both actions it scales down instead of
               // throwing a RenderFlex "RIGHT OVERFLOWED" error.
-              Align(
+              FittedBox(
+                fit: BoxFit.scaleDown,
                 alignment: Alignment.centerLeft,
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      DsTextAction(
-                        label: l.text('edit'),
-                        icon: Icons.edit_outlined,
-                        onPressed: () => onEdit(p),
-                      ),
-                      const SizedBox(width: DsSpacing.x2),
-                      DsTextAction(
-                        label: l.text('delete'),
-                        icon: Icons.delete_outline,
-                        tone: DsTone.danger,
-                        onPressed: () => onDelete(p),
-                      ),
-                    ],
-                  ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    DsTextAction(
+                      label: l.text('edit'),
+                      icon: Icons.edit_outlined,
+                      onPressed: () => onEdit(p),
+                    ),
+                    const SizedBox(width: DsSpacing.x2),
+                    DsTextAction(
+                      label: l.text('delete'),
+                      icon: Icons.delete_outline,
+                      tone: DsTone.danger,
+                      onPressed: () => onDelete(p),
+                    ),
+                  ],
                 ),
               ),
-            ]),
-          ],
+            ],
         ],
       ),
     );
   }
-
-  Widget _row(List<Widget> cells, {Color? background}) => Container(
-        color: background,
-        padding: const EdgeInsets.symmetric(
-          horizontal: DsSpacing.x5,
-          vertical: DsSpacing.x4,
-        ),
-        child: Row(
-          children: [
-            for (var i = 0; i < cells.length; i++)
-              Expanded(flex: _flex[i], child: cells[i]),
-          ],
-        ),
-      );
-
-  Widget _header(String label) => Text(
-        label,
-        style: const TextStyle(
-          fontSize: 13,
-          fontWeight: FontWeight.w600,
-          color: DsColors.textMuted,
-        ),
-      );
-
-  Widget _text(String value) => Text(
-        value,
-        style: const TextStyle(fontSize: 14, color: DsColors.textPrimary),
-        overflow: TextOverflow.ellipsis,
-      );
-
-  Widget _leading(Widget child) =>
-      Align(alignment: Alignment.centerLeft, child: child);
 }

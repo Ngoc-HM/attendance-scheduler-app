@@ -44,7 +44,7 @@ class _HolidaysDialogState extends ConsumerState<HolidaysDialog> {
         children: [
           Text('${widget.year}',
               style: Theme.of(context).textTheme.titleSmall),
-          const SizedBox(height: 12),
+          const SizedBox(height: DsSpacing.x3),
           if (holidays.isEmpty)
             Text(l.text('noHolidaysYet'))
           else
@@ -61,7 +61,7 @@ class _HolidaysDialogState extends ConsumerState<HolidaysDialog> {
           const Divider(height: 24),
           Text(l.text('addHoliday'),
               style: Theme.of(context).textTheme.titleSmall),
-          const SizedBox(height: 8),
+          const SizedBox(height: DsSpacing.x2),
           Row(
             children: [
               Expanded(
@@ -79,7 +79,7 @@ class _HolidaysDialogState extends ConsumerState<HolidaysDialog> {
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: DsSpacing.x2),
           TextField(
             controller: _nameCtrl,
             decoration: InputDecoration(
@@ -89,10 +89,10 @@ class _HolidaysDialogState extends ConsumerState<HolidaysDialog> {
             ),
           ),
           if (state.error != null) ...[
-            const SizedBox(height: 8),
+            const SizedBox(height: DsSpacing.x2),
             Text(
               state.error!,
-              style: const TextStyle(color: DsColors.danger, fontSize: 12),
+              style: const TextStyle(color: DsColors.danger, fontSize: DsFontSize.caption),
             ),
           ],
         ],

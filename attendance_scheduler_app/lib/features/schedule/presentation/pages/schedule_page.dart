@@ -93,7 +93,7 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
         if (isAdmin && _showShiftChanges) ...[
           const Divider(height: 1),
           Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(DsSpacing.x4),
             child: Row(
               children: [
                 Expanded(
@@ -114,7 +114,7 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
         ],
         if (isAdmin)
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: DsSpacing.x4, vertical: DsSpacing.x2),
             child: TextButton.icon(
               icon: Icon(_showShiftChanges
                   ? Icons.expand_less
@@ -287,7 +287,7 @@ class _GenerateResultBanner extends ConsumerWidget {
         .join('\n');
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: DsSpacing.x4, vertical: DsSpacing.x2),
       child: Stack(
         children: [
           DsInlineAlert(

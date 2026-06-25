@@ -165,7 +165,7 @@ class _AttendanceError extends StatelessWidget {
     final l = AppLocalizations.of(context);
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(DsSpacing.x6),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -174,7 +174,7 @@ class _AttendanceError extends StatelessWidget {
               message: message,
               tone: DsTone.danger,
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: DsSpacing.x4),
             DsSecondaryButton(
               label: l.text('retry'),
               icon: Icons.refresh,

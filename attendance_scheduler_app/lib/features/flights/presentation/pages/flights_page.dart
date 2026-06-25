@@ -41,7 +41,7 @@ class FlightsPage extends ConsumerWidget {
               err is ApiException ? err.message : l.text('flightsLoadFailed'),
               style: Theme.of(context).textTheme.bodyMedium,
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: DsSpacing.x3),
             DsPrimaryButton(
               label: l.text('retry'),
               onPressed: ctrl.load,

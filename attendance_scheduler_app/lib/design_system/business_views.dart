@@ -7,6 +7,7 @@ import '../i18n/app_localizations.dart';
 import 'components.dart';
 import 'forms.dart';
 import 'states.dart';
+import 'tables.dart';
 import 'tokens.dart';
 import 'view_models.dart';
 
@@ -492,11 +493,7 @@ class _DsDayGrid extends StatelessWidget {
   Widget _headerText(String label, {TextAlign align = TextAlign.center}) => Text(
         label,
         textAlign: align,
-        style: const TextStyle(
-          fontSize: 13,
-          fontWeight: FontWeight.w600,
-          color: DsColors.textMuted,
-        ),
+        style: DsType.tableHeader,
       );
 }
 
@@ -732,76 +729,37 @@ class _FlightsTable extends StatelessWidget {
 
   final List<DsFlightRowData> rows;
 
-  // date | pairs | flights | STA | STD | status
-  static const _flex = [2, 1, 4, 2, 2, 2];
-
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
-    return Column(
-      children: [
-        _row(
+    // date | pairs | flights | STA | STD | status
+    final columns = [
+      DsTableColumn(header: l.text('date'), flex: 2),
+      DsTableColumn(header: l.text('pairs'), flex: 1),
+      DsTableColumn(header: l.text('flights'), flex: 4),
+      const DsTableColumn(header: 'STA', flex: 2),
+      const DsTableColumn(header: 'STD', flex: 2),
+      DsTableColumn(header: l.status, flex: 2),
+    ];
+
+    return DsDataTable(
+      columns: columns,
+      rows: [
+        for (final row in rows)
           [
-            _header(l.text('date')),
-            _header(l.text('pairs')),
-            _header(l.text('flights')),
-            _header('STA'),
-            _header('STD'),
-            _header(l.status),
-          ],
-          background: DsColors.surfaceSubtle,
-        ),
-        for (final row in rows) ...[
-          const Divider(height: 1, color: DsColors.border),
-          _row([
-            _text(l.flightDate(row.date)),
-            _text('${row.flightPairs}'),
-            _text(row.flights),
-            _text(row.arrival),
-            _text(row.departure),
-            _leading(
-              DsBadge(
-                label: l.statusLabel(row.status),
-                tone: row.status == 'Complete' ? DsTone.success : DsTone.warning,
-              ),
+            Text(l.flightDate(row.date), style: DsType.tableCell, overflow: TextOverflow.ellipsis),
+            Text('${row.flightPairs}', style: DsType.tableCell),
+            Text(row.flights, style: DsType.tableCell, overflow: TextOverflow.ellipsis),
+            Text(row.arrival, style: DsType.tableCell),
+            Text(row.departure, style: DsType.tableCell),
+            DsBadge(
+              label: l.statusLabel(row.status),
+              tone: row.status == 'Complete' ? DsTone.success : DsTone.warning,
             ),
-          ]),
-        ],
+          ],
       ],
     );
   }
-
-  Widget _row(List<Widget> cells, {Color? background}) => Container(
-    color: background,
-    padding: const EdgeInsets.symmetric(
-      horizontal: DsSpacing.x5,
-      vertical: DsSpacing.x4,
-    ),
-    child: Row(
-      children: [
-        for (var i = 0; i < cells.length; i++)
-          Expanded(flex: _flex[i], child: cells[i]),
-      ],
-    ),
-  );
-
-  Widget _header(String label) => Text(
-    label,
-    style: const TextStyle(
-      fontSize: 13,
-      fontWeight: FontWeight.w600,
-      color: DsColors.textMuted,
-    ),
-  );
-
-  Widget _text(String value) => Text(
-    value,
-    style: const TextStyle(fontSize: 14, color: DsColors.textPrimary),
-    overflow: TextOverflow.ellipsis,
-  );
-
-  Widget _leading(Widget child) =>
-      Align(alignment: Alignment.centerLeft, child: child);
 }
 
 class DsUploadZone extends StatelessWidget {
@@ -954,104 +912,63 @@ class _LeavesTable extends StatelessWidget {
   final ValueChanged<int> onApprove;
   final ValueChanged<int> onReject;
 
-  // employee | role | type | dates | days | carry | status | actions
-  static const _flex = [3, 2, 2, 3, 1, 1, 2, 3];
-
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
-    return Column(
-      children: [
-        _row(
+    // employee | role | type | dates | days | carry | status | actions
+    final columns = [
+      DsTableColumn(header: l.text('employee'), flex: 3),
+      DsTableColumn(header: l.role, flex: 2),
+      DsTableColumn(header: l.text('type'), flex: 2),
+      DsTableColumn(header: l.text('dates'), flex: 3),
+      DsTableColumn(header: l.text('days'), flex: 1),
+      DsTableColumn(header: l.text('carry'), flex: 1),
+      DsTableColumn(header: l.status, flex: 2),
+      DsTableColumn(header: l.actions, flex: 3),
+    ];
+
+    return DsDataTable(
+      columns: columns,
+      rows: [
+        for (var index = 0; index < rows.length; index++)
           [
-            _header(l.text('employee')),
-            _header(l.role),
-            _header(l.text('type')),
-            _header(l.text('dates')),
-            _header(l.text('days')),
-            _header(l.text('carry')),
-            _header(l.status),
-            _header(l.actions),
+            Text(rows[index].employee, style: DsType.tableCell, overflow: TextOverflow.ellipsis),
+            DsBadge(label: rows[index].role),
+            Text(l.leaveTypeLabel(rows[index].type), style: DsType.tableCell, overflow: TextOverflow.ellipsis),
+            Text(rows[index].range, style: DsType.tableCell, overflow: TextOverflow.ellipsis),
+            Text('${rows[index].days}', style: DsType.tableCell),
+            Text('${rows[index].carryComp}', style: DsType.tableCell),
+            DsBadge(
+              label: l.statusLabel(rows[index].status),
+              tone: switch (rows[index].status) {
+                'Approved' => DsTone.success,
+                'Rejected' => DsTone.danger,
+                _ => DsTone.warning,
+              },
+            ),
+            rows[index].status == 'Pending'
+                ? Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      DsTextAction(
+                        label: l.approve,
+                        icon: Icons.check,
+                        tone: DsTone.success,
+                        onPressed: () => onApprove(index),
+                      ),
+                      DsTextAction(
+                        label: l.text('reject'),
+                        icon: Icons.close,
+                        tone: DsTone.danger,
+                        onPressed: () => onReject(index),
+                      ),
+                    ],
+                  )
+                : const SizedBox.shrink(),
           ],
-          background: DsColors.surfaceSubtle,
-        ),
-        for (var index = 0; index < rows.length; index++) ...[
-          const Divider(height: 1, color: DsColors.border),
-          _row([
-            _text(rows[index].employee),
-            _leading(DsBadge(label: rows[index].role)),
-            _text(l.leaveTypeLabel(rows[index].type)),
-            _text(rows[index].range),
-            _text('${rows[index].days}'),
-            _text('${rows[index].carryComp}'),
-            _leading(
-              DsBadge(
-                label: l.statusLabel(rows[index].status),
-                tone: switch (rows[index].status) {
-                  'Approved' => DsTone.success,
-                  'Rejected' => DsTone.danger,
-                  _ => DsTone.warning,
-                },
-              ),
-            ),
-            _leading(
-              rows[index].status == 'Pending'
-                  ? Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        DsTextAction(
-                          label: l.approve,
-                          icon: Icons.check,
-                          tone: DsTone.success,
-                          onPressed: () => onApprove(index),
-                        ),
-                        DsTextAction(
-                          label: l.text('reject'),
-                          icon: Icons.close,
-                          tone: DsTone.danger,
-                          onPressed: () => onReject(index),
-                        ),
-                      ],
-                    )
-                  : const SizedBox.shrink(),
-            ),
-          ]),
-        ],
       ],
     );
   }
-
-  Widget _row(List<Widget> cells, {Color? background}) => Container(
-    color: background,
-    padding: const EdgeInsets.symmetric(
-      horizontal: DsSpacing.x5,
-      vertical: DsSpacing.x4,
-    ),
-    child: Row(
-      children: [
-        for (var i = 0; i < cells.length; i++)
-          Expanded(flex: _flex[i], child: cells[i]),
-      ],
-    ),
-  );
-
-  Widget _header(String label) => Text(
-    label,
-    style: const TextStyle(
-      fontSize: 13,
-      fontWeight: FontWeight.w600,
-      color: DsColors.textMuted,
-    ),
-  );
-
-  Widget _text(String value) => Text(
-    value,
-    style: const TextStyle(fontSize: 14, color: DsColors.textPrimary),
-    overflow: TextOverflow.ellipsis,
-  );
-
-  Widget _leading(Widget child) =>
-      Align(alignment: Alignment.centerLeft, child: child);
 }
 
 class DsAttendanceView extends StatelessWidget {
@@ -1285,81 +1202,40 @@ class _ReportsTable extends StatelessWidget {
   final List<DsReportRowData> rows;
   final ValueChanged<int> onDownload;
 
-  // report name | period | updated | status | action
-  static const _flex = [4, 2, 2, 2, 2];
-
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
-    return Column(
-      children: [
-        _row(
+    // report name | period | updated | status | action
+    final columns = [
+      DsTableColumn(header: l.text('report'), flex: 4),
+      DsTableColumn(header: l.text('period'), flex: 2),
+      DsTableColumn(header: l.text('updated'), flex: 2),
+      DsTableColumn(header: l.status, flex: 2),
+      DsTableColumn(header: l.text('action'), flex: 2),
+    ];
+
+    return DsDataTable(
+      columns: columns,
+      rows: [
+        for (var index = 0; index < rows.length; index++)
           [
-            _header(l.text('report')),
-            _header(l.text('period')),
-            _header(l.text('updated')),
-            _header(l.status),
-            _header(l.text('action')),
+            Text(rows[index].name, style: DsType.tableCell, overflow: TextOverflow.ellipsis),
+            Text(rows[index].period, style: DsType.tableCell, overflow: TextOverflow.ellipsis),
+            Text(rows[index].updated, style: DsType.tableCell, overflow: TextOverflow.ellipsis),
+            DsBadge(
+              label: l.statusLabel(rows[index].status),
+              tone: DsTone.success,
+              icon: Icons.check_circle_outline,
+            ),
+            DsTextAction(
+              label: l.text('download'),
+              icon: Icons.download_outlined,
+              onPressed: () => onDownload(index),
+            ),
           ],
-          background: DsColors.surfaceSubtle,
-        ),
-        for (var index = 0; index < rows.length; index++) ...[
-          const Divider(height: 1, color: DsColors.border),
-          _row([
-            _text(rows[index].name),
-            _text(rows[index].period),
-            _text(rows[index].updated),
-            _leading(
-              DsBadge(
-                label: l.statusLabel(rows[index].status),
-                tone: DsTone.success,
-                icon: Icons.check_circle_outline,
-              ),
-            ),
-            _leading(
-              DsTextAction(
-                label: l.text('download'),
-                icon: Icons.download_outlined,
-                onPressed: () => onDownload(index),
-              ),
-            ),
-          ]),
-        ],
       ],
     );
   }
-
-  Widget _row(List<Widget> cells, {Color? background}) => Container(
-    color: background,
-    padding: const EdgeInsets.symmetric(
-      horizontal: DsSpacing.x5,
-      vertical: DsSpacing.x4,
-    ),
-    child: Row(
-      children: [
-        for (var i = 0; i < cells.length; i++)
-          Expanded(flex: _flex[i], child: cells[i]),
-      ],
-    ),
-  );
-
-  Widget _header(String label) => Text(
-    label,
-    style: const TextStyle(
-      fontSize: 13,
-      fontWeight: FontWeight.w600,
-      color: DsColors.textMuted,
-    ),
-  );
-
-  Widget _text(String value) => Text(
-    value,
-    style: const TextStyle(fontSize: 14, color: DsColors.textPrimary),
-    overflow: TextOverflow.ellipsis,
-  );
-
-  Widget _leading(Widget child) =>
-      Align(alignment: Alignment.centerLeft, child: child);
 }
 
 class DsUsersView extends StatelessWidget {
@@ -1487,47 +1363,40 @@ class _UsersTable extends StatelessWidget {
   final ValueChanged<int> onEnable;
   final void Function(int id, String role) onChangeRole;
 
-  // Column flex weights — header and body cells must stay in sync.
-  static const _flex = [2, 3, 2, 2, 2, 3];
-
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
-    return Column(
-      children: [
-        _row(
+    // username | fullName | role | code | status | actions
+    final columns = [
+      DsTableColumn(header: l.username, flex: 2),
+      DsTableColumn(header: l.fullName, flex: 3),
+      DsTableColumn(header: l.role, flex: 2),
+      const DsTableColumn(header: 'Code', flex: 2),
+      DsTableColumn(header: l.status, flex: 2),
+      DsTableColumn(header: l.actions, flex: 3),
+    ];
+
+    return DsDataTable(
+      columns: columns,
+      rows: [
+        for (final user in users)
           [
-            _header(l.username),
-            _header(l.fullName),
-            _header(l.role),
-            _header('Code'),
-            _header(l.status),
-            _header(l.actions),
-          ],
-          background: DsColors.surfaceSubtle,
-        ),
-        for (final user in users) ...[
-          const Divider(height: 1, color: DsColors.border),
-          _row([
-            _text(user.username),
-            _text(user.fullName),
-            _leading(DsBadge(label: l.roleLabel(user.role))),
-            _leading(
-              user.code.isEmpty
-                  ? const SizedBox.shrink()
-                  : DsBadge(label: user.code, tone: DsTone.neutral),
+            Text(user.username, style: DsType.tableCell, overflow: TextOverflow.ellipsis),
+            Text(user.fullName, style: DsType.tableCell, overflow: TextOverflow.ellipsis),
+            DsBadge(label: l.roleLabel(user.role)),
+            user.code.isEmpty
+                ? const SizedBox.shrink()
+                : DsBadge(label: user.code, tone: DsTone.neutral),
+            DsBadge(
+              label: l.statusLabel(user.status),
+              tone: switch (user.status) {
+                'active' => DsTone.success,
+                'pending' => DsTone.warning,
+                _ => DsTone.neutral,
+              },
             ),
-            _leading(
-              DsBadge(
-                label: l.statusLabel(user.status),
-                tone: switch (user.status) {
-                  'active' => DsTone.success,
-                  'pending' => DsTone.warning,
-                  _ => DsTone.neutral,
-                },
-              ),
-            ),
-            _leading(switch (user.status) {
+            // Actions cell: approve / disable+change-role / enable
+            switch (user.status) {
               'pending' => _ActionButton(
                 label: l.approve,
                 tone: DsTone.success,
@@ -1556,44 +1425,11 @@ class _UsersTable extends StatelessWidget {
                 tone: DsTone.primary,
                 onPressed: () => onEnable(user.id),
               ),
-            }),
-          ]),
-        ],
+            },
+          ],
       ],
     );
   }
-
-  Widget _row(List<Widget> cells, {Color? background}) => Container(
-    color: background,
-    padding: const EdgeInsets.symmetric(
-      horizontal: DsSpacing.x5,
-      vertical: DsSpacing.x4,
-    ),
-    child: Row(
-      children: [
-        for (var i = 0; i < cells.length; i++)
-          Expanded(flex: _flex[i], child: cells[i]),
-      ],
-    ),
-  );
-
-  Widget _header(String label) => Text(
-    label,
-    style: const TextStyle(
-      fontSize: 13,
-      fontWeight: FontWeight.w600,
-      color: DsColors.textMuted,
-    ),
-  );
-
-  Widget _text(String value) => Text(
-    value,
-    style: const TextStyle(fontSize: 14, color: DsColors.textPrimary),
-    overflow: TextOverflow.ellipsis,
-  );
-
-  Widget _leading(Widget child) =>
-      Align(alignment: Alignment.centerLeft, child: child);
 }
 
 /// Compact, clearly-bordered tonal button for a single row action (approve /
@@ -1624,7 +1460,7 @@ class _ActionButton extends StatelessWidget {
         ),
         minimumSize: Size.zero,
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+        textStyle: const TextStyle(fontSize: DsFontSize.footnote, fontWeight: FontWeight.w600),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(DsRadius.medium),
           side: BorderSide(color: colors.foreground.withValues(alpha: 0.30)),
@@ -1689,7 +1525,7 @@ class _RoleChangeMenu extends StatelessWidget {
             Text(
               l.text('changeRole'),
               style: const TextStyle(
-                fontSize: 13,
+                fontSize: DsFontSize.footnote,
                 fontWeight: FontWeight.w600,
                 color: DsColors.primaryHover,
               ),

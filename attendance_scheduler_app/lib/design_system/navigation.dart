@@ -211,7 +211,7 @@ class _DsSideNavigation extends StatelessWidget {
         children: [
           Container(
             height: 72,
-            padding: EdgeInsets.symmetric(horizontal: extended ? 20 : 16),
+            padding: EdgeInsets.symmetric(horizontal: extended ? DsSpacing.x5 : DsSpacing.x4),
             decoration: const BoxDecoration(
               border: Border(bottom: BorderSide(color: DsColors.border)),
             ),
@@ -340,7 +340,7 @@ class _DsNavigationItem extends StatelessWidget {
         borderRadius: BorderRadius.circular(DsRadius.medium),
         child: Container(
           height: DsControlHeight.touch,
-          padding: EdgeInsets.symmetric(horizontal: extended ? 12 : 0),
+          padding: EdgeInsets.symmetric(horizontal: extended ? DsSpacing.x3 : 0),
           decoration: BoxDecoration(
             border: selected
                 ? const Border(

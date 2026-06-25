@@ -99,7 +99,7 @@ class ReportsPage extends ConsumerWidget {
                   ),
                 ],
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: DsSpacing.x2),
               // Month (optional — blank = yearly export)
               Row(
                 children: [
@@ -123,7 +123,7 @@ class ReportsPage extends ConsumerWidget {
                   ),
                 ],
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: DsSpacing.x2),
               // Format
               Row(
                 children: [

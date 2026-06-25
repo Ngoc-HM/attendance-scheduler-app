@@ -61,7 +61,7 @@ class _ShiftChangeRequestDialogState
             '${widget.workDate.month.toString().padLeft(2, '0')}-'
             '${widget.workDate.day.toString().padLeft(2, '0')}',
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: DsSpacing.x4),
           SegmentedButton<String>(
             segments: [
               ButtonSegment(
@@ -76,10 +76,10 @@ class _ShiftChangeRequestDialogState
             selected: {_kind},
             onSelectionChanged: (s) => setState(() => _kind = s.first),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: DsSpacing.x4),
           if (_kind == 'change_code') ...[
             Text(l.text('newShiftCode')),
-            const SizedBox(height: 8),
+            const SizedBox(height: DsSpacing.x2),
             DropdownButton<ShiftCode>(
               value: _selectedCode,
               isExpanded: true,
@@ -97,7 +97,7 @@ class _ShiftChangeRequestDialogState
             ),
           ] else ...[
             Text(l.text('selectColleague')),
-            const SizedBox(height: 8),
+            const SizedBox(height: DsSpacing.x2),
             DropdownButton<int>(
               value: _counterpartUserId,
               isExpanded: true,
@@ -115,7 +115,7 @@ class _ShiftChangeRequestDialogState
               onChanged: (v) => setState(() => _counterpartUserId = v),
             ),
           ],
-          const SizedBox(height: 16),
+          const SizedBox(height: DsSpacing.x4),
           TextField(
             controller: _noteCtrl,
             decoration: InputDecoration(
@@ -173,7 +173,7 @@ class ShiftChangePendingPanel extends ConsumerWidget {
     }
     if (pending.isEmpty) {
       return Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(DsSpacing.x4),
         child: Text(l.text('noPendingShiftChanges')),
       );
     }
@@ -207,7 +207,7 @@ class ShiftChangePendingPanel extends ConsumerWidget {
               if (req.warnings.isNotEmpty)
                 Text(
                   req.warnings.join('; '),
-                  style: const TextStyle(color: DsColors.danger, fontSize: 11),
+                  style: const TextStyle(color: DsColors.danger, fontSize: DsFontSize.micro),
                 ),
             ],
           ),

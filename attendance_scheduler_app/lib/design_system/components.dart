@@ -265,7 +265,7 @@ class DsPage extends StatelessWidget {
             ],
           );
           return SingleChildScrollView(
-            padding: EdgeInsets.fromLTRB(horizontal, 24, horizontal, 32),
+            padding: EdgeInsets.fromLTRB(horizontal, DsSpacing.x6, horizontal, DsSpacing.x8),
             // Fill the full width by default; only center when a finite cap is set.
             child: maxWidth.isFinite
                 ? Align(
@@ -457,7 +457,7 @@ class DsBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = dsToneColors(tone);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: DsSpacing.x2, vertical: DsSpacing.x1),
       decoration: BoxDecoration(
         color: colors.background,
         borderRadius: BorderRadius.circular(DsRadius.small),

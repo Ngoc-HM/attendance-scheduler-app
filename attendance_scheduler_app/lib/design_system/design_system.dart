@@ -5,6 +5,7 @@ export 'liquid_navigation.dart';
 export 'navigation.dart';
 export 'navigation_models.dart';
 export 'states.dart';
+export 'tables.dart';
 export 'theme.dart';
 export 'tokens.dart';
 export 'view_models.dart';
