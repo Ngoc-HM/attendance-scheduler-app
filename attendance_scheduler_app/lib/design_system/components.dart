@@ -234,13 +234,17 @@ class DsPage extends StatelessWidget {
     required this.child,
     this.subtitle,
     this.actions = const [],
-    this.maxWidth = 1440,
+    this.maxWidth = double.infinity,
   });
 
   final String title;
   final String? subtitle;
   final List<Widget> actions;
   final Widget child;
+
+  /// Optional content cap. Defaults to [double.infinity] so pages fill the
+  /// full available width (no centered side-gutters); pass a finite value only
+  /// for content that reads better centered (e.g. narrow forms).
   final double maxWidth;
 
   @override
@@ -252,26 +256,26 @@ class DsPage extends StatelessWidget {
           final horizontal = constraints.maxWidth < DsBreakpoints.mobile
               ? 16.0
               : 24.0;
+          final content = Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              DsPageHeader(title: title, subtitle: subtitle, actions: actions),
+              const SizedBox(height: DsSpacing.x6),
+              child,
+            ],
+          );
           return SingleChildScrollView(
             padding: EdgeInsets.fromLTRB(horizontal, 24, horizontal, 32),
-            child: Align(
-              alignment: Alignment.topCenter,
-              child: ConstrainedBox(
-                constraints: BoxConstraints(maxWidth: maxWidth),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    DsPageHeader(
-                      title: title,
-                      subtitle: subtitle,
-                      actions: actions,
+            // Fill the full width by default; only center when a finite cap is set.
+            child: maxWidth.isFinite
+                ? Align(
+                    alignment: Alignment.topCenter,
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(maxWidth: maxWidth),
+                      child: content,
                     ),
-                    const SizedBox(height: DsSpacing.x6),
-                    child,
-                  ],
-                ),
-              ),
-            ),
+                  )
+                : content,
           );
         },
       ),

@@ -1,22 +1,30 @@
 /// Data model: maps backend [FlightDayRead] JSON → domain data used by the UI.
 ///
 /// Backend shape:
-///   { "id": int, "day": "YYYY-MM-DD", "flight_pairs": 0|1|2 }
+///   { "id": int, "day": "YYYY-MM-DD", "flight_pairs": 0|1|2,
+///     "flights": [FlightRead, ...] }
 class FlightDayModel {
   const FlightDayModel({
     required this.id,
     required this.day,
     required this.flightPairs,
+    this.flights = const [],
   });
 
   final int id;
   final DateTime day;
   final int flightPairs;
 
+  /// Individual flight legs for this day (arrival + departure per pair).
+  final List<FlightModel> flights;
+
   factory FlightDayModel.fromJson(Map<String, dynamic> json) => FlightDayModel(
     id: json['id'] as int,
     day: DateTime.parse(json['day'] as String),
     flightPairs: json['flight_pairs'] as int,
+    flights: (json['flights'] as List<dynamic>? ?? [])
+        .map((e) => FlightModel.fromJson(e as Map<String, dynamic>))
+        .toList(),
   );
 }
 

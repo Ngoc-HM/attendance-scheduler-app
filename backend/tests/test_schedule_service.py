@@ -67,22 +67,26 @@ def test_generate_override_publish_pipeline(client: TestClient) -> None:
     assert client.get(f"/api/v1/schedules/{YEAR}/{MONTH}", headers=user_hdr).status_code == 404
     assert client.get(f"/api/v1/schedules/{YEAR}/{MONTH}", headers=admin).status_code == 200
 
-    # Manual override (F-09): force a working code on someone's day — always
-    # saved, warning returned (recheck catches quota/staffing drift).
+    # Manual override (F-09): force a working code onto one of fixed[0]'s OFF
+    # (X) days — always saved, and the re-check warns because that week now has
+    # one fewer than the required 2 off days (off-quota drift).
+    off_day = next(
+        a["work_date"] for a in schedule["assignments"]
+        if a["user_id"] == fixed[0]["id"] and a["code"] == "X"
+    )
     res = client.post(
         f"/api/v1/schedules/{schedule['id']}/override",
         headers=admin,
-        json={"user_id": fixed[0]["id"], "work_date": f"{YEAR}-{MONTH:02d}-01",
-              "code": "A/D"},
+        json={"user_id": fixed[0]["id"], "work_date": off_day, "code": "A/D"},
     )
     assert res.status_code == 200, res.text
     over = res.json()
     cell = next(
         a for a in over["schedule"]["assignments"]
-        if a["user_id"] == fixed[0]["id"] and a["work_date"] == f"{YEAR}-{MONTH:02d}-01"
+        if a["user_id"] == fixed[0]["id"] and a["work_date"] == off_day
     )
     assert cell["code"] == "A/D" and cell["is_manual_override"] is True
-    assert over["violations"]  # over-coverage flagged by the re-check
+    assert over["violations"]  # fewer than 2 off days that week → flagged
 
     # Regenerate guard: manual edits present → 409 without force.
     res = client.post(
@@ -100,6 +104,32 @@ def test_generate_override_publish_pipeline(client: TestClient) -> None:
         json={"year": YEAR, "month": MONTH},
     )
     assert res.status_code == 409
+
+
+def test_regenerate_with_force_replaces_cells(client: TestClient) -> None:
+    """Regression: generating twice for the same month (force=True) must replace
+    the old cells, not collide on uq_assignment_cell (schedule_id,user_id,date)."""
+    yr, mo = 2027, 5  # a month no other test touches
+    admin = _admin_headers(client)
+    for i in (1, 2, 3, 4):
+        _make_user(client, admin, f"regen_a{i}", "A")
+
+    def _gen(force: bool):
+        return client.post(
+            "/api/v1/schedules/generate",
+            headers=admin,
+            json={"year": yr, "month": mo, "force": force},
+        )
+
+    first = _gen(False)
+    assert first.status_code == 200, first.text
+    n_first = len(first.json()["schedule"]["assignments"])
+    assert n_first > 0
+
+    # Second run with force must succeed (no UniqueViolation) and fully replace.
+    second = _gen(True)
+    assert second.status_code == 200, second.text
+    assert len(second.json()["schedule"]["assignments"]) == n_first
 
 
 def test_autorun_trigger_logic(client: TestClient) -> None:

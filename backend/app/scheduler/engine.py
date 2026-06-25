@@ -9,10 +9,14 @@ carry penalized slack, so a solution is returned even when rules cannot all
 hold — each broken rule comes back as a ``Violation`` (§5.6 #12–14) for the
 admin to resolve (A/D fallback suggestion, manual edit F-09).
 
-Scope note: the engine auto-assigns only ``ASSIGNABLE_CODES``. O/D lets
-flexible roles (M/T) default to office duty on working days (decision #3).
-Other codes (B, T, AD, AL, CD, S) are admin-entered or pre-pinned via
-``SolverInput.approved_off``.
+Scope note: the engine auto-assigns only ``ASSIGNABLE_CODES`` — flight duties
+(A / D / A/D) plus the two rest codes (X weekly off, CD comp-day). Every working
+day for every role is a real flight shift, matching the manual roster (WR JUN26):
+the per-day flightPairs staffing is a *minimum* floor and everyone on duty gets
+A or D, balanced. O/D (office duty) is NO LONGER auto-generated — it stays in
+the code set only for admin manual entry / attendance (e.g. a cancelled flight,
+"VN31/30 NO-OP"). Other codes (B, T, AD, AL, S) are admin-entered or pre-pinned
+via ``SolverInput.approved_off``.
 """
 
 from __future__ import annotations
@@ -30,7 +34,6 @@ ASSIGNABLE_CODES: tuple[AttendanceCode, ...] = (
     AttendanceCode.A,
     AttendanceCode.D,
     AttendanceCode.A_D,
-    AttendanceCode.O_D,
     AttendanceCode.X,
     AttendanceCode.CD,   # auto comp-day off — forced from carry_comp (§5.3 #6)
 )

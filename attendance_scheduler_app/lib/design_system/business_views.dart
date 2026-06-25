@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../core/constants/shift_codes.dart';
@@ -322,12 +324,20 @@ class DsScheduleView extends StatelessWidget {
                   ),
                 ),
                 const Divider(height: 1),
-                _DsRosterTable(month: month, rows: rows, days: days),
+                if (rows.isEmpty)
+                  _DsRosterEmptyState(
+                    title: l.text('scheduleEmptyTitle'),
+                    message: l.text('scheduleEmptyMessage'),
+                  )
+                else
+                  _DsRosterTable(month: month, rows: rows, days: days),
               ],
             ),
           ),
-          const SizedBox(height: DsSpacing.x4),
-          const _DsShiftLegend(),
+          if (rows.isNotEmpty) ...[
+            const SizedBox(height: DsSpacing.x4),
+            const _DsShiftLegend(),
+          ],
         ],
       ),
     );
@@ -348,43 +358,196 @@ class _DsRosterTable extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: DataTable(
-        columns: [
-          DataColumn(label: Text(l.text('employee'))),
-          DataColumn(label: Text(l.role)),
-          for (var day = 1; day <= days; day++)
-            DataColumn(
-              label: _DsDayHeader(date: DateTime(month.year, month.month, day)),
-            ),
-          const DataColumn(label: Text('A')),
-          const DataColumn(label: Text('D')),
-          DataColumn(label: Text(l.text('off'))),
-        ],
-        rows: [
-          for (final row in rows)
-            DataRow(
-              cells: [
-                DataCell(
-                  SizedBox(
-                    width: 110,
-                    child: Text(
+    return _DsDayGrid(
+      month: month,
+      days: days,
+      trailingHeaders: ['A', 'D', l.text('off')],
+      rows: [
+        for (final row in rows)
+          _DsDayGridRow(
+            name: row.name,
+            role: row.role,
+            shifts: row.shifts,
+            trailing: ['${row.arrivals}', '${row.departures}', '${row.offDays}'],
+          ),
+      ],
+    );
+  }
+}
+
+/// Shared, full-width day-by-day grid used by the roster and attendance boards:
+/// employee · role · one cell per day · trailing summary columns. Columns are
+/// distributed evenly across the full surface width (min widths double as flex
+/// weights so proportions hold while stretching); it only scrolls horizontally
+/// when a long month genuinely can't fit the viewport.
+class _DsDayGrid extends StatelessWidget {
+  const _DsDayGrid({
+    required this.month,
+    required this.days,
+    required this.trailingHeaders,
+    required this.rows,
+  });
+
+  final DateTime month;
+  final int days;
+  final List<String> trailingHeaders;
+  final List<_DsDayGridRow> rows;
+
+  static const double _nameMin = 150;
+  static const double _roleMin = 80;
+  static const double _dayMin = 46;
+  static const double _trailMin = 72;
+
+  @override
+  Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    final naturalWidth = _nameMin +
+        _roleMin +
+        days * _dayMin +
+        trailingHeaders.length * _trailMin;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final tableWidth = math.max(constraints.maxWidth, naturalWidth);
+        return SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: SizedBox(
+            width: tableWidth,
+            child: Column(
+              children: [
+                _gridRow(
+                  background: DsColors.surfaceSubtle,
+                  name: _headerText(l.text('employee'), align: TextAlign.left),
+                  role: _headerText(l.role),
+                  days: [
+                    for (var day = 1; day <= days; day++)
+                      _DsDayHeader(date: DateTime(month.year, month.month, day)),
+                  ],
+                  trailing: [for (final h in trailingHeaders) _headerText(h)],
+                ),
+                for (final row in rows) ...[
+                  const Divider(height: 1, color: DsColors.border),
+                  _gridRow(
+                    name: Text(
                       row.name,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(fontWeight: FontWeight.w600),
                     ),
+                    role: Center(child: DsBadge(label: row.role)),
+                    days: [
+                      for (final shift in row.shifts)
+                        Center(child: DsShiftBadge(code: shift, compact: true)),
+                    ],
+                    trailing: [
+                      for (final value in row.trailing)
+                        Center(
+                          child: Text(
+                            value,
+                            style: const TextStyle(color: DsColors.textPrimary),
+                          ),
+                        ),
+                    ],
                   ),
-                ),
-                DataCell(DsBadge(label: row.role)),
-                for (final shift in row.shifts)
-                  DataCell(DsShiftBadge(code: shift, compact: true)),
-                DataCell(Text('${row.arrivals}')),
-                DataCell(Text('${row.departures}')),
-                DataCell(Text('${row.offDays}')),
+                ],
               ],
             ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _gridRow({
+    required Widget name,
+    required Widget role,
+    required List<Widget> days,
+    required List<Widget> trailing,
+    Color? background,
+  }) {
+    return Container(
+      color: background,
+      padding: const EdgeInsets.symmetric(
+        horizontal: DsSpacing.x4,
+        vertical: DsSpacing.x3,
+      ),
+      child: Row(
+        children: [
+          _cell(_nameMin, name),
+          _cell(_roleMin, role),
+          for (final day in days) _cell(_dayMin, day),
+          for (final cell in trailing) _cell(_trailMin, cell),
         ],
+      ),
+    );
+  }
+
+  Widget _cell(double weight, Widget child) => Expanded(
+        flex: weight.round(),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 2),
+          child: child,
+        ),
+      );
+
+  Widget _headerText(String label, {TextAlign align = TextAlign.center}) => Text(
+        label,
+        textAlign: align,
+        style: const TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+          color: DsColors.textMuted,
+        ),
+      );
+}
+
+class _DsDayGridRow {
+  const _DsDayGridRow({
+    required this.name,
+    required this.role,
+    required this.shifts,
+    required this.trailing,
+  });
+
+  final String name;
+  final String role;
+  final List<ShiftCode> shifts;
+  final List<String> trailing;
+}
+
+/// Centered, full-surface placeholder shown when the month has no roster yet —
+/// keeps the surface balanced instead of a bunched, content-hugging DataTable.
+class _DsRosterEmptyState extends StatelessWidget {
+  const _DsRosterEmptyState({required this.title, required this.message});
+
+  final String title;
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        vertical: DsSpacing.x10,
+        horizontal: DsSpacing.x4,
+      ),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.calendar_month_outlined,
+              size: 32,
+              color: DsColors.textDisabled,
+            ),
+            const SizedBox(height: DsSpacing.x3),
+            Text(title, style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: DsSpacing.x2),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: DsColors.textMuted),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -460,6 +623,7 @@ class DsFlightsView extends StatelessWidget {
     required this.onNextMonth,
     required this.onImport,
     required this.onAdd,
+    this.onManagePresets,
   });
 
   final DateTime month;
@@ -468,6 +632,9 @@ class DsFlightsView extends StatelessWidget {
   final VoidCallback onNextMonth;
   final VoidCallback onImport;
   final VoidCallback onAdd;
+
+  /// If non-null an admin "Manage presets" toolbar action is shown.
+  final VoidCallback? onManagePresets;
 
   @override
   Widget build(BuildContext context) {
@@ -481,6 +648,12 @@ class DsFlightsView extends StatelessWidget {
       title: l.text('flightsTitle'),
       subtitle: l.text('flightsSubtitle'),
       actions: [
+        if (onManagePresets != null)
+          DsSecondaryButton(
+            label: l.text('managePresets'),
+            icon: Icons.tune_outlined,
+            onPressed: onManagePresets!,
+          ),
         DsSecondaryButton(
           label: l.text('importExcel'),
           icon: Icons.upload_file_outlined,
@@ -1001,48 +1174,19 @@ class DsAttendanceView extends StatelessWidget {
                     ),
                   )
                 else
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: DataTable(
-                      columns: [
-                        DataColumn(label: Text(l.text('employee'))),
-                        DataColumn(label: Text(l.role)),
-                        for (var day = 1; day <= days; day++)
-                          DataColumn(
-                            label: _DsDayHeader(
-                              date: DateTime(month.year, month.month, day),
-                            ),
-                          ),
-                        DataColumn(label: Text(l.text('work'))),
-                        DataColumn(label: Text(l.text('absent'))),
-                      ],
-                      rows: [
-                        for (final row in rows)
-                          DataRow(
-                            cells: [
-                              DataCell(
-                                SizedBox(
-                                  width: 110,
-                                  child: Text(
-                                    row.name,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              DataCell(DsBadge(label: row.role)),
-                              for (final shift in row.shifts)
-                                DataCell(
-                                  DsShiftBadge(code: shift, compact: true),
-                                ),
-                              DataCell(Text('${row.workdays}')),
-                              DataCell(Text('${row.absences}')),
-                            ],
-                          ),
-                      ],
-                    ),
+                  _DsDayGrid(
+                    month: month,
+                    days: days,
+                    trailingHeaders: [l.text('work'), l.text('absent')],
+                    rows: [
+                      for (final row in rows)
+                        _DsDayGridRow(
+                          name: row.name,
+                          role: row.role,
+                          shifts: row.shifts,
+                          trailing: ['${row.workdays}', '${row.absences}'],
+                        ),
+                    ],
                   ),
               ],
             ),

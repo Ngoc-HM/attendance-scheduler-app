@@ -12,6 +12,7 @@ Called from the FastAPI lifespan on startup. Two jobs:
 from __future__ import annotations
 
 import logging
+from datetime import time
 
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine.url import make_url
@@ -21,6 +22,7 @@ from app.core.config import settings
 from app.core.database import Base, SessionLocal, engine
 from app.core.security import get_password_hash
 from app.models.enums import Role, UserStatus
+from app.models.flight import FlightPreset
 from app.models.user import User
 from app.services.user_service import next_user_code
 
@@ -113,6 +115,41 @@ def ensure_first_admin(db: Session) -> User:
     return admin
 
 
+def ensure_default_flight_presets(db: Session) -> None:
+    """Insert the two standard presets if the flight_presets table is empty.
+
+    Idempotent: only seeds when the table is empty so admin edits are never
+    overwritten on restart.
+    """
+    if db.query(FlightPreset).count() > 0:
+        return
+
+    defaults = [
+        FlightPreset(
+            label="HAN–FRA (37/36)",
+            route="HAN-FRA",
+            flt_arr=37,
+            flt_dep=36,
+            sta=time(6, 0),
+            std=time(13, 55),
+            sort_order=0,
+        ),
+        FlightPreset(
+            label="SGN–FRA (31/30)",
+            route="SGN-FRA",
+            flt_arr=31,
+            flt_dep=30,
+            sta=time(6, 30),
+            std=time(13, 35),
+            sort_order=1,
+        ),
+    ]
+    for preset in defaults:
+        db.add(preset)
+    db.commit()
+    logger.info("Default flight presets seeded (%d rows).", len(defaults))
+
+
 def run_startup_bootstrap() -> None:
     """Entry point for the app lifespan."""
     ensure_database_exists()
@@ -120,5 +157,6 @@ def run_startup_bootstrap() -> None:
     db = SessionLocal()
     try:
         ensure_first_admin(db)
+        ensure_default_flight_presets(db)
     finally:
         db.close()

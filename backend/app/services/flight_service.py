@@ -14,8 +14,8 @@ from fastapi import HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.core.i18n import t
-from app.models.flight import Flight, FlightDay
-from app.schemas.flight import FlightDayUpsert, FlightUpsert
+from app.models.flight import Flight, FlightDay, FlightPreset
+from app.schemas.flight import FlightDayApply, FlightDayApplyBatch, FlightDayUpsert, FlightPresetUpsert, FlightUpsert
 from app.services.flight_excel_parser import parse_flight_workbook
 from app.services.flight_pair_derivation import derive_pairs_for_day
 
@@ -55,7 +55,7 @@ def _recompute_pairs_for_days(db: Session, days: set[date]) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Public API
+# Public API — days
 # ---------------------------------------------------------------------------
 
 
@@ -70,6 +70,27 @@ def list_days(db: Session, year: int, month: int) -> list[FlightDay]:
         .order_by(FlightDay.day)
         .all()
     )
+
+
+def list_flights_for_days(db: Session, days: list[date]) -> dict[date, list[Flight]]:
+    """Return Flight rows grouped by day (keyed by date), ordered by flt_number.
+
+    Used by the endpoint to enrich FlightDayRead with its constituent legs.
+    Returns an empty list for days with no Flight rows.
+    """
+    if not days:
+        return {}
+
+    rows = (
+        db.query(Flight)
+        .filter(Flight.day.in_(days))
+        .order_by(Flight.day, Flight.flt_number)
+        .all()
+    )
+    result: dict[date, list[Flight]] = {d: [] for d in days}
+    for row in rows:
+        result[row.day].append(row)
+    return result
 
 
 def upsert_day(db: Session, payload: FlightDayUpsert) -> FlightDay:
@@ -205,3 +226,158 @@ def import_excel(db: Session, file: UploadFile) -> list[Flight]:
         ) from exc
 
     return upserted
+
+
+# ---------------------------------------------------------------------------
+# Public API — presets
+# ---------------------------------------------------------------------------
+
+
+def list_presets(db: Session) -> list[FlightPreset]:
+    """Return all FlightPreset rows ordered by sort_order then id."""
+    return (
+        db.query(FlightPreset)
+        .order_by(FlightPreset.sort_order, FlightPreset.id)
+        .all()
+    )
+
+
+def create_preset(db: Session, payload: FlightPresetUpsert) -> FlightPreset:
+    """Insert a new FlightPreset row."""
+    preset = FlightPreset(
+        label=payload.label,
+        route=payload.route,
+        flt_arr=payload.flt_arr,
+        flt_dep=payload.flt_dep,
+        sta=payload.sta,
+        std=payload.std,
+        sort_order=payload.sort_order,
+        is_active=payload.is_active,
+    )
+    db.add(preset)
+    db.commit()
+    db.refresh(preset)
+    return preset
+
+
+def update_preset(db: Session, preset_id: int, payload: FlightPresetUpsert) -> FlightPreset:
+    """Update an existing FlightPreset; raises 404 if not found."""
+    preset = db.query(FlightPreset).filter(FlightPreset.id == preset_id).one_or_none()
+    if preset is None:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            detail=t("flight.preset_not_found"),
+        )
+
+    preset.label = payload.label
+    preset.route = payload.route
+    preset.flt_arr = payload.flt_arr
+    preset.flt_dep = payload.flt_dep
+    preset.sta = payload.sta
+    preset.std = payload.std
+    preset.sort_order = payload.sort_order
+    preset.is_active = payload.is_active
+
+    db.commit()
+    db.refresh(preset)
+    return preset
+
+
+def delete_preset(db: Session, preset_id: int) -> None:
+    """Delete a FlightPreset; raises 404 if not found."""
+    preset = db.query(FlightPreset).filter(FlightPreset.id == preset_id).one_or_none()
+    if preset is None:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            detail=t("flight.preset_not_found"),
+        )
+    db.delete(preset)
+    db.commit()
+
+
+def _apply_presets_no_commit(db: Session, day: date, preset_ids: list[int]) -> FlightDay:
+    """Replace a day's Flight legs from presets WITHOUT committing.
+
+    - Load preset rows for given IDs (silently skip missing).
+    - DELETE existing Flight rows for the day.
+    - Build arrival + departure legs, deduped by flt_number (later wins).
+    - flush() + recompute pairs. Caller must commit.
+    """
+    # Load requested presets in order; silently skip non-existent IDs.
+    presets: list[FlightPreset] = []
+    for pid in preset_ids:
+        p = db.query(FlightPreset).filter(FlightPreset.id == pid).one_or_none()
+        if p is not None:
+            presets.append(p)
+
+    # Delete all existing Flight rows for this day (replace semantics).
+    db.query(Flight).filter(Flight.day == day).delete(synchronize_session=False)
+
+    # Build legs deduped by flt_number; later preset in the list wins.
+    legs: dict[int, Flight] = {}
+    for preset in presets:
+        # Arrival leg: carries sta only.
+        legs[preset.flt_arr] = Flight(
+            day=day,
+            flt_number=preset.flt_arr,
+            route=preset.route,
+            sta=preset.sta,
+            std=None,
+        )
+        # Departure leg: carries std only.
+        legs[preset.flt_dep] = Flight(
+            day=day,
+            flt_number=preset.flt_dep,
+            route=preset.route,
+            sta=None,
+            std=preset.std,
+        )
+
+    for leg in legs.values():
+        db.add(leg)
+
+    db.flush()
+    _recompute_pairs_for_days(db, {day})
+    # Flush again so the FlightDay row (possibly just created by _recompute_pairs_for_days)
+    # is visible to subsequent queries within this session before commit.
+    db.flush()
+    fd = db.query(FlightDay).filter(FlightDay.day == day).one()
+    return fd
+
+
+def apply_presets_to_day(db: Session, payload: FlightDayApply) -> FlightDay:
+    """Replace the day's Flight legs with legs derived from the selected presets.
+
+    Semantics:
+    - Load preset rows for the given IDs (silently ignore missing IDs).
+    - DELETE all existing Flight rows for that day.
+    - For each preset create arrival + departure legs.
+      DEDUP by flt_number (dict keyed by flt_number; later preset wins)
+      to prevent duplicate (day, flt_number) rows.
+    - Flush, recompute flight_pairs, commit. Returns refreshed FlightDay.
+    """
+    fd = _apply_presets_no_commit(db, payload.day, payload.preset_ids)
+    db.commit()
+    db.refresh(fd)
+    return fd
+
+
+def apply_presets_batch(db: Session, payload: FlightDayApplyBatch) -> list[FlightDay]:
+    """Replace Flight legs for multiple days atomically in a single commit.
+
+    Each item behaves identically to apply_presets_to_day (replace semantics;
+    empty preset_ids clears that day → flight_pairs 0).  All mutations are
+    flushed then committed once, preserving atomicity.  Returns FlightDay rows
+    in input order.
+    """
+    fds: list[FlightDay] = []
+    for item in payload.items:
+        fd = _apply_presets_no_commit(db, item.day, item.preset_ids)
+        fds.append(fd)
+
+    db.commit()
+
+    for fd in fds:
+        db.refresh(fd)
+
+    return fds

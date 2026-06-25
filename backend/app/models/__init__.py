@@ -6,7 +6,7 @@ Alembic autogenerate (see ``alembic/env.py``).
 
 from app.models.attendance import AttendanceRecord
 from app.models.audit import AuditLog
-from app.models.flight import Flight, FlightDay
+from app.models.flight import Flight, FlightDay, FlightPreset
 from app.models.holiday import Holiday
 from app.models.leave import LeaveRequest
 from app.models.role_code_counter import RoleCodeCounter
@@ -19,6 +19,7 @@ __all__ = [
     "AuditLog",
     "Flight",
     "FlightDay",
+    "FlightPreset",
     "Holiday",
     "LeaveRequest",
     "MonthlySchedule",

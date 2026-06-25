@@ -1,12 +1,13 @@
-"""§5.4 #7 — balance A and D shift counts across the fixed group (soft).
+"""§5.4 #7 — balance A and D shift counts across ALL people (soft).
 
 Highest-priority objective (spec note): within the month, minimize the spread
-between the person with the most and the fewest A shifts — and likewise for D
-— across the FIXED group (A1–A4), the roles that actually take flight duty.
+between the person with the most and the fewest A shifts — and likewise for D.
+Every role now takes flight duty (O/D is no longer auto-assigned; manual roster
+WR JUN26 shows M/T on A/D too), so the balance spans the whole team, not just
+the fixed A group.
 
 An ``A/D`` double shift covers one arrival and one departure, so it counts
-toward BOTH totals. Flexible roles (M/T) default to O/D and are excluded —
-including them would just measure who isn't on flight duty.
+toward BOTH totals.
 """
 
 from __future__ import annotations
@@ -25,8 +26,8 @@ def terms(
     inp: SolverInput,
     weight: int,
 ) -> list[cp_model.LinearExpr]:
-    fixed = [p for p in inp.people if p.role.is_fixed]
-    if len(fixed) < 2:
+    people = inp.people
+    if len(people) < 2:
         return []  # spread needs at least two people
 
     n_days = len(inp.days)
@@ -34,7 +35,7 @@ def terms(
 
     for shift in (AttendanceCode.A, AttendanceCode.D):
         totals: list[cp_model.IntVar] = []
-        for p in fixed:
+        for p in people:
             total = model.NewIntVar(0, n_days, f"total_{shift.name}_{p.user_id}")
             # A/D counts toward both A and D totals (§5.3 #6 / §7).
             model.Add(

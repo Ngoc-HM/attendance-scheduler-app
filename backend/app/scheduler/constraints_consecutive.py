@@ -9,7 +9,7 @@ Two pieces per person:
    days before an OFF. Among the first ``max(1, 6 - carry_streak)`` days there
    must be at least one OFF (soft, same slack treatment).
 
-"Working" here = any assignable code except X (A, D, A/D, O/D).
+"Working" here = any assignable code except the rest codes X/CD (A, D, A/D).
 """
 
 from __future__ import annotations

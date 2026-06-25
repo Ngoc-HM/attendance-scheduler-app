@@ -1,18 +1,21 @@
-"""§5.3 #4 + #6 — fixed-group (A1–A4) daily staffing from flight pairs (soft).
+"""§5.3 #4 + #6 — daily flight-shift staffing from flight pairs (soft floor).
 
-Demand per day, covered by the FIXED group only (spec table, §5.3 #4):
+Per-day MINIMUM coverage required (spec table, §5.3 #4):
 
-    flight_pairs == 2  →  1 on A and 2 on D
-    flight_pairs == 1  →  1 on A and 1 on D
-    flight_pairs == 0  →  no flight-shift staffing (and none allowed)
+    flight_pairs == 2  →  at least 1 on A and 2 on D
+    flight_pairs == 1  →  at least 1 on A and 1 on D
+    flight_pairs == 0  →  no flight-shift minimum that day
+
+This is a FLOOR, not an exact target (manual roster WR JUN26 + spec §6): every
+person on duty that day is on a real flight shift (A / D / A/D), not just the
+bare minimum — extra A/D coverage above the floor is fine and expected. The
+even split between A and D is shaped by the balance objective, not capped here.
+O/D is no longer auto-assigned, so a working day is always A, D or A/D.
 
 An ``A/D`` assignment covers one A AND one D simultaneously (§5.3 #6 — the
-last-resort double shift; its usage is discouraged via a moderate objective
-penalty in ``objectives``, and it earns +1 workday / 1 CD handled by F-14).
-
-Modeled as equalities with under/over slack so the model stays feasible:
-``sum(A) + sum(A/D) + under - over == demand``. Under-coverage reports a
-Violation that suggests the A/D fallback (§5.6 #13).
+last-resort double shift; discouraged via a moderate objective penalty). Only
+UNDER-coverage is penalized (a Violation suggesting the A/D fallback, §5.6 #13);
+there is no upper bound on a shift's headcount.
 """
 
 from __future__ import annotations
@@ -25,7 +28,7 @@ from app.models.enums import AttendanceCode
 from app.scheduler.domain import SolverInput
 from app.scheduler.slack_registry import SlackRegistry
 
-# demand_A, demand_D per flight_pairs value (§5.3 #4).
+# Minimum demand_A, demand_D per flight_pairs value (§5.3 #4).
 DEMAND: dict[int, tuple[int, int]] = {0: (0, 0), 1: (1, 1), 2: (1, 2)}
 
 
@@ -35,41 +38,33 @@ def add(
     inp: SolverInput,
     registry: SlackRegistry,
 ) -> None:
-    fixed = [p for p in inp.people if p.role.is_fixed]
-    if not fixed:
-        return  # nothing to staff (e.g. unit tests with only flexible roles)
+    if not inp.people:
+        return
 
     for d in sorted(inp.days):
         pairs = inp.flight_pairs.get(d, 0)
         demand_a, demand_d = DEMAND.get(pairs, (0, 0))
+        if demand_a == 0 and demand_d == 0:
+            continue  # no flight ops that day → no minimum to enforce
 
-        sum_a = sum(x[(p.user_id, d, AttendanceCode.A)] for p in fixed)
-        sum_d = sum(x[(p.user_id, d, AttendanceCode.D)] for p in fixed)
-        sum_ad = sum(x[(p.user_id, d, AttendanceCode.A_D)] for p in fixed)
+        # Everyone on duty takes a flight shift, so count across all people.
+        sum_a = sum(x[(p.user_id, d, AttendanceCode.A)] for p in inp.people)
+        sum_d = sum(x[(p.user_id, d, AttendanceCode.D)] for p in inp.people)
+        sum_ad = sum(x[(p.user_id, d, AttendanceCode.A_D)] for p in inp.people)
 
         for shift, total, demand in (("A", sum_a, demand_a), ("D", sum_d, demand_d)):
             label = f"staff_{shift}_{d.isoformat()}"
-            under = model.NewIntVar(0, 4, f"{label}_under")
-            over = model.NewIntVar(0, 4, f"{label}_over")
+            # Floor only: total + A/D + under >= demand (no over cap).
+            under = model.NewIntVar(0, len(inp.people), f"{label}_under")
             # A/D covers one unit of BOTH shifts (§5.3 #6).
-            model.Add(total + sum_ad + under - over == demand)
+            model.Add(total + sum_ad + under >= demand)
 
             registry.register(
                 under,
-                rule="fixed_group_staffing",
+                rule="flight_staffing",
                 message=(
-                    f"{d}: short {shift}-shift coverage in the fixed group "
-                    f"(need {demand}); consider an A/D double shift (§5.3 #6) "
-                    f"or a manual edit (F-09)"
-                ),
-                day=d,
-            )
-            registry.register(
-                over,
-                rule="fixed_group_staffing",
-                message=(
-                    f"{d}: more {shift}-shift assignments than the demand "
-                    f"of {demand} for the fixed group"
+                    f"{d}: short {shift}-shift coverage (need at least {demand}); "
+                    f"consider an A/D double shift (§5.3 #6) or a manual edit (F-09)"
                 ),
                 day=d,
             )

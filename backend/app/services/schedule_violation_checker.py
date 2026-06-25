@@ -74,18 +74,23 @@ def check_off_quota(grid, roles, weeks) -> list[str]:
 
 
 def check_staffing(grid, roles, weeks, flight_pairs) -> list[str]:
-    """§5.3 #4 — fixed-group A/D coverage per day (A/D covers both)."""
+    """§5.3 #4 — daily A/D coverage must meet at least the per-pairs minimum.
+
+    A floor, not an exact match (every role takes flight duty now; O/D is no
+    longer auto-assigned), and counted across ALL people — kept in sync with
+    ``constraints_staffing``. Only UNDER-coverage warns; extra A/D is fine.
+    """
     days = sorted({d for block in weeks for d in block})
-    fixed = [uid for uid, role in roles.items() if role.is_fixed]
+    everyone = list(roles)
     warnings: list[str] = []
     for d in days:
         need_a, need_d = DEMAND.get(flight_pairs.get(d, 0), (0, 0))
-        a = sum(1 for u in fixed if grid.get((u, d)) is AttendanceCode.A)
-        dd = sum(1 for u in fixed if grid.get((u, d)) is AttendanceCode.D)
-        ad = sum(1 for u in fixed if grid.get((u, d)) is AttendanceCode.A_D)
-        if (a + ad, dd + ad) != (need_a, need_d):
+        a = sum(1 for u in everyone if grid.get((u, d)) is AttendanceCode.A)
+        dd = sum(1 for u in everyone if grid.get((u, d)) is AttendanceCode.D)
+        ad = sum(1 for u in everyone if grid.get((u, d)) is AttendanceCode.A_D)
+        if a + ad < need_a or dd + ad < need_d:
             warnings.append(
-                f"{d}: fixed-group coverage A={a + ad}/{need_a}, "
-                f"D={dd + ad}/{need_d} does not match the flight demand"
+                f"{d}: short flight coverage A={a + ad}/{need_a}, "
+                f"D={dd + ad}/{need_d} (need at least the flight minimum)"
             )
     return warnings

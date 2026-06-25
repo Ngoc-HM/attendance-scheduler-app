@@ -44,14 +44,25 @@ def test_balance_spread_is_minimal_across_fixed_group() -> None:
         assert max(totals) - min(totals) <= 1, f"{shift}: {totals}"
 
 
-def test_weekly_offs_prefer_weekend_pairs() -> None:
-    """§5.4 #8: with no other pressure the 2 X land on Sat+Sun."""
+def test_weekly_offs_not_forced_onto_weekend() -> None:
+    """Owner decision 2026-06-18: Sat/Sun are ordinary working days — the two
+    weekly OFF days must NOT all be dumped on the weekend. We keep the 2-per-7
+    quota but no longer reward Sat+Sun pairing, so the offs no longer pile up
+    on every weekend (fairness/rotation is left to the premium-off objective)."""
     days = month_days(2026, 6)
     people = [PersonInput(1, Role.T)]
     out = _solve(people, days)
 
     assert out.feasible and not out.violations
     grid = {(a.user_id, a.day): a.code for a in out.assignments}
+
+    # Quota still holds: exactly 2 OFF days in each full 7-day block.
+    for block in build_weeks(days):
+        if len(block) >= 7:
+            offs = sum(1 for d in block if grid[(1, d)] is AttendanceCode.X)
+            assert offs == 2, f"block {block[0]}: {offs} offs"
+
+    # And they are NOT all forced onto Sat+Sun every week any more.
     satsun_pairs = sum(
         1
         for d in days
@@ -60,8 +71,7 @@ def test_weekly_offs_prefer_weekend_pairs() -> None:
         and grid[(1, d)] is AttendanceCode.X
         and grid[(1, d.replace(day=d.day + 1))] is AttendanceCode.X
     )
-    # June 2026 has 4 Sat+Sun pairs; reward should capture most of them.
-    assert satsun_pairs >= 2
+    assert satsun_pairs < 4  # June 2026 has 4 Sat+Sun pairs; not all dumped there
 
 
 def test_premium_off_balances_against_carry() -> None:
@@ -92,6 +102,7 @@ def test_holiday_counts_as_premium_day() -> None:
 
     assert out.feasible and not out.violations
     grid = {(a.user_id, a.day): a.code for a in out.assignments}
-    # The holiday is NOT auto-off: at least one of them works it.
+    # The holiday is NOT auto-off: at least one of them works it — and working
+    # now means a real flight shift (O/D is no longer auto-assigned).
     codes = {grid[(1, holiday)], grid[(2, holiday)]}
-    assert codes & {AttendanceCode.O_D}
+    assert codes & {AttendanceCode.A, AttendanceCode.D, AttendanceCode.A_D}

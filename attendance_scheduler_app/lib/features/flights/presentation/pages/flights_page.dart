@@ -7,10 +7,13 @@ import '../../../../design_system/design_system.dart';
 import '../../../../i18n/app_localizations.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../providers/flights_provider.dart';
+import '../widgets/month_batch_dialog.dart';
+import 'flight_presets_page.dart';
 
 /// Flights page (F-04) — live data from GET /flights/days.
 ///
-/// Admin actions: manual add/upsert, Excel import.
+/// Admin primary action: "Add flight" opens the month-batch preset grid.
+/// Admin secondary actions: Excel import, manage presets.
 /// All users: month navigation + table view.
 class FlightsPage extends ConsumerWidget {
   const FlightsPage({super.key});
@@ -21,6 +24,11 @@ class FlightsPage extends ConsumerWidget {
     final ctrl = ref.read(flightsControllerProvider.notifier);
     final isAdmin =
         ref.watch(authControllerProvider).user?.isAdmin ?? false;
+    // Keep the autoDispose presets provider alive and preload it so the
+    // month-batch dialog has presets ready by the time "Add flight" is tapped.
+    // Without this watch the provider was only `ref.read` inside the dialog
+    // handler → it returned a transient `loading` state and the dialog bailed.
+    ref.watch(flightPresetsControllerProvider);
     final l = AppLocalizations.of(context);
 
     return state.rows.when(
@@ -48,8 +56,15 @@ class FlightsPage extends ConsumerWidget {
         onNextMonth: ctrl.nextMonth,
         onImport: isAdmin ? () => _pickAndImport(context, ref, l) : () {},
         onAdd: isAdmin
-            ? () => _showAddDialog(context, ref, state.month, l)
+            ? () => _showMonthBatchDialog(context, ref, state.month, l)
             : () {},
+        onManagePresets: isAdmin
+            ? () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const FlightPresetsPage(),
+                  ),
+                )
+            : null,
       ),
     );
   }
@@ -82,87 +97,77 @@ class FlightsPage extends ConsumerWidget {
       }
     } on ApiException catch (e) {
       if (context.mounted) {
-        DsFeedback.show(
-          context,
-          e.message,
-          tone: DsTone.danger,
-        );
+        DsFeedback.show(context, e.message, tone: DsTone.danger);
       }
     }
   }
 
   // ---------------------------------------------------------------------------
-  // Manual add/upsert dialog
+  // Month-batch preset dialog
   // ---------------------------------------------------------------------------
 
-  Future<void> _showAddDialog(
+  Future<void> _showMonthBatchDialog(
     BuildContext context,
     WidgetRef ref,
     DateTime month,
     AppLocalizations l,
   ) async {
-    final dayCtrl = TextEditingController();
-    final pairsCtrl = TextEditingController(text: '1');
+    // Presets come from the autoDispose provider — ensure it is alive while we
+    // build the dialog by reading it here (watch keeps it alive in the widget).
+    final presetsAsync = ref.read(flightPresetsControllerProvider);
+    final activePresets = presetsAsync.asData?.value
+            .where((p) => p.isActive)
+            .toList() ??
+        [];
+
+    // If presets haven't loaded yet (very early tap before preload finishes),
+    // bail with a hint — the build() watch means a retry will succeed.
+    if (presetsAsync.isLoading) {
+      DsFeedback.show(
+        context,
+        l.text('monthFlightsLoading'),
+        tone: DsTone.primary,
+      );
+      return;
+    }
+
+    // No presets configured → guide the admin to create one first.
+    if (activePresets.isEmpty) {
+      DsFeedback.show(
+        context,
+        l.text('noPresetsMessage'),
+        tone: DsTone.primary,
+      );
+      return;
+    }
+
+    final existingDays = ref.read(flightsControllerProvider).dayModels;
+
+    if (!context.mounted) return;
 
     await showDialog<void>(
       context: context,
-      builder: (ctx) => DsFormDialog(
-        title: l.text('addFlightDay'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: dayCtrl,
-              decoration: InputDecoration(
-                labelText: l.text('dayOfMonth'),
-                hintText: '1–31',
-              ),
-              keyboardType: TextInputType.number,
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: pairsCtrl,
-              decoration: InputDecoration(
-                labelText: l.text('flightPairsCount'),
-                hintText: '0 / 1 / 2',
-              ),
-              keyboardType: TextInputType.number,
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: Text(l.cancel),
-          ),
-          DsPrimaryButton(
-            label: l.create,
-            onPressed: () async {
-              final day = int.tryParse(dayCtrl.text.trim());
-              final pairs = int.tryParse(pairsCtrl.text.trim());
-              if (day == null || pairs == null || pairs < 0 || pairs > 2) {
-                return;
-              }
-              Navigator.of(ctx).pop();
-              final date = DateTime(month.year, month.month, day);
-              final ctrl = ref.read(flightsControllerProvider.notifier);
-              try {
-                await ctrl.upsertDay(date, pairs);
-                if (context.mounted) {
-                  DsFeedback.show(
-                    context,
-                    l.text('flightDaySaved'),
-                    tone: DsTone.success,
-                  );
-                }
-              } on ApiException catch (e) {
-                if (context.mounted) {
-                  DsFeedback.show(context, e.message, tone: DsTone.danger);
-                }
-              }
-            },
-          ),
-        ],
+      builder: (_) => MonthBatchDialog(
+        month: month,
+        presets: activePresets,
+        existingDays: existingDays,
+        onApply: (items) async {
+          final ctrl = ref.read(flightsControllerProvider.notifier);
+          try {
+            await ctrl.applyMonth(items);
+            if (context.mounted) {
+              DsFeedback.show(
+                context,
+                l.text('monthFlightsSaved'),
+                tone: DsTone.success,
+              );
+            }
+          } on ApiException catch (e) {
+            if (context.mounted) {
+              DsFeedback.show(context, e.message, tone: DsTone.danger);
+            }
+          }
+        },
       ),
     );
   }

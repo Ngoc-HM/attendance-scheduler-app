@@ -25,10 +25,7 @@ class ScheduleRemoteDataSource {
       return MonthlyScheduleModel.fromJson(
           response.data as Map<String, dynamic>);
     } on DioException catch (e) {
-      throw ApiException(
-        e.response?.data?['detail']?.toString() ?? e.message ?? 'fetch_failed',
-        statusCode: e.response?.statusCode,
-      );
+      throw ApiException.fromDio(e, 'fetch_failed');
     }
   }
 
@@ -46,12 +43,7 @@ class ScheduleRemoteDataSource {
       return ScheduleResultModel.fromJson(
           response.data as Map<String, dynamic>);
     } on DioException catch (e) {
-      throw ApiException(
-        e.response?.data?['detail']?.toString() ??
-            e.message ??
-            'generate_failed',
-        statusCode: e.response?.statusCode,
-      );
+      throw ApiException.fromDio(e, 'generate_failed');
     }
   }
 
@@ -75,12 +67,7 @@ class ScheduleRemoteDataSource {
       return MonthlyScheduleModel.fromJson(
           response.data as Map<String, dynamic>);
     } on DioException catch (e) {
-      throw ApiException(
-        e.response?.data?['detail']?.toString() ??
-            e.message ??
-            'override_failed',
-        statusCode: e.response?.statusCode,
-      );
+      throw ApiException.fromDio(e, 'override_failed');
     }
   }
 
@@ -92,12 +79,7 @@ class ScheduleRemoteDataSource {
       return MonthlyScheduleModel.fromJson(
           response.data as Map<String, dynamic>);
     } on DioException catch (e) {
-      throw ApiException(
-        e.response?.data?['detail']?.toString() ??
-            e.message ??
-            'publish_failed',
-        statusCode: e.response?.statusCode,
-      );
+      throw ApiException.fromDio(e, 'publish_failed');
     }
   }
 
@@ -116,12 +98,7 @@ class ScheduleRemoteDataSource {
               ShiftChangeRequestModel.fromJson(e as Map<String, dynamic>))
           .toList();
     } on DioException catch (e) {
-      throw ApiException(
-        e.response?.data?['detail']?.toString() ??
-            e.message ??
-            'shift_changes_fetch_failed',
-        statusCode: e.response?.statusCode,
-      );
+      throw ApiException.fromDio(e, 'shift_changes_fetch_failed');
     }
   }
 
@@ -149,12 +126,7 @@ class ScheduleRemoteDataSource {
       return ShiftChangeRequestModel.fromJson(
           response.data as Map<String, dynamic>);
     } on DioException catch (e) {
-      throw ApiException(
-        e.response?.data?['detail']?.toString() ??
-            e.message ??
-            'shift_change_create_failed',
-        statusCode: e.response?.statusCode,
-      );
+      throw ApiException.fromDio(e, 'shift_change_create_failed');
     }
   }
 
@@ -171,12 +143,7 @@ class ScheduleRemoteDataSource {
       return ShiftChangeRequestModel.fromJson(
           response.data as Map<String, dynamic>);
     } on DioException catch (e) {
-      throw ApiException(
-        e.response?.data?['detail']?.toString() ??
-            e.message ??
-            'shift_change_decide_failed',
-        statusCode: e.response?.statusCode,
-      );
+      throw ApiException.fromDio(e, 'shift_change_decide_failed');
     }
   }
 }

@@ -65,9 +65,19 @@ def generate(db: Session, year: int, month: int, force: bool = False) -> Schedul
     if existing is None:
         existing = MonthlySchedule(year=year, month=month)
         db.add(existing)
+        db.flush()  # assign existing.id before deleting/inserting cells
     existing.status = ScheduleStatus.draft
     existing.generated_at = datetime.now(timezone.utc)
-    existing.assignments.clear()  # replace previous draft cells
+
+    # Hard-delete previous cells by schedule_id (business key) — the ORM
+    # collection's id-based delete proved unreliable on regenerate (DELETE
+    # matched 0 rows, then the re-insert collided on uq_assignment_cell).
+    # Deleting by schedule_id + expiring the stale collection avoids the race.
+    db.query(ShiftAssignment).filter(
+        ShiftAssignment.schedule_id == existing.id
+    ).delete(synchronize_session=False)
+    db.flush()
+    db.expire(existing, ["assignments"])
 
     for a in out.assignments:
         # Restore the concrete code on pinned cells: the engine plans approved

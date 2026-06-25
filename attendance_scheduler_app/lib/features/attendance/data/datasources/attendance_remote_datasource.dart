@@ -36,12 +36,7 @@ class AttendanceRemoteDataSource {
               AttendanceRecordModel.fromJson(e as Map<String, dynamic>))
           .toList();
     } on DioException catch (e) {
-      throw ApiException(
-        e.response?.data?['detail']?.toString() ??
-            e.message ??
-            'attendance_fetch_failed',
-        statusCode: e.response?.statusCode,
-      );
+      throw ApiException.fromDio(e, 'attendance_fetch_failed');
     }
   }
 
@@ -61,12 +56,7 @@ class AttendanceRemoteDataSource {
               AttendanceRecordModel.fromJson(e as Map<String, dynamic>))
           .toList();
     } on DioException catch (e) {
-      throw ApiException(
-        e.response?.data?['detail']?.toString() ??
-            e.message ??
-            'my_attendance_fetch_failed',
-        statusCode: e.response?.statusCode,
-      );
+      throw ApiException.fromDio(e, 'my_attendance_fetch_failed');
     }
   }
 
@@ -88,12 +78,7 @@ class AttendanceRemoteDataSource {
       return AttendanceRecordModel.fromJson(
           response.data as Map<String, dynamic>);
     } on DioException catch (e) {
-      throw ApiException(
-        e.response?.data?['detail']?.toString() ??
-            e.message ??
-            'attendance_upsert_failed',
-        statusCode: e.response?.statusCode,
-      );
+      throw ApiException.fromDio(e, 'attendance_upsert_failed');
     }
   }
 
@@ -113,12 +98,7 @@ class AttendanceRemoteDataSource {
       return SickCoverResultModel.fromJson(
           response.data as Map<String, dynamic>);
     } on DioException catch (e) {
-      throw ApiException(
-        e.response?.data?['detail']?.toString() ??
-            e.message ??
-            'sick_cover_failed',
-        statusCode: e.response?.statusCode,
-      );
+      throw ApiException.fromDio(e, 'sick_cover_failed');
     }
   }
 
@@ -130,12 +110,7 @@ class AttendanceRemoteDataSource {
         data: {'year': year, 'month': month},
       );
     } on DioException catch (e) {
-      throw ApiException(
-        e.response?.data?['detail']?.toString() ??
-            e.message ??
-            'attendance_seed_failed',
-        statusCode: e.response?.statusCode,
-      );
+      throw ApiException.fromDio(e, 'attendance_seed_failed');
     }
   }
 
@@ -153,12 +128,7 @@ class AttendanceRemoteDataSource {
           .map((e) => HolidayModel.fromJson(e as Map<String, dynamic>))
           .toList();
     } on DioException catch (e) {
-      throw ApiException(
-        e.response?.data?['detail']?.toString() ??
-            e.message ??
-            'holidays_fetch_failed',
-        statusCode: e.response?.statusCode,
-      );
+      throw ApiException.fromDio(e, 'holidays_fetch_failed');
     }
   }
 
@@ -174,12 +144,7 @@ class AttendanceRemoteDataSource {
       );
       return HolidayModel.fromJson(response.data as Map<String, dynamic>);
     } on DioException catch (e) {
-      throw ApiException(
-        e.response?.data?['detail']?.toString() ??
-            e.message ??
-            'holiday_upsert_failed',
-        statusCode: e.response?.statusCode,
-      );
+      throw ApiException.fromDio(e, 'holiday_upsert_failed');
     }
   }
 
@@ -188,12 +153,7 @@ class AttendanceRemoteDataSource {
     try {
       await _dio.delete(ApiEndpoints.holidayById(id));
     } on DioException catch (e) {
-      throw ApiException(
-        e.response?.data?['detail']?.toString() ??
-            e.message ??
-            'holiday_delete_failed',
-        statusCode: e.response?.statusCode,
-      );
+      throw ApiException.fromDio(e, 'holiday_delete_failed');
     }
   }
 

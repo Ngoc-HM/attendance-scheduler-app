@@ -26,6 +26,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "flight.invalid_pairs": "flight_pairs must be 0, 1 or 2.",
         "flight.import_failed": "Excel import failed.",
         "flight.import_bad_file": "Unsupported or unreadable Excel file.",
+        "flight.preset_not_found": "Flight preset not found.",
         # --- Leaves (F-05/F-06) ---
         "leave.not_found": "Leave request not found.",
         "leave.window_closed_monthly": "Monthly leave registration is open from day 1 to day 20 of the previous month.",
@@ -63,6 +64,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "flight.invalid_pairs": "Số cặp chuyến bay phải là 0, 1 hoặc 2.",
         "flight.import_failed": "Import Excel thất bại.",
         "flight.import_bad_file": "File Excel không hợp lệ hoặc không đọc được.",
+        "flight.preset_not_found": "Không tìm thấy preset chuyến bay.",
         # --- Leaves (F-05/F-06) ---
         "leave.not_found": "Không tìm thấy đơn nghỉ.",
         "leave.window_closed_monthly": "Đăng ký nghỉ tháng mở từ ngày 1 đến ngày 20 của tháng trước.",
