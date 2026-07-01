@@ -6,6 +6,7 @@ import '../../../../core/network/api_exception.dart';
 import '../../../../design_system/design_system.dart';
 import '../../../../i18n/app_localizations.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
+import '../../data/datasources/flights_remote_datasource.dart';
 import '../providers/flights_provider.dart';
 import '../widgets/month_batch_dialog.dart';
 import 'flight_presets_page.dart';
@@ -151,10 +152,12 @@ class FlightsPage extends ConsumerWidget {
         month: month,
         presets: activePresets,
         existingDays: existingDays,
-        onApply: (items) async {
+        loadMonth: (m) =>
+            ref.read(flightsDataSourceProvider).listDays(m.year, m.month),
+        onApply: (appliedMonth, items) async {
           final ctrl = ref.read(flightsControllerProvider.notifier);
           try {
-            await ctrl.applyMonth(items);
+            await ctrl.applyMonth(appliedMonth, items);
             if (context.mounted) {
               DsFeedback.show(
                 context,

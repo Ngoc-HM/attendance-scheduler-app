@@ -51,11 +51,10 @@ def generate(db: Session, year: int, month: int, force: bool = False) -> Schedul
         .filter(MonthlySchedule.year == year, MonthlySchedule.month == month)
         .one_or_none()
     )
-    if existing is not None and not force:
-        if existing.status is ScheduleStatus.published:
-            raise HTTPException(status.HTTP_409_CONFLICT, detail=t("schedule.published_locked"))
-        if any(a.is_manual_override for a in existing.assignments):
-            raise HTTPException(status.HTTP_409_CONFLICT, detail=t("schedule.has_overrides"))
+    # Testing mode (owner 2026-07-01): admin may regenerate freely — no lock on
+    # published schedules or manual overrides. Regenerating resets to draft.
+    # ``force`` is kept in the signature for API compatibility but no longer gates.
+    _ = force
 
     inp = schedule_input_builder.build(db, year, month)
     out = SchedulerEngine().solve(inp)

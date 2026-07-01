@@ -89,15 +89,19 @@ class FlightsController extends StateNotifier<FlightsState> {
     await load();
   }
 
-  /// Admin: apply a batch of day→presets mappings then reload.
+  /// Admin: apply a batch of day→presets changes (which may span several
+  /// months), then show [month] in the page.
   ///
   /// [items] should contain only days whose selection CHANGED vs. the initial
-  /// state — the dialog is responsible for diffing.  A no-op if list is empty.
+  /// state — the dialog is responsible for diffing.
   Future<void> applyMonth(
+    DateTime month,
     List<({DateTime day, List<int> presetIds})> items,
   ) async {
-    if (items.isEmpty) return;
-    await _ds.applyBatch(items);
+    state = state.copyWith(month: DateTime(month.year, month.month));
+    if (items.isNotEmpty) {
+      await _ds.applyBatch(items);
+    }
     await load();
   }
 

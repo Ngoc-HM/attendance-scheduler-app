@@ -88,14 +88,16 @@ def test_generate_override_publish_pipeline(client: TestClient) -> None:
     assert cell["code"] == "A/D" and cell["is_manual_override"] is True
     assert over["violations"]  # fewer than 2 off days that week → flagged
 
-    # Regenerate guard: manual edits present → 409 without force.
+    # Testing mode (owner 2026-07-01): admin can regenerate freely — manual
+    # overrides no longer block regeneration.
     res = client.post(
         "/api/v1/schedules/generate", headers=admin,
         json={"year": YEAR, "month": MONTH},
     )
-    assert res.status_code == 409
+    assert res.status_code == 200
 
-    # Publish → visible to normal users; regenerate without force still 409.
+    # Publish → visible to normal users; regenerating is still allowed (the
+    # month simply resets to draft).
     res = client.post(f"/api/v1/schedules/{schedule['id']}/publish", headers=admin)
     assert res.status_code == 200 and res.json()["status"] == "published"
     assert client.get(f"/api/v1/schedules/{YEAR}/{MONTH}", headers=user_hdr).status_code == 200
@@ -103,7 +105,7 @@ def test_generate_override_publish_pipeline(client: TestClient) -> None:
         "/api/v1/schedules/generate", headers=admin,
         json={"year": YEAR, "month": MONTH},
     )
-    assert res.status_code == 409
+    assert res.status_code == 200
 
 
 def test_regenerate_with_force_replaces_cells(client: TestClient) -> None:

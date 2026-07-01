@@ -1,17 +1,16 @@
 """§5.3 #4 + #6 — daily flight-shift staffing from flight pairs (soft floor).
 
+Scoped to ROLE-A people only (owner decision 2026-06-26): only the fixed group
+takes A / D / A/D flight duties.  Role T (AD) and role M (O/D) are never
+counted toward flight-pair coverage.
+
 Per-day MINIMUM coverage required (spec table, §5.3 #4):
 
     flight_pairs == 2  →  at least 1 on A and 2 on D
     flight_pairs == 1  →  at least 1 on A and 1 on D
     flight_pairs == 0  →  no flight-shift minimum that day
 
-This is a FLOOR, not an exact target (manual roster WR JUN26 + spec §6): every
-person on duty that day is on a real flight shift (A / D / A/D), not just the
-bare minimum — extra A/D coverage above the floor is fine and expected. The
-even split between A and D is shaped by the balance objective, not capped here.
-O/D is no longer auto-assigned, so a working day is always A, D or A/D.
-
+This is a FLOOR, not an exact target: extra coverage above the floor is fine.
 An ``A/D`` assignment covers one A AND one D simultaneously (§5.3 #6 — the
 last-resort double shift; discouraged via a moderate objective penalty). Only
 UNDER-coverage is penalized (a Violation suggesting the A/D fallback, §5.6 #13);
@@ -24,7 +23,7 @@ from datetime import date
 
 from ortools.sat.python import cp_model
 
-from app.models.enums import AttendanceCode
+from app.models.enums import AttendanceCode, Role
 from app.scheduler.domain import SolverInput
 from app.scheduler.slack_registry import SlackRegistry
 
@@ -38,7 +37,9 @@ def add(
     inp: SolverInput,
     registry: SlackRegistry,
 ) -> None:
-    if not inp.people:
+    # Only role-A people have A / D / A/D vars.
+    role_a = [p for p in inp.people if p.role is Role.A]
+    if not role_a:
         return
 
     for d in sorted(inp.days):
@@ -47,15 +48,15 @@ def add(
         if demand_a == 0 and demand_d == 0:
             continue  # no flight ops that day → no minimum to enforce
 
-        # Everyone on duty takes a flight shift, so count across all people.
-        sum_a = sum(x[(p.user_id, d, AttendanceCode.A)] for p in inp.people)
-        sum_d = sum(x[(p.user_id, d, AttendanceCode.D)] for p in inp.people)
-        sum_ad = sum(x[(p.user_id, d, AttendanceCode.A_D)] for p in inp.people)
+        # Count A / D / A/D across role-A people only.
+        sum_a = sum(x[(p.user_id, d, AttendanceCode.A)] for p in role_a)
+        sum_d = sum(x[(p.user_id, d, AttendanceCode.D)] for p in role_a)
+        sum_ad = sum(x[(p.user_id, d, AttendanceCode.A_D)] for p in role_a)
 
         for shift, total, demand in (("A", sum_a, demand_a), ("D", sum_d, demand_d)):
             label = f"staff_{shift}_{d.isoformat()}"
             # Floor only: total + A/D + under >= demand (no over cap).
-            under = model.NewIntVar(0, len(inp.people), f"{label}_under")
+            under = model.NewIntVar(0, len(role_a), f"{label}_under")
             # A/D covers one unit of BOTH shifts (§5.3 #6).
             model.Add(total + sum_ad + under >= demand)
 

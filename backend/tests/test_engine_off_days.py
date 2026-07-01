@@ -57,6 +57,28 @@ def test_approved_leave_raises_block_target() -> None:
     assert got == 2 + 2
 
 
+def test_two_weekly_offs_are_adjacent_when_free() -> None:
+    """§5.4 #8 (revived 2026-07-01) — with no flight pressure, each full block's
+    2 offs sit next to each other (adjacent), for every role."""
+    days = month_days(2026, 6)  # blocks 7/7/7/7/2
+    people = [PersonInput(1, Role.A), PersonInput(2, Role.T), PersonInput(3, Role.M)]
+    out = _solve(people, days)  # no flights → adjacency freely achievable
+
+    assert out.feasible and not out.violations
+    grid = {(a.user_id, a.day): a.code for a in out.assignments}
+    for p in people:
+        for block in build_weeks(days):
+            if len(block) < 7:
+                continue  # partial tail block (1 off) — nothing to pair
+            offs = [
+                i for i, d in enumerate(block)
+                if grid[(p.user_id, d)] is AttendanceCode.X
+            ]
+            assert len(offs) == 2 and offs[1] - offs[0] == 1, (
+                f"user {p.user_id} block {block[0]}: offs at {offs} not adjacent"
+            )
+
+
 def test_impossible_quota_reports_violation_not_infeasible() -> None:
     """Slack path: a block fully pinned AL cannot fit 2 extra X → Violation."""
     days = month_days(2026, 6)[:7]  # a single 7-day block

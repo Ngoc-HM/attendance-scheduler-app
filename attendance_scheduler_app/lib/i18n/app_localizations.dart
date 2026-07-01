@@ -229,6 +229,10 @@ class AppLocalizations {
           'No schedule for this month. Tap "Generate schedule" to build one.',
       'scheduleGenerated': 'Schedule generated.',
       'scheduleInfeasible': 'No valid schedule could be found.',
+      'regenerateTitle': 'Regenerate schedule?',
+      'regenerateWarning':
+          'This schedule is published. Regenerating will rearrange the whole month and overwrite it. Continue?',
+      'regenerate': 'Regenerate',
       'scheduleNotPublishedYet': 'The schedule for this month is not published yet.',
       'schedulePublished': 'Schedule published.',
       'selectColleague': 'Select a colleague',
@@ -486,6 +490,10 @@ class AppLocalizations {
           'Chưa có lịch cho tháng này. Nhấn "Tạo lịch" để bắt đầu.',
       'scheduleGenerated': 'Đã tạo lịch.',
       'scheduleInfeasible': 'Không tìm được lời giải hợp lệ cho lịch.',
+      'regenerateTitle': 'Tạo lại lịch?',
+      'regenerateWarning':
+          'Lịch này đã công bố. Tạo lại sẽ sắp xếp lại toàn bộ tháng và ghi đè lịch hiện tại. Tiếp tục?',
+      'regenerate': 'Tạo lại',
       'scheduleNotPublishedYet': 'Lịch tháng này chưa được công bố.',
       'schedulePublished': 'Đã công bố lịch.',
       'selectColleague': 'Chọn đồng nghiệp',

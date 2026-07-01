@@ -240,10 +240,12 @@ class DsScheduleView extends StatelessWidget {
     required this.onNextMonth,
     required this.onGenerate,
     required this.onPublish,
+    this.flightLabels = const {},
   });
 
   final DateTime month;
   final List<DsRosterRowData> rows;
+  final Map<int, String> flightLabels; // day-of-month → FLT codes for the roster
   final VoidCallback onPreviousMonth;
   final VoidCallback onNextMonth;
   final VoidCallback onGenerate;
@@ -307,6 +309,11 @@ class DsScheduleView extends StatelessWidget {
             ],
           ),
           const SizedBox(height: DsSpacing.x6),
+          // Legend on top (owner 2026-07-01) so codes are explained before the table.
+          if (rows.isNotEmpty) ...[
+            const _DsShiftLegend(),
+            const SizedBox(height: DsSpacing.x4),
+          ],
           DsSurface(
             padding: EdgeInsets.zero,
             child: Column(
@@ -331,49 +338,212 @@ class DsScheduleView extends StatelessWidget {
                     message: l.text('scheduleEmptyMessage'),
                   )
                 else
-                  _DsRosterTable(month: month, rows: rows, days: days),
+                  _DsRosterTable(
+                    month: month,
+                    rows: rows,
+                    days: days,
+                    flightLabels: flightLabels,
+                  ),
               ],
             ),
           ),
-          if (rows.isNotEmpty) ...[
-            const SizedBox(height: DsSpacing.x4),
-            const _DsShiftLegend(),
-          ],
         ],
       ),
     );
   }
 }
 
+/// Monthly roster — TRANSPOSED (owner 2026-07-01): days run DOWN as rows,
+/// people run ACROSS as columns. Person columns fill the width evenly; only a
+/// very narrow viewport / many people triggers horizontal scroll. A summary
+/// block (A / D / off totals per person) closes the table.
 class _DsRosterTable extends StatelessWidget {
   const _DsRosterTable({
     required this.month,
     required this.rows,
     required this.days,
+    this.flightLabels = const {},
   });
 
   final DateTime month;
   final List<DsRosterRowData> rows;
   final int days;
+  final Map<int, String> flightLabels; // day-of-month → FLT codes
+
+  static const double _dayColW = 40;
+  static const double _wdColW = 48;
+  static const double _fltColW = 96;
+  static const double _personMinW = 60;
 
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
-    return _DsDayGrid(
-      month: month,
-      days: days,
-      trailingHeaders: ['A', 'D', l.text('off')],
-      rows: [
-        for (final row in rows)
-          _DsDayGridRow(
-            name: row.name,
-            role: row.role,
-            shifts: row.shifts,
-            trailing: ['${row.arrivals}', '${row.departures}', '${row.offDays}'],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final n = rows.length;
+        const hPad = DsSpacing.x3 * 2; // each row's horizontal padding (x3 both sides)
+        final avail =
+            constraints.maxWidth - _dayColW - _wdColW - _fltColW - hPad;
+        final fits = n == 0 || n * _personMinW <= avail;
+        final personW = fits && n > 0 ? avail / n : _personMinW;
+
+        final table = Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _headerRow(l, personW),
+            for (var i = 0; i < days; i++) ...[
+              const Divider(height: 1, color: DsColors.border),
+              _dayRow(l, i, personW),
+            ],
+            const Divider(height: 1, color: DsColors.border),
+            _summaryRow('A', personW, (r) => '${r.arrivals}'),
+            _summaryRow('D', personW, (r) => '${r.departures}'),
+            _summaryRow(l.text('off'), personW, (r) => '${r.offDays}'),
+          ],
+        );
+
+        if (fits) return table;
+        return SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: SizedBox(
+            width: _dayColW + _wdColW + _fltColW + n * personW + hPad,
+            child: table,
           ),
-      ],
+        );
+      },
     );
   }
+
+  Widget _headerRow(AppLocalizations l, double personW) => Container(
+        color: DsColors.surfaceSubtle,
+        padding: const EdgeInsets.symmetric(
+          horizontal: DsSpacing.x3,
+          vertical: DsSpacing.x2,
+        ),
+        child: Row(
+          children: [
+            SizedBox(
+              width: _dayColW,
+              child: Text(l.text('columnDay'),
+                  textAlign: TextAlign.center, style: DsType.tableHeader),
+            ),
+            SizedBox(
+              width: _wdColW,
+              child: Text(l.text('columnWeekday'),
+                  textAlign: TextAlign.center, style: DsType.tableHeader),
+            ),
+            const SizedBox(
+              width: _fltColW,
+              child: Text('FLT',
+                  textAlign: TextAlign.center, style: DsType.tableHeader),
+            ),
+            for (final row in rows)
+              SizedBox(
+                width: personW,
+                child: Text(
+                  row.name,
+                  textAlign: TextAlign.center,
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                  style: const TextStyle(
+                    fontSize: DsFontSize.footnote,
+                    fontWeight: FontWeight.w700,
+                    color: DsColors.textPrimary,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      );
+
+  Widget _dayRow(AppLocalizations l, int i, double personW) {
+    final date = DateTime(month.year, month.month, i + 1);
+    final weekend = date.weekday == DateTime.saturday ||
+        date.weekday == DateTime.sunday;
+    final dayColor = weekend ? DsColors.primary : DsColors.textPrimary;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: DsSpacing.x3, vertical: 4),
+      child: Row(
+        children: [
+          SizedBox(
+            width: _dayColW,
+            child: Text('${i + 1}',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: DsFontSize.footnote,
+                  fontWeight: FontWeight.w600,
+                  color: dayColor,
+                )),
+          ),
+          SizedBox(
+            width: _wdColW,
+            child: Text(l.shortWeekday(date),
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: DsFontSize.caption,
+                  color: weekend ? DsColors.primary : DsColors.textMuted,
+                )),
+          ),
+          SizedBox(
+            width: _fltColW,
+            child: Text(
+              flightLabels[i + 1] ?? '',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: DsFontSize.micro,
+                fontWeight: FontWeight.w600,
+                color: DsColors.textSecondary,
+                height: 1.2,
+              ),
+            ),
+          ),
+          for (final row in rows)
+            SizedBox(
+              width: personW,
+              child: Center(
+                child: i < row.shifts.length
+                    ? DsShiftBadge(code: row.shifts[i], compact: true)
+                    : const Text('—', style: TextStyle(color: DsColors.textMuted)),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _summaryRow(
+    String label,
+    double personW,
+    String Function(DsRosterRowData) value,
+  ) =>
+      Container(
+        color: DsColors.surfaceSubtle,
+        padding: const EdgeInsets.symmetric(
+          horizontal: DsSpacing.x3,
+          vertical: DsSpacing.x2,
+        ),
+        child: Row(
+          children: [
+            SizedBox(
+              width: _dayColW + _wdColW + _fltColW,
+              child: Text(label, style: DsType.tableHeader),
+            ),
+            for (final row in rows)
+              SizedBox(
+                width: personW,
+                child: Center(
+                  child: Text(
+                    value(row),
+                    style: const TextStyle(
+                      fontSize: DsFontSize.caption,
+                      color: DsColors.textPrimary,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      );
 }
 
 /// Shared, full-width day-by-day grid used by the roster and attendance boards:

@@ -44,34 +44,35 @@ def test_balance_spread_is_minimal_across_fixed_group() -> None:
         assert max(totals) - min(totals) <= 1, f"{shift}: {totals}"
 
 
-def test_weekly_offs_not_forced_onto_weekend() -> None:
-    """Owner decision 2026-06-18: Sat/Sun are ordinary working days — the two
-    weekly OFF days must NOT all be dumped on the weekend. We keep the 2-per-7
-    quota but no longer reward Sat+Sun pairing, so the offs no longer pile up
-    on every weekend (fairness/rotation is left to the premium-off objective)."""
+def test_weekend_offs_not_all_piled_up_under_flights() -> None:
+    """Owner decision 2026-06-18: Sat/Sun are ordinary working days. The two
+    weekly offs may sit adjacently (off-pairing, 2026-07-01) with NO weekend
+    bias, so what actually keeps a weekend STAFFED is the flight demand: with
+    2 pairs every day the fixed group is never all off on the same Sat/Sun."""
     days = month_days(2026, 6)
-    people = [PersonInput(1, Role.T)]
-    out = _solve(people, days)
+    fixed_ids = (1, 2, 3, 4)
+    people = [PersonInput(u, Role.A) for u in fixed_ids]
+    out = _solve(people, days, flight_pairs={d: 2 for d in days})
 
     assert out.feasible and not out.violations
     grid = {(a.user_id, a.day): a.code for a in out.assignments}
 
     # Quota still holds: exactly 2 OFF days in each full 7-day block.
-    for block in build_weeks(days):
-        if len(block) >= 7:
-            offs = sum(1 for d in block if grid[(1, d)] is AttendanceCode.X)
-            assert offs == 2, f"block {block[0]}: {offs} offs"
+    for u in fixed_ids:
+        for block in build_weeks(days):
+            if len(block) >= 7:
+                offs = sum(1 for d in block if grid[(u, d)] is AttendanceCode.X)
+                assert offs == 2, f"user {u} block {block[0]}: {offs} offs"
 
-    # And they are NOT all forced onto Sat+Sun every week any more.
-    satsun_pairs = sum(
-        1
-        for d in days
-        if d.weekday() == SAT
-        and d.replace(day=d.day + 1) in set(days)
-        and grid[(1, d)] is AttendanceCode.X
-        and grid[(1, d.replace(day=d.day + 1))] is AttendanceCode.X
-    )
-    assert satsun_pairs < 4  # June 2026 has 4 Sat+Sun pairs; not all dumped there
+    # Staffing floor (§5.3 #4: 2 pairs → 1 A + 2 D) keeps the weekend covered —
+    # the whole fixed group is never off on the same Sat/Sun.
+    for d in days:
+        if d.weekday() in (SAT, SUN):
+            working = sum(
+                1 for u in fixed_ids
+                if grid[(u, d)] not in (AttendanceCode.X, AttendanceCode.CD)
+            )
+            assert working >= 3, f"{d}: only {working} working (need >=1A+2D)"
 
 
 def test_premium_off_balances_against_carry() -> None:
@@ -102,7 +103,8 @@ def test_holiday_counts_as_premium_day() -> None:
 
     assert out.feasible and not out.violations
     grid = {(a.user_id, a.day): a.code for a in out.assignments}
-    # The holiday is NOT auto-off: at least one of them works it — and working
-    # now means a real flight shift (O/D is no longer auto-assigned).
+    # The holiday is NOT auto-off: at least one of them works it.
+    # Role T working code is AD (full-day duty, no shift split).
     codes = {grid[(1, holiday)], grid[(2, holiday)]}
-    assert codes & {AttendanceCode.A, AttendanceCode.D, AttendanceCode.A_D}
+    # At least one person works (AD) — not both can have X given 2-X/week budget.
+    assert AttendanceCode.AD in codes

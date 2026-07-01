@@ -6,127 +6,148 @@ import '../../../../i18n/app_localizations.dart';
 import '../../data/models/flight_day_model.dart';
 import '../../data/models/flight_preset_model.dart';
 
-/// Batch-editor dialog: shows ALL days of [month] as a tick-grid.
+/// Batch-editor dialog: shows the whole [month] as a tick-grid.
 ///
-/// Rows = days (1..N). Columns = one per active preset.
-/// Admin ticks cells to assign presets to days, then hits "Apply whole month".
-/// Returns ONLY the days whose selection CHANGED from the initial state.
+/// Transposed layout: DAYS run horizontally as columns (1..N, with weekday),
+/// PRESETS are the vertical rows. Admin ticks cells to assign presets to days,
+/// then hits "Apply whole month". Returns ONLY the days whose selection CHANGED
+/// from the initial state.
 class MonthBatchDialog extends ConsumerStatefulWidget {
   const MonthBatchDialog({
     super.key,
     required this.month,
     required this.presets,
     required this.existingDays,
+    required this.loadMonth,
     required this.onApply,
   });
 
-  /// The month being edited (year + month, day is ignored).
+  /// The month shown when the dialog opens (year + month, day ignored).
   final DateTime month;
 
-  /// Active presets only — these become the grid columns.
+  /// Active presets only — these become the grid rows.
   final List<FlightPresetModel> presets;
 
-  /// Current flight data for the month — used to compute initial selection.
+  /// Flight data for the INITIAL month — seeds tick state without a refetch.
   final List<FlightDayModel> existingDays;
 
-  /// Called with the changed items when the admin taps "Apply".
-  final void Function(List<({DateTime day, List<int> presetIds})> items)
-      onApply;
+  /// Loads flight data for another month when the admin switches months.
+  final Future<List<FlightDayModel>> Function(DateTime month) loadMonth;
+
+  /// Called with the month last shown + the changed items (which may span
+  /// several visited months) when the admin taps "Apply".
+  final void Function(
+    DateTime month,
+    List<({DateTime day, List<int> presetIds})> items,
+  ) onApply;
 
   @override
   ConsumerState<MonthBatchDialog> createState() => _MonthBatchDialogState();
 }
 
 class _MonthBatchDialogState extends ConsumerState<MonthBatchDialog> {
-  /// selection[dayOfMonth] = Set of selected preset ids for that day.
-  late final Map<int, Set<int>> _selection;
+  /// Ticks keyed by FULL date, so selections persist across visited months
+  /// (lets the admin fill the current month AND next month, then apply once).
+  final Map<DateTime, Set<int>> _selection = {};
+  final Map<DateTime, Set<int>> _initial = {};
 
-  /// Initial snapshot — compared on apply to find changed days.
-  late final Map<int, Set<int>> _initial;
+  /// 'year-month' keys already ingested — avoids refetching / resetting them.
+  final Set<String> _loaded = {};
 
-  late final int _daysInMonth;
+  late DateTime _month; // currently displayed month
+  bool _loading = false;
 
   @override
   void initState() {
     super.initState();
-    _daysInMonth = DateUtils.getDaysInMonth(
-      widget.month.year,
-      widget.month.month,
-    );
-    _selection = _buildInitialSelection();
-    // Deep-copy for diff at apply time.
-    _initial = {
-      for (final e in _selection.entries) e.key: Set<int>.of(e.value),
-    };
+    _month = DateTime(widget.month.year, widget.month.month);
+    _ingest(_month, widget.existingDays);
   }
 
-  /// Derives initial checkbox state from [existingDays].
-  ///
+  String _mk(DateTime m) => '${m.year}-${m.month}';
+
+  DateTime _date(int dom) => DateTime(_month.year, _month.month, dom);
+
+  /// Seed selection + initial snapshot for [month] from its flight data.
   /// A preset is "applied" to a day when BOTH preset.fltArr AND preset.fltDep
   /// appear among that day's flight fltNumber values.
-  Map<int, Set<int>> _buildInitialSelection() {
-    final result = <int, Set<int>>{
-      for (var d = 1; d <= _daysInMonth; d++) d: <int>{},
-    };
-
-    for (final dayModel in widget.existingDays) {
-      final dom = dayModel.day.day;
-      if (dom < 1 || dom > _daysInMonth) continue;
-      final fltNumbers = dayModel.flights.map((f) => f.fltNumber).toSet();
-      for (final preset in widget.presets) {
-        if (fltNumbers.contains(preset.fltArr) &&
-            fltNumbers.contains(preset.fltDep)) {
-          result[dom]!.add(preset.id);
-        }
-      }
+  void _ingest(DateTime month, List<FlightDayModel> days) {
+    final n = DateUtils.getDaysInMonth(month.year, month.month);
+    for (var dom = 1; dom <= n; dom++) {
+      final date = DateTime(month.year, month.month, dom);
+      _selection.putIfAbsent(date, () => <int>{});
+      _initial.putIfAbsent(date, () => <int>{});
     }
-    return result;
+    for (final dm in days) {
+      final date = DateTime(dm.day.year, dm.day.month, dm.day.day);
+      final flt = dm.flights.map((f) => f.fltNumber).toSet();
+      final sel = <int>{};
+      for (final p in widget.presets) {
+        if (flt.contains(p.fltArr) && flt.contains(p.fltDep)) sel.add(p.id);
+      }
+      _selection[date] = Set<int>.of(sel);
+      _initial[date] = Set<int>.of(sel);
+    }
+    _loaded.add(_mk(month));
   }
 
-  void _toggle(int day, int presetId) {
+  /// Switch the displayed month; lazily loads its data the first time.
+  Future<void> _goToMonth(DateTime target) async {
+    final t = DateTime(target.year, target.month);
+    if (_loaded.contains(_mk(t))) {
+      setState(() => _month = t);
+      return;
+    }
+    setState(() => _loading = true);
+    try {
+      final data = await widget.loadMonth(t);
+      if (!mounted) return;
+      setState(() {
+        _ingest(t, data);
+        _month = t;
+        _loading = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  void _toggle(int dom, int presetId) {
     setState(() {
-      final daySet = _selection[day]!;
-      if (daySet.contains(presetId)) {
-        daySet.remove(presetId);
-      } else if (daySet.length < 2) {
-        daySet.add(presetId);
+      final s = _selection[_date(dom)]!;
+      if (s.contains(presetId)) {
+        s.remove(presetId);
+      } else if (s.length < 2) {
+        s.add(presetId);
       }
     });
   }
 
-  /// Toggle all days for a given preset column.
-  ///
-  /// If ALL days already have this preset ticked → untick all; otherwise → tick
-  /// all days that still have room (< 2 selected or already have this preset).
-  void _toggleColumn(int presetId) {
+  /// Toggle a preset across all days of the CURRENT month (row "select all").
+  void _togglePresetAll(int presetId) {
+    final n = DateUtils.getDaysInMonth(_month.year, _month.month);
     setState(() {
-      final allTicked = _selection.values.every((s) => s.contains(presetId));
-      if (allTicked) {
-        for (final s in _selection.values) {
+      final allTicked = [
+        for (var dom = 1; dom <= n; dom++) _selection[_date(dom)]!,
+      ].every((s) => s.contains(presetId));
+      for (var dom = 1; dom <= n; dom++) {
+        final s = _selection[_date(dom)]!;
+        if (allTicked) {
           s.remove(presetId);
-        }
-      } else {
-        for (final s in _selection.values) {
-          if (!s.contains(presetId) && s.length < 2) {
-            s.add(presetId);
-          }
+        } else if (!s.contains(presetId) && s.length < 2) {
+          s.add(presetId);
         }
       }
     });
   }
 
-  /// Returns ONLY days whose selection differs from the initial state.
+  /// Changed days across ALL visited months (vs their initial snapshot).
   List<({DateTime day, List<int> presetIds})> _computeChanges() {
     final changes = <({DateTime day, List<int> presetIds})>[];
-    for (var dom = 1; dom <= _daysInMonth; dom++) {
-      final current = _selection[dom]!;
-      final initial = _initial[dom]!;
-      if (!_setsEqual(current, initial)) {
-        final sortedIds = current.toList()..sort();
-        changes.add((
-          day: DateTime(widget.month.year, widget.month.month, dom),
-          presetIds: sortedIds,
-        ));
+    for (final entry in _selection.entries) {
+      final init = _initial[entry.key] ?? const <int>{};
+      if (!_setsEqual(entry.value, init)) {
+        changes.add((day: entry.key, presetIds: entry.value.toList()..sort()));
       }
     }
     return changes;
@@ -137,24 +158,34 @@ class _MonthBatchDialogState extends ConsumerState<MonthBatchDialog> {
 
   void _submit() {
     final changes = _computeChanges();
+    final shown = _month;
     Navigator.of(context).pop();
-    widget.onApply(changes);
+    widget.onApply(shown, changes);
   }
 
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
+    final screen = MediaQuery.of(context).size;
+    final daysInMonth = DateUtils.getDaysInMonth(_month.year, _month.month);
+    // Per-month view (day-of-month → tick set) the grid understands.
+    final view = <int, Set<int>>{
+      for (var dom = 1; dom <= daysInMonth; dom++) dom: _selection[_date(dom)]!,
+    };
 
     return Dialog(
-      insetPadding: const EdgeInsets.symmetric(horizontal: DsSpacing.x10, vertical: DsSpacing.x10),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(DsRadius.xLarge)),
+      insetPadding: EdgeInsets.zero,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(DsRadius.xLarge),
+      ),
       clipBehavior: Clip.antiAlias,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 660),
+      child: SizedBox(
+        // 90% of the app window — big canvas; days spread across the width.
+        width: screen.width * 0.9,
+        height: screen.height * 0.9,
         child: Column(
-          mainAxisSize: MainAxisSize.min,
           children: [
-            // ─── Title bar ────────────────────────────────────────────────
+            // ─── Title bar + month switcher ───────────────────────────────
             Padding(
               padding: const EdgeInsets.fromLTRB(
                 DsSpacing.x6,
@@ -186,6 +217,16 @@ class _MonthBatchDialogState extends ConsumerState<MonthBatchDialog> {
                       ],
                     ),
                   ),
+                  // Pick which month to fill (current / next / any).
+                  _MonthSwitcher(
+                    label: l.monthYear(_month),
+                    enabled: !_loading,
+                    onPrev: () =>
+                        _goToMonth(DateTime(_month.year, _month.month - 1)),
+                    onNext: () =>
+                        _goToMonth(DateTime(_month.year, _month.month + 1)),
+                  ),
+                  const SizedBox(width: DsSpacing.x2),
                   IconButton(
                     icon: const Icon(Icons.close),
                     color: DsColors.textMuted,
@@ -195,19 +236,18 @@ class _MonthBatchDialogState extends ConsumerState<MonthBatchDialog> {
               ),
             ),
 
-            // ─── Grid ─────────────────────────────────────────────────────
-            Flexible(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxHeight: 520),
-                child: _BatchGrid(
-                  month: widget.month,
-                  daysInMonth: _daysInMonth,
-                  presets: widget.presets,
-                  selection: _selection,
-                  onToggleCell: _toggle,
-                  onToggleColumn: _toggleColumn,
-                ),
-              ),
+            // ─── Grid (transposed: days across, presets down) ─────────────
+            Expanded(
+              child: _loading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _TransposedGrid(
+                      month: _month,
+                      daysInMonth: daysInMonth,
+                      presets: widget.presets,
+                      selection: view,
+                      onToggleCell: _toggle,
+                      onTogglePresetAll: _togglePresetAll,
+                    ),
             ),
 
             // ─── Footer ───────────────────────────────────────────────────
@@ -241,24 +281,79 @@ class _MonthBatchDialogState extends ConsumerState<MonthBatchDialog> {
   }
 }
 
+/// Compact ‹ Month Year › selector for the dialog header.
+class _MonthSwitcher extends StatelessWidget {
+  const _MonthSwitcher({
+    required this.label,
+    required this.enabled,
+    required this.onPrev,
+    required this.onNext,
+  });
+
+  final String label;
+  final bool enabled;
+  final VoidCallback onPrev;
+  final VoidCallback onNext;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        border: Border.all(color: DsColors.border),
+        borderRadius: BorderRadius.circular(DsRadius.medium),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            icon: const Icon(Icons.chevron_left),
+            iconSize: 20,
+            onPressed: enabled ? onPrev : null,
+          ),
+          ConstrainedBox(
+            constraints: const BoxConstraints(minWidth: 110),
+            child: Text(
+              label,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: DsFontSize.body,
+                fontWeight: FontWeight.w600,
+                color: DsColors.textPrimary,
+              ),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.chevron_right),
+            iconSize: 20,
+            onPressed: enabled ? onNext : null,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 // ---------------------------------------------------------------------------
-// Grid
+// Grid (transposed)
 // ---------------------------------------------------------------------------
 
-/// Renders the sticky header row + scrollable day rows.
-///
-/// Layout: narrow fixed Day + Wday columns; preset columns share the remaining
-/// width evenly (Expanded) so the grid fills the dialog with no dead space.
-/// When there are many presets (>4) it falls back to fixed-width columns with
-/// horizontal scroll so they never get crushed.
-class _BatchGrid extends StatelessWidget {
-  const _BatchGrid({
+/// Column geometry shared by the fixed preset column and the scrollable days.
+const double _presetColW = 210;
+const double _minDayColW = 44; // days spread wider when there is room
+const double _headerH = 52;
+const double _rowH = 60;
+
+/// Renders a sticky left column (preset labels + row "select all") next to a
+/// horizontally-scrollable band of day columns. Vertical scroll kicks in only
+/// if there are many presets.
+class _TransposedGrid extends StatelessWidget {
+  const _TransposedGrid({
     required this.month,
     required this.daysInMonth,
     required this.presets,
     required this.selection,
     required this.onToggleCell,
-    required this.onToggleColumn,
+    required this.onTogglePresetAll,
   });
 
   final DateTime month;
@@ -266,170 +361,150 @@ class _BatchGrid extends StatelessWidget {
   final List<FlightPresetModel> presets;
   final Map<int, Set<int>> selection;
   final void Function(int day, int presetId) onToggleCell;
-  final void Function(int presetId) onToggleColumn;
-
-  static const double _dayColW = 56.0;
-  static const double _wdColW = 72.0;
-  static const double _presetScrollW = 150.0; // used only in scroll fallback
+  final void Function(int presetId) onTogglePresetAll;
 
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
-    final scroll = presets.length > 4;
+    final gridHeight = _headerH + presets.length * _rowH;
 
-    final grid = Column(
-      children: [
-        _HeaderRow(
-          presets: presets,
-          selection: selection,
-          daysInMonth: daysInMonth,
-          onToggleColumn: onToggleColumn,
-          dayColW: _dayColW,
-          wdColW: _wdColW,
-          expand: !scroll,
-          presetW: _presetScrollW,
-          dayLabel: l.text('columnDay'),
-          wdLabel: l.text('columnWeekday'),
-        ),
-        const Divider(height: 1, color: DsColors.border),
-        Flexible(
-          child: ListView.separated(
-            shrinkWrap: true,
-            itemCount: daysInMonth,
-            separatorBuilder: (_, _) =>
-                const Divider(height: 1, color: DsColors.border),
-            itemBuilder: (context, index) {
-              final dom = index + 1;
-              final date = DateTime(month.year, month.month, dom);
-              return _DayRow(
-                date: date,
-                presets: presets,
-                selected: selection[dom]!,
-                onToggle: (presetId) => onToggleCell(dom, presetId),
-                dayColW: _dayColW,
-                wdColW: _wdColW,
-                expand: !scroll,
-                presetW: _presetScrollW,
-                striped: index.isOdd,
-                l: l,
-              );
-            },
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Spread the days to fill the width; only scroll if they won't fit.
+        final availForDays = constraints.maxWidth - _presetColW;
+        final fits = daysInMonth * _minDayColW <= availForDays;
+        final dayW = fits ? availForDays / daysInMonth : _minDayColW;
+        final daysWidth = daysInMonth * dayW;
+
+        final dayBand = Column(
+          children: [
+            _DayHeaderRow(
+              month: month,
+              daysInMonth: daysInMonth,
+              dayW: dayW,
+              l: l,
+            ),
+            for (final preset in presets)
+              _PresetCheckboxRow(
+                preset: preset,
+                month: month,
+                daysInMonth: daysInMonth,
+                selection: selection,
+                onToggleCell: onToggleCell,
+                dayW: dayW,
+              ),
+          ],
+        );
+
+        return SingleChildScrollView(
+          // Vertical safety for many presets; normally not needed (2-3 rows).
+          child: SizedBox(
+            height: gridHeight,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // ── Fixed left column: preset labels + per-row select-all ──
+                _PresetLabelColumn(
+                  presets: presets,
+                  selection: selection,
+                  daysInMonth: daysInMonth,
+                  onTogglePresetAll: onTogglePresetAll,
+                ),
+                // ── Day columns: fill width, or scroll horizontally ──
+                if (fits)
+                  SizedBox(width: daysWidth, child: dayBand)
+                else
+                  Expanded(
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: SizedBox(width: daysWidth, child: dayBand),
+                    ),
+                  ),
+              ],
+            ),
           ),
-        ),
-      ],
-    );
-
-    if (!scroll) return grid;
-
-    final totalW = _dayColW + _wdColW + presets.length * _presetScrollW;
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: SizedBox(width: totalW, child: grid),
+        );
+      },
     );
   }
 }
 
-// ---------------------------------------------------------------------------
-// Shared column layout helper
-// ---------------------------------------------------------------------------
-
-/// Builds a row of [dayCell] + [wdCell] + one cell per preset, using the same
-/// flex rules for the header and every body row so columns stay aligned.
-List<Widget> _columns({
-  required Widget dayCell,
-  required Widget wdCell,
-  required List<Widget> presetCells,
-  required double dayColW,
-  required double wdColW,
-  required bool expand,
-  required double presetW,
+/// Shared cell container so the fixed column and scroll band align pixel-perfect.
+Widget _cell({
+  required double width,
+  required double height,
+  Widget? child,
+  Color? background,
+  bool rightBorder = false,
+  AlignmentGeometry alignment = Alignment.center,
+  EdgeInsetsGeometry padding = EdgeInsets.zero,
 }) {
-  return [
-    SizedBox(width: dayColW, child: dayCell),
-    SizedBox(width: wdColW, child: wdCell),
-    for (final cell in presetCells)
-      if (expand)
-        Expanded(child: Center(child: cell))
-      else
-        SizedBox(width: presetW, child: Center(child: cell)),
-  ];
+  return Container(
+    width: width,
+    height: height,
+    alignment: alignment,
+    padding: padding,
+    decoration: BoxDecoration(
+      color: background,
+      border: Border(
+        bottom: const BorderSide(color: DsColors.border),
+        right: rightBorder
+            ? const BorderSide(color: DsColors.border)
+            : BorderSide.none,
+      ),
+    ),
+    child: child,
+  );
 }
 
-// ---------------------------------------------------------------------------
-// Header
-// ---------------------------------------------------------------------------
-
-/// Sticky header: column labels + tri-state "select all" checkboxes, with each
-/// preset's STA/STD shown so the admin knows what they are ticking.
-class _HeaderRow extends StatelessWidget {
-  const _HeaderRow({
+/// Fixed left column: a corner cell + one labelled row per preset, each with a
+/// tri-state "select all days" checkbox.
+class _PresetLabelColumn extends StatelessWidget {
+  const _PresetLabelColumn({
     required this.presets,
     required this.selection,
     required this.daysInMonth,
-    required this.onToggleColumn,
-    required this.dayColW,
-    required this.wdColW,
-    required this.expand,
-    required this.presetW,
-    required this.dayLabel,
-    required this.wdLabel,
+    required this.onTogglePresetAll,
   });
 
   final List<FlightPresetModel> presets;
   final Map<int, Set<int>> selection;
   final int daysInMonth;
-  final void Function(int presetId) onToggleColumn;
-  final double dayColW;
-  final double wdColW;
-  final bool expand;
-  final double presetW;
-  final String dayLabel;
-  final String wdLabel;
+  final void Function(int presetId) onTogglePresetAll;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: DsColors.surfaceSubtle,
-      padding: const EdgeInsets.symmetric(
-        horizontal: DsSpacing.x4,
-        vertical: DsSpacing.x3,
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: _columns(
-          dayColW: dayColW,
-          wdColW: wdColW,
-          expand: expand,
-          presetW: presetW,
-          dayCell: _headerLabel(dayLabel),
-          wdCell: _headerLabel(wdLabel),
-          presetCells: [
-            for (final preset in presets)
-              _PresetColumnHeader(
-                preset: preset,
-                selection: selection,
-                daysInMonth: daysInMonth,
-                onToggle: () => onToggleColumn(preset.id),
-              ),
-          ],
+    return Column(
+      children: [
+        // Corner (sits above the day numbers).
+        _cell(
+          width: _presetColW,
+          height: _headerH,
+          background: DsColors.surfaceSubtle,
+          rightBorder: true,
         ),
-      ),
+        for (final preset in presets)
+          _cell(
+            width: _presetColW,
+            height: _rowH,
+            rightBorder: true,
+            alignment: Alignment.centerLeft,
+            padding: const EdgeInsets.symmetric(horizontal: DsSpacing.x4),
+            child: _PresetLabel(
+              preset: preset,
+              selection: selection,
+              daysInMonth: daysInMonth,
+              onToggle: () => onTogglePresetAll(preset.id),
+            ),
+          ),
+      ],
     );
   }
-
-  Widget _headerLabel(String label) => Padding(
-        padding: const EdgeInsets.only(bottom: DsSpacing.x3),
-        child: Text(
-          label,
-          style: DsType.tableHeader.copyWith(fontSize: DsFontSize.caption),
-          overflow: TextOverflow.ellipsis,
-        ),
-      );
 }
 
-/// One preset column header: label + STA/STD + tri-state checkbox (all/some/none).
-class _PresetColumnHeader extends StatelessWidget {
-  const _PresetColumnHeader({
+/// Preset name + STA/STD + tri-state "tick every day" checkbox.
+class _PresetLabel extends StatelessWidget {
+  const _PresetLabel({
     required this.preset,
     required this.selection,
     required this.daysInMonth,
@@ -443,31 +518,42 @@ class _PresetColumnHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    var tickedCount = 0;
+    var ticked = 0;
     for (var d = 1; d <= daysInMonth; d++) {
-      if (selection[d]!.contains(preset.id)) tickedCount++;
+      if (selection[d]!.contains(preset.id)) ticked++;
     }
-    final allTicked = tickedCount == daysInMonth;
-    final someTicked = tickedCount > 0 && !allTicked;
+    final all = ticked == daysInMonth;
+    final some = ticked > 0 && !all;
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
+    return Row(
       children: [
-        Text(
-          preset.label,
-          style: DsType.gridHeader,
-          overflow: TextOverflow.ellipsis,
-          maxLines: 1,
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: 1),
-        Text(
-          '${preset.sta} · ${preset.std}',
-          style: DsType.micro,
-          textAlign: TextAlign.center,
+        Expanded(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                preset.label,
+                style: const TextStyle(
+                  fontSize: DsFontSize.body,
+                  fontWeight: FontWeight.w700,
+                  color: DsColors.textPrimary,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 1),
+              Text(
+                '${preset.sta} · ${preset.std}',
+                style: const TextStyle(
+                  fontSize: DsFontSize.caption,
+                  color: DsColors.textMuted,
+                ),
+              ),
+            ],
+          ),
         ),
         Checkbox(
-          value: allTicked ? true : (someTicked ? null : false),
+          value: all ? true : (some ? null : false),
           tristate: true,
           visualDensity: VisualDensity.compact,
           onChanged: (_) => onToggle(),
@@ -477,84 +563,99 @@ class _PresetColumnHeader extends StatelessWidget {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Day row
-// ---------------------------------------------------------------------------
-
-/// One data row for a day-of-month. Weekend days get a tinted day/weekday label
-/// and odd rows are subtly striped for readability.
-class _DayRow extends StatelessWidget {
-  const _DayRow({
-    required this.date,
-    required this.presets,
-    required this.selected,
-    required this.onToggle,
-    required this.dayColW,
-    required this.wdColW,
-    required this.expand,
-    required this.presetW,
-    required this.striped,
+/// Header band: day number + weekday for each day (weekend tinted).
+class _DayHeaderRow extends StatelessWidget {
+  const _DayHeaderRow({
+    required this.month,
+    required this.daysInMonth,
+    required this.dayW,
     required this.l,
   });
 
-  final DateTime date;
-  final List<FlightPresetModel> presets;
-  final Set<int> selected;
-  final void Function(int presetId) onToggle;
-  final double dayColW;
-  final double wdColW;
-  final bool expand;
-  final double presetW;
-  final bool striped;
+  final DateTime month;
+  final int daysInMonth;
+  final double dayW;
   final AppLocalizations l;
 
   @override
   Widget build(BuildContext context) {
-    final isWeekend =
-        date.weekday == DateTime.saturday || date.weekday == DateTime.sunday;
-    final labelColor = isWeekend ? DsColors.primary : DsColors.textPrimary;
+    return Row(
+      children: [
+        for (var dom = 1; dom <= daysInMonth; dom++)
+          _dayHeaderCell(DateTime(month.year, month.month, dom)),
+      ],
+    );
+  }
 
-    return Container(
-      color: striped ? DsColors.surfaceSubtle.withValues(alpha: 0.5) : null,
-      padding: const EdgeInsets.symmetric(
-        horizontal: DsSpacing.x4,
-        vertical: 2,
-      ),
-      child: Row(
-        children: _columns(
-          dayColW: dayColW,
-          wdColW: wdColW,
-          expand: expand,
-          presetW: presetW,
-          dayCell: Text(
+  Widget _dayHeaderCell(DateTime date) {
+    final weekend = date.weekday == DateTime.saturday ||
+        date.weekday == DateTime.sunday;
+    final color = weekend ? DsColors.primary : DsColors.textPrimary;
+    return _cell(
+      width: dayW,
+      height: _headerH,
+      background: DsColors.surfaceSubtle,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
             '${date.day}',
             style: TextStyle(
-              fontSize: DsFontSize.body,
-              fontWeight: FontWeight.w600,
-              color: labelColor,
+              fontSize: DsFontSize.footnote,
+              fontWeight: FontWeight.w700,
+              color: color,
             ),
           ),
-          wdCell: Text(
+          Text(
             l.shortWeekday(date),
             style: TextStyle(
-              fontSize: DsFontSize.small,
-              color: isWeekend ? DsColors.primary : DsColors.textMuted,
+              fontSize: DsFontSize.micro,
+              color: weekend ? DsColors.primary : DsColors.textMuted,
             ),
           ),
-          presetCells: [
-            for (final preset in presets)
-              Checkbox(
-                value: selected.contains(preset.id),
-                visualDensity: VisualDensity.compact,
-                // Disable unticked checkboxes when row already has 2 selected.
-                onChanged:
-                    (selected.length >= 2 && !selected.contains(preset.id))
-                        ? null
-                        : (_) => onToggle(preset.id),
-              ),
-          ],
-        ),
+        ],
       ),
+    );
+  }
+}
+
+/// One preset row: a checkbox per day. Caps at 2 presets per day (column).
+class _PresetCheckboxRow extends StatelessWidget {
+  const _PresetCheckboxRow({
+    required this.preset,
+    required this.month,
+    required this.daysInMonth,
+    required this.selection,
+    required this.onToggleCell,
+    required this.dayW,
+  });
+
+  final FlightPresetModel preset;
+  final DateTime month;
+  final int daysInMonth;
+  final Map<int, Set<int>> selection;
+  final void Function(int day, int presetId) onToggleCell;
+  final double dayW;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        for (var dom = 1; dom <= daysInMonth; dom++)
+          _cell(
+            width: dayW,
+            height: _rowH,
+            child: Checkbox(
+              value: selection[dom]!.contains(preset.id),
+              visualDensity: VisualDensity.compact,
+              // Disable when the day already holds 2 other presets.
+              onChanged: (selection[dom]!.length >= 2 &&
+                      !selection[dom]!.contains(preset.id))
+                  ? null
+                  : (_) => onToggleCell(dom, preset.id),
+            ),
+          ),
+      ],
     );
   }
 }

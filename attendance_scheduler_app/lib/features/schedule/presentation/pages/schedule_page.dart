@@ -5,6 +5,8 @@ import '../../../../core/constants/shift_codes.dart';
 import '../../../../design_system/design_system.dart';
 import '../../../../i18n/app_localizations.dart';
 import '../../../auth/domain/entities/user.dart';
+import '../../../flights/data/datasources/flights_remote_datasource.dart';
+import '../../../flights/data/models/flight_day_model.dart';
 import '../../domain/entities/schedule_entities.dart';
 import '../providers/schedule_provider.dart';
 import '../providers/shift_change_provider.dart';
@@ -20,6 +22,7 @@ class SchedulePage extends ConsumerStatefulWidget {
 class _SchedulePageState extends ConsumerState<SchedulePage> {
   DateTime _month = DateTime(DateTime.now().year, DateTime.now().month);
   bool _showShiftChanges = false;
+  Map<int, String> _flightLabels = const {}; // day-of-month → FLT codes
 
   @override
   void initState() {
@@ -37,6 +40,41 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
     if (isAdmin) {
       ref.read(shiftChangeControllerProvider.notifier).load(all: true);
     }
+    _loadFlights();
+  }
+
+  /// Load the month's flight codes (FLT #) per day for the roster's flight column.
+  Future<void> _loadFlights() async {
+    try {
+      final days = await ref
+          .read(flightsDataSourceProvider)
+          .listDays(_month.year, _month.month);
+      if (!mounted) return;
+      setState(() => _flightLabels = _buildFlightLabels(days));
+    } catch (_) {
+      if (mounted) setState(() => _flightLabels = const {});
+    }
+  }
+
+  /// Map day-of-month → the flight-code label, IDENTICAL to the Flights page
+  /// (e.g. "31/30 · 37/36"): pair each arrival leg (has STA) with the departure
+  /// leg (has STD) at the same index, join with " · ".
+  static Map<int, String> _buildFlightLabels(List<FlightDayModel> days) {
+    final result = <int, String>{};
+    for (final fd in days) {
+      final arr = fd.flights.where((f) => f.sta != null).toList();
+      final dep = fd.flights.where((f) => f.std != null).toList();
+      final count = fd.flightPairs > 0
+          ? fd.flightPairs
+          : (arr.isNotEmpty || dep.isNotEmpty ? 1 : 0);
+      final labels = <String>[
+        for (var i = 0; i < count; i++)
+          '${i < arr.length ? arr[i].fltNumber : '?'}'
+              '/${i < dep.length ? dep[i].fltNumber : '?'}',
+      ];
+      if (labels.isNotEmpty) result[fd.day.day] = labels.join(' · ');
+    }
+    return result;
   }
 
   void _prevMonth() {
@@ -77,6 +115,7 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
           child: DsScheduleView(
             month: _month,
             rows: rows,
+            flightLabels: _flightLabels,
             onPreviousMonth: _prevMonth,
             onNextMonth: _nextMonth,
             onGenerate: isAdmin ? () => _onGenerate(context, l) : () {},
@@ -134,10 +173,10 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
     final schedule = state.schedule;
     if (schedule == null) return [];
 
-    // Build user id→name map (admin has users list; non-admin falls back to id).
+    // Build user id→code map (employee code, e.g. "A3"). Admin has the users
+    // list; non-admin falls back to the raw id.
     final userMap = <int, String>{
-      for (final u in state.users)
-        u.id: u.fullName.isNotEmpty ? u.fullName : u.username,
+      for (final u in state.users) u.id: u.code,
     };
 
     // Group assignments by user_id.
@@ -151,7 +190,7 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
       list.sort((a, b) => a.workDate.compareTo(b.workDate));
     }
 
-    return byUser.entries.map((entry) {
+    final rows = byUser.entries.map((entry) {
       final userId = entry.key;
       final assignments = entry.value;
       final shifts =
@@ -174,7 +213,20 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
         offDays: offDays,
       );
     }).toList();
+
+    // Sort by role letter (A, M, T…), then by the numeric part of the code
+    // (A1, A2, … A10) so the roster reads in a stable, predictable order.
+    rows.sort((a, b) {
+      final byRole = a.role.compareTo(b.role);
+      if (byRole != 0) return byRole;
+      return _codeSeq(a.name).compareTo(_codeSeq(b.name));
+    });
+    return rows;
   }
+
+  /// Numeric suffix of an employee code ("A3" → 3); 0 when none.
+  int _codeSeq(String code) =>
+      int.tryParse(code.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
 
   String _roleLabel(int userId, ScheduleState state) {
     final user = state.users.where((u) => u.id == userId).firstOrNull;
@@ -199,6 +251,8 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
   // ── Admin actions ─────────────────────────────────────────────────────────────
 
   Future<void> _onGenerate(BuildContext context, AppLocalizations l) async {
+    // Testing mode: admin regenerates freely — the backend no longer blocks a
+    // published or manually-edited month, so no confirm dialog is needed.
     await ref
         .read(scheduleControllerProvider.notifier)
         .generate(_month.year, _month.month);
