@@ -10,11 +10,12 @@ Implements:
 
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, timedelta
 
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.i18n import t
 from app.models.enums import AttendanceCode, LeaveStatus, LeaveType, UserStatus
 from app.models.leave import LeaveRequest
@@ -22,7 +23,6 @@ from app.models.user import User
 from app.schemas.leave import LeaveCreate
 from app.services import leave_conflict_resolver
 from app.services.leave_windows import classify, is_annual_window_open, is_monthly_window_open
-
 
 # ---------------------------------------------------------------------------
 # Internal helpers
@@ -35,7 +35,13 @@ def _get_or_404(db: Session, leave_id: int) -> LeaveRequest:
     return req
 
 
-def _has_overlap(db: Session, user_id: int, start: date, end: date, exclude_id: int | None = None) -> bool:
+def _has_overlap(
+    db: Session,
+    user_id: int,
+    start: date,
+    end: date,
+    exclude_id: int | None = None,
+) -> bool:
     """Return True if any pending/approved request for user overlaps [start, end]."""
     q = (
         db.query(LeaveRequest)
@@ -55,7 +61,14 @@ def _has_overlap(db: Session, user_id: int, start: date, end: date, exclude_id: 
 # Public API
 # ---------------------------------------------------------------------------
 
-def create_request(db: Session, user_id: int, payload: LeaveCreate, today: date | None = None) -> LeaveRequest:
+def create_request(
+    db: Session,
+    user_id: int,
+    payload: LeaveCreate,
+    today: date | None = None,
+    *,
+    enforce_window: bool | None = None,
+) -> LeaveRequest:
     """F-05/F-06 — validate window, classify, check overlap, persist pending.
 
     Parameters
@@ -65,6 +78,10 @@ def create_request(db: Session, user_id: int, payload: LeaveCreate, today: date 
     """
     if today is None:
         today = date.today()
+    if enforce_window is None:
+        # Development must allow rapid end-to-end testing without waiting for a
+        # calendar window. Staging/production keep the business cutoff.
+        enforce_window = settings.ENVIRONMENT != "dev"
 
     start = payload.start_date
     end = payload.end_date
@@ -77,13 +94,20 @@ def create_request(db: Session, user_id: int, payload: LeaveCreate, today: date 
     leave_type = classify(start, end)
 
     # 3. Window enforcement.
-    if leave_type is LeaveType.monthly:
-        if not is_monthly_window_open(today, start.month, start.year):
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=t("leave.window_closed_monthly"))
-    else:
-        # Annual: submission must be in the calendar year before the leave's start year.
-        if not is_annual_window_open(today, start.year):
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=t("leave.window_closed_annual"))
+    if enforce_window:
+        if leave_type is LeaveType.monthly:
+            if not is_monthly_window_open(today, start.month, start.year):
+                raise HTTPException(
+                    status.HTTP_400_BAD_REQUEST,
+                    detail=t("leave.window_closed_monthly"),
+                )
+        else:
+            # Annual: submission must be in the calendar year before the leave's start year.
+            if not is_annual_window_open(today, start.year):
+                raise HTTPException(
+                    status.HTTP_400_BAD_REQUEST,
+                    detail=t("leave.window_closed_annual"),
+                )
 
     # 4. Overlap guard (pending or approved requests for same user).
     if _has_overlap(db, user_id, start, end):
@@ -196,7 +220,7 @@ def _staffing_warnings(db: Session, req: LeaveRequest) -> list[str]:
     day's demand from the flight schedule: 1 pair → 1A+1D, 2 pairs → 1A+2D.
     Two severities:
     - remaining < max(A,D) people → the day CANNOT be covered at all;
-    - remaining < A+D people → coverable only via an A/D double (last resort).
+    - remaining < A+D people → too few people for ordinary A + D coverage.
     """
     from app.models.enums import Role
     from app.services import flight_service
@@ -246,7 +270,7 @@ def _staffing_warnings(db: Session, req: LeaveRequest) -> list[str]:
         if remaining < max(need_a, need_d):
             warnings.append(f"{day.isoformat()}: {t('leave.staffing_impossible')}")
         elif remaining < need_a + need_d:
-            warnings.append(f"{day.isoformat()}: {t('leave.staffing_needs_double')}")
+            warnings.append(f"{day.isoformat()}: {t('leave.staffing_short_ordinary')}")
     return warnings
 
 

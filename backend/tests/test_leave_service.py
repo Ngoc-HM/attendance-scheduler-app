@@ -166,8 +166,32 @@ class TestLeaveEndpoints:
     def _admin_headers(self, client):
         return _bearer(_token(client, "admin", "admin123"))
 
-    def test_approve_decrements_balance(self, client: TestClient):
-        """Approving a leave request reduces annual_leave_balance by day count."""
+    def test_dev_mode_bypasses_registration_window(self, client: TestClient):
+        """Development supports immediate end-to-end testing on any date."""
+        from app.core.database import get_db
+        from app.schemas.leave import LeaveCreate
+        from app.services import leave_service
+
+        admin = self._admin_headers(client)
+        uid = _create_user(client, admin, "dev_window_bypass").json()["id"]
+        db_gen = get_db()
+        db = next(db_gen)
+        try:
+            request = leave_service.create_request(
+                db,
+                uid,
+                LeaveCreate(
+                    start_date=date(2033, 9, 3),
+                    end_date=date(2033, 9, 4),
+                ),
+                today=date(2026, 7, 22),
+            )
+            assert request.status is LeaveStatus.pending
+        finally:
+            db.close()
+
+    def test_approve_keeps_informational_balance(self, client: TestClient):
+        """Current policy has no leave quota; approval keeps the info balance."""
         admin = self._admin_headers(client)
 
         # Create user.
@@ -199,12 +223,15 @@ class TestLeaveEndpoints:
             leave_id = req.id
 
             # Admin approves.
-            req_approved = leave_service.decide(db, leave_id, LeaveStatus.approved, admin_id=1)
+            req_approved, warnings = leave_service.decide(
+                db, leave_id, LeaveStatus.approved, admin_id=1
+            )
             assert req_approved.status == LeaveStatus.approved
+            assert warnings == []
 
-            # Balance reduced by 3.
+            # No leave quota/balance mutation under the current policy.
             db.refresh(user)
-            assert user.annual_leave_balance == 7
+            assert user.annual_leave_balance == 10
         finally:
             db.close()
 
@@ -294,7 +321,9 @@ class TestLeaveEndpoints:
                 end_date=date(2025, 3, 5),
             )
             with pytest.raises(HTTPException) as exc_info:
-                leave_service.create_request(db, uid, payload, today=today)
+                leave_service.create_request(
+                    db, uid, payload, today=today, enforce_window=True
+                )
             assert exc_info.value.status_code == 400
         finally:
             db.close()

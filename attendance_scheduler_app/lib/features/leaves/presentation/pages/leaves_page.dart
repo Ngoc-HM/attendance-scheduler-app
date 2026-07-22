@@ -50,8 +50,8 @@ class LeavesPage extends ConsumerWidget {
         onRevoke: isAdmin
             ? (index) => _confirmRevoke(context, ref, ctrl, index, l)
             : null,
-        // Monthly window = day 1–20 (leave_windows.py) — keep the banner honest.
-        registrationOpen: DateTime.now().day <= 20,
+        // Development mode: registration is intentionally always open.
+        registrationOpen: true,
       ),
     );
   }
@@ -69,11 +69,13 @@ class LeavesPage extends ConsumerWidget {
     AppLocalizations l,
   ) async {
     try {
-      final warnings =
-          approve ? await ctrl.approve(index) : await ctrl.reject(index);
+      final warnings = approve
+          ? await ctrl.approve(index)
+          : await ctrl.reject(index);
       if (context.mounted) {
-        final base =
-            approve ? l.text('requestApproved') : l.text('requestRejected');
+        final base = approve
+            ? l.text('requestApproved')
+            : l.text('requestRejected');
         // Decision-time warnings (e.g. an already-generated month is now
         // stale and must be regenerated) must reach the admin's eyes.
         DsFeedback.show(
@@ -151,11 +153,8 @@ class LeavesPage extends ConsumerWidget {
     final startCtrl = TextEditingController();
     final endCtrl = TextEditingController();
 
-    // Earliest selectable leave date = first day of next month. Monthly leave
-    // for the current month can no longer be registered (window already
-    // closed), so blocking past/current months prevents the most common 400.
     final now = DateTime.now();
-    final firstAllowed = DateTime(now.year, now.month + 1, 1);
+    final firstAllowed = DateTime(2000);
 
     String fmtDate(DateTime d) =>
         '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
@@ -182,14 +181,17 @@ class LeavesPage extends ConsumerWidget {
                 readOnly: true,
                 decoration: InputDecoration(
                   labelText: l.text('startDate'),
-                  prefixIcon: const Icon(Icons.calendar_today_outlined, size: 20),
+                  prefixIcon: const Icon(
+                    Icons.calendar_today_outlined,
+                    size: 20,
+                  ),
                 ),
                 onTap: () async {
                   final picked = await showDatePicker(
                     context: ctx,
-                    initialDate: startDate ?? firstAllowed,
+                    initialDate: startDate ?? now,
                     firstDate: firstAllowed,
-                    lastDate: DateTime(2030),
+                    lastDate: DateTime(2100),
                   );
                   if (picked != null) {
                     setS(() {
@@ -211,14 +213,17 @@ class LeavesPage extends ConsumerWidget {
                 readOnly: true,
                 decoration: InputDecoration(
                   labelText: l.text('endDate'),
-                  prefixIcon: const Icon(Icons.calendar_today_outlined, size: 20),
+                  prefixIcon: const Icon(
+                    Icons.calendar_today_outlined,
+                    size: 20,
+                  ),
                 ),
                 onTap: () async {
                   final picked = await showDatePicker(
                     context: ctx,
-                    initialDate: endDate ?? startDate ?? firstAllowed,
+                    initialDate: endDate ?? startDate ?? now,
                     firstDate: startDate ?? firstAllowed,
-                    lastDate: DateTime(2030),
+                    lastDate: DateTime(2100),
                   );
                   if (picked != null) {
                     setS(() {

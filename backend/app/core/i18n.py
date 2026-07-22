@@ -49,7 +49,9 @@ MESSAGES: dict[str, dict[str, str]] = {
         "leave.schedule_stale": "This leave overlaps a month whose schedule was already generated — regenerate that month so the leave appears in it.",
         "leave.revoke_only_approved": "Only an approved leave can be revoked.",
         "leave.staffing_impossible": "flights CANNOT be covered — too few group-A staff remain that day.",
-        "leave.staffing_needs_double": "flights only coverable with an A/D double shift that day.",
+        "leave.staffing_short_ordinary": (
+            "not enough role-A staff for ordinary A and D coverage that day."
+        ),
         # --- Shift changes (decision #8) ---
         "swap.not_found": "Shift-change request not found.",
         "swap.own_cell_only": "You can only request changes for your own scheduled day.",
@@ -104,7 +106,9 @@ MESSAGES: dict[str, dict[str, str]] = {
         "leave.schedule_stale": "Ngày nghỉ này trùng tháng đã tạo lịch — cần tạo lại lịch tháng đó để ngày nghỉ được cập nhật.",
         "leave.revoke_only_approved": "Chỉ hủy được đơn nghỉ đã duyệt.",
         "leave.staffing_impossible": "KHÔNG thể phủ chuyến bay — nhóm A còn lại quá ít người ngày này.",
-        "leave.staffing_needs_double": "chuyến bay ngày này chỉ phủ được nếu có người làm ca đúp A/D.",
+        "leave.staffing_short_ordinary": (
+            "không đủ nhân sự role A để phủ ca A và D thông thường trong ngày."
+        ),
         # --- Shift changes (decision #8) ---
         "swap.not_found": "Không tìm thấy yêu cầu đổi ca.",
         "swap.own_cell_only": "Chỉ được yêu cầu đổi ca cho ngày làm của chính mình.",

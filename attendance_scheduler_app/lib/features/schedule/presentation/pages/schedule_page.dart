@@ -34,11 +34,9 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
 
   void _loadMonth() {
     final isAdmin = ref.read(isAdminProvider);
-    ref.read(scheduleControllerProvider.notifier).load(
-          _month.year,
-          _month.month,
-          isAdmin: isAdmin,
-        );
+    ref
+        .read(scheduleControllerProvider.notifier)
+        .load(_month.year, _month.month, isAdmin: isAdmin);
     if (isAdmin) {
       ref.read(shiftChangeControllerProvider.notifier).load(all: true);
       ref.read(selfArrangeAdminControllerProvider.notifier).load();
@@ -128,13 +126,6 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
                 : null,
           ),
         ),
-        if (scheduleState.lastResult != null)
-          _GenerateResultBanner(
-            result: scheduleState.lastResult!,
-            onDismiss: () => ref
-                .read(scheduleControllerProvider.notifier)
-                .clearResult(),
-          ),
         if (isAdmin && _showShiftChanges) ...[
           const Divider(height: 1),
           Padding(
@@ -149,8 +140,7 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
                 ),
                 IconButton(
                   icon: const Icon(Icons.close),
-                  onPressed: () =>
-                      setState(() => _showShiftChanges = false),
+                  onPressed: () => setState(() => _showShiftChanges = false),
                 ),
               ],
             ),
@@ -162,11 +152,16 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
         ],
         if (isAdmin)
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: DsSpacing.x4, vertical: DsSpacing.x2),
+            padding: const EdgeInsets.symmetric(
+              horizontal: DsSpacing.x4,
+              vertical: DsSpacing.x2,
+            ),
             child: TextButton.icon(
-              icon: Icon(_showShiftChanges
-                  ? Icons.expand_less
-                  : Icons.swap_horiz_outlined),
+              icon: Icon(
+                _showShiftChanges
+                    ? Icons.expand_less
+                    : Icons.swap_horiz_outlined,
+              ),
               label: Text(l.text('shiftChangeRequests')),
               onPressed: () =>
                   setState(() => _showShiftChanges = !_showShiftChanges),
@@ -184,9 +179,7 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
 
     // Build user id→code map (employee code, e.g. "A3"). Admin has the users
     // list; non-admin falls back to the raw id.
-    final userMap = <int, String>{
-      for (final u in state.users) u.id: u.code,
-    };
+    final userMap = <int, String>{for (final u in state.users) u.id: u.code};
 
     // Group assignments by user_id.
     final byUser = <int, List<ShiftAssignment>>{};
@@ -202,15 +195,16 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
     final rows = byUser.entries.map((entry) {
       final userId = entry.key;
       final assignments = entry.value;
-      final shifts =
-          assignments.map((a) => _codeToShiftCode(a.code)).toList();
+      final shifts = assignments.map((a) => _codeToShiftCode(a.code)).toList();
       final name = userMap[userId] ?? 'User $userId';
       final role = _roleLabel(userId, state);
 
-      final arrivals =
-          shifts.where((s) => s == ShiftCode.a || s == ShiftCode.aD).length;
-      final departures =
-          shifts.where((s) => s == ShiftCode.d || s == ShiftCode.aD).length;
+      final arrivals = shifts
+          .where((s) => s == ShiftCode.a || s == ShiftCode.aD)
+          .length;
+      final departures = shifts
+          .where((s) => s == ShiftCode.d || s == ShiftCode.aD)
+          .length;
       final offDays = shifts.where((s) => s == ShiftCode.x).length;
 
       return DsRosterRowData(
@@ -244,19 +238,19 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
   }
 
   ShiftCode _codeToShiftCode(String code) => switch (code) {
-        'A' => ShiftCode.a,
-        'D' => ShiftCode.d,
-        'A/D' => ShiftCode.aD,
-        'AD' => ShiftCode.ad,
-        'X' => ShiftCode.x,
-        'CD' => ShiftCode.cd,
-        'O/D' => ShiftCode.oD,
-        'T' => ShiftCode.t,
-        'B' => ShiftCode.b,
-        'S' => ShiftCode.s,
-        'AL' => ShiftCode.al,
-        _ => ShiftCode.x,
-      };
+    'A' => ShiftCode.a,
+    'D' => ShiftCode.d,
+    'A/D' => ShiftCode.aD,
+    'AD' => ShiftCode.ad,
+    'X' => ShiftCode.x,
+    'CD' => ShiftCode.cd,
+    'O/D' => ShiftCode.oD,
+    'T' => ShiftCode.t,
+    'B' => ShiftCode.b,
+    'S' => ShiftCode.s,
+    'AL' => ShiftCode.al,
+    _ => ShiftCode.x,
+  };
 
   // ── Admin actions ─────────────────────────────────────────────────────────────
 
@@ -330,6 +324,13 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
           l.text('scheduleInfeasible'),
           tone: DsTone.warning,
         );
+      } else if (result != null && result.violations.isNotEmpty) {
+        DsFeedback.show(
+          context,
+          '${l.text('scheduleGenerated')} ${result.violations.length} '
+          '${l.text('ruleWarnings')}',
+          tone: DsTone.warning,
+        );
       } else {
         DsFeedback.show(
           context,
@@ -398,10 +399,11 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
     } else if (warnings.isEmpty) {
       DsFeedback.show(context, l.text('cellSaved'), tone: DsTone.success);
     } else {
-      // Saved, but the edit broke hard rules — admin sees exactly what.
+      // Keep the top-right toast concise; detailed diagnostics must never
+      // expand into a screen-sized notification.
       DsFeedback.show(
         context,
-        '${l.text('cellSaved')} ${warnings.join('; ')}',
+        '${l.text('cellSaved')} ${warnings.length} ${l.text('ruleWarnings')}',
         tone: DsTone.warning,
       );
     }
@@ -418,7 +420,11 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
     if (state.error != null) {
       DsFeedback.show(context, state.error!, tone: DsTone.danger);
     } else {
-      DsFeedback.show(context, l.text('schedulePublished'), tone: DsTone.success);
+      DsFeedback.show(
+        context,
+        l.text('schedulePublished'),
+        tone: DsTone.success,
+      );
     }
   }
 }
@@ -447,53 +453,6 @@ class _ScheduleNotPublished extends StatelessWidget {
       onNextMonth: onNext,
       onGenerate: () {},
       onPublish: () {},
-    );
-  }
-}
-
-/// Banner shown after a generate call, listing violations.
-class _GenerateResultBanner extends ConsumerWidget {
-  const _GenerateResultBanner({
-    required this.result,
-    required this.onDismiss,
-  });
-
-  final ScheduleResult result;
-  final VoidCallback onDismiss;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final l = AppLocalizations.of(context);
-    final tone = result.feasible ? DsTone.success : DsTone.warning;
-    final title = result.feasible
-        ? l.text('scheduleGenerated')
-        : l.text('scheduleInfeasible');
-
-    final violationText = result.violations
-        .map((v) => '• ${v.message}')
-        .join('\n');
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: DsSpacing.x4, vertical: DsSpacing.x2),
-      child: Stack(
-        children: [
-          DsInlineAlert(
-            title: title,
-            message: result.violations.isEmpty
-                ? l.text('scheduleReviewMessage')
-                : violationText,
-            tone: tone,
-          ),
-          Positioned(
-            top: 0,
-            right: 0,
-            child: IconButton(
-              icon: const Icon(Icons.close, size: 16),
-              onPressed: onDismiss,
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

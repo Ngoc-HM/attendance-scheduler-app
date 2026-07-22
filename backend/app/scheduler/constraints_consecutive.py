@@ -12,7 +12,7 @@ Two pieces per person:
 "Working" here = any code in the person's role domain that is NOT a rest code
 (X / CD).  Per role:
 
-    Role.A → working = {A, D, A/D}
+    Role.A → working = {A, D}; emergency A/D is not solver-generated
     Role.T → working = {AD}
     Role.M → working = {O/D}
     Role.F → working = {AD}   (T-like, owner 2026-07-22)
@@ -27,7 +27,7 @@ from datetime import date
 
 from ortools.sat.python import cp_model
 
-from app.models.enums import AttendanceCode, Role
+from app.models.enums import AttendanceCode
 from app.scheduler.domain import SolverInput
 from app.scheduler.role_codes import OFF_CODES, codes_for
 from app.scheduler.slack_registry import SlackRegistry

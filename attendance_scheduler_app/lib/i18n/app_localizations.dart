@@ -112,7 +112,7 @@ class AppLocalizations {
       'excelFileHint': 'Excel files up to 10 MB',
       'chooseFile': 'Choose file',
       'leaveRequests': 'Leave requests',
-      'leaveSubtitle': 'Monthly requests close on the 20th',
+      'leaveSubtitle': 'Leave registration is unrestricted in development',
       'requestLeave': 'Request leave',
       'pending': 'Pending',
       'approved': 'Approved',
@@ -127,7 +127,7 @@ class AppLocalizations {
       'shortLeaveMessage':
           'Short leave is under 5 consecutive days. Longer leave uses the annual request.',
       'leaveWindowHint':
-          'Monthly leave (≤5 days): register on days 1–20 of the previous month. Annual leave (≥6 days): register during the previous year.',
+          'Development mode: leave dates are not restricted by registration windows.',
       'requests': 'Requests',
       'type': 'Type',
       'dates': 'Dates',
@@ -230,12 +230,14 @@ class AppLocalizations {
       'scheduleEmptyMessage':
           'No schedule for this month. Tap "Generate schedule" to build one.',
       'scheduleGenerated': 'Schedule generated.',
+      'ruleWarnings': 'rule warning(s).',
       'scheduleInfeasible': 'No valid schedule could be found.',
       'regenerateTitle': 'Regenerate schedule?',
       'regenerateWarning':
           'This schedule is published. Regenerating will rearrange the whole month and overwrite it. Continue?',
       'regenerate': 'Regenerate',
-      'scheduleNotPublishedYet': 'The schedule for this month is not published yet.',
+      'scheduleNotPublishedYet':
+          'The schedule for this month is not published yet.',
       'schedulePublished': 'Schedule published.',
       'selectColleague': 'Select a colleague',
       'selectEmployee': 'Select an employee',
@@ -272,7 +274,8 @@ class AppLocalizations {
       // --- Month batch dialog
       'fillMonth': 'Fill whole month',
       'monthFlightsTitle': 'Fill whole month',
-      'monthFlightsHint': 'Tick presets per day. Up to 2 per row. Only changed days are saved.',
+      'monthFlightsHint':
+          'Tick presets per day. Up to 2 per row. Only changed days are saved.',
       'monthFlightsLoading': 'Presets are loading — please try again.',
       'monthFlightsSaved': 'Month flights saved.',
       'selectAllColumn': 'Select all',
@@ -296,7 +299,7 @@ class AppLocalizations {
       'selfArrangeTitle': 'Self-arrange shifts',
       'selfArrangeHint':
           'Tap your own cells to swap work/off. Every 7-day block must keep '
-              'exactly its required off days. Changes apply after admin approval.',
+          'exactly its required off days. Changes apply after admin approval.',
       'selfArrangeSubmit': 'Submit for approval',
       'selfArrangeNote': 'Note (optional)',
       'selfArrangeSubmitted': 'Request submitted — waiting for admin approval.',
@@ -314,8 +317,8 @@ class AppLocalizations {
       'flightsMissingTitle': 'No flight data for this month',
       'flightsMissingBody':
           'No flights have been entered for this month yet, so the generated '
-              'roster will contain no flight duties (A/D) and may be wrong. '
-              'Enter flights first, or generate anyway?',
+          'roster will contain no flight duties (A/D) and may be wrong. '
+          'Enter flights first, or generate anyway?',
       'generateAnyway': 'Generate anyway',
       // --- Admin cell edit (F-09 UI, owner 2026-07-17) ---
       'editCell': 'Edit cell',
@@ -327,14 +330,14 @@ class AppLocalizations {
       'registrationClosed': 'Monthly registration closed',
       'registrationClosedMessage':
           'Monthly-leave registration is open from day 1 to day 20 (for the '
-              'next month). Annual leave (5+ days) is registered during the '
-              'previous year.',
+          'next month). Annual leave (5+ days) is registered during the '
+          'previous year.',
       // --- Revoke approval (owner 2026-07-17) ---
       'revokeApproval': 'Revoke approval',
       'revokeConfirmMessage':
           'This returns the leave days to the employee\'s balance and marks '
-              'the request as rejected. If the month was already scheduled, '
-              'regenerate it afterwards.',
+          'the request as rejected. If the month was already scheduled, '
+          'regenerate it afterwards.',
       'requestRevoked': 'Approval revoked.',
     },
     'vi': {
@@ -433,7 +436,7 @@ class AppLocalizations {
       'excelFileHint': 'Tệp Excel tối đa 10 MB',
       'chooseFile': 'Chọn tệp',
       'leaveRequests': 'Đăng ký nghỉ',
-      'leaveSubtitle': 'Đăng ký hàng tháng đóng vào ngày 20',
+      'leaveSubtitle': 'Môi trường dev không giới hạn thời gian đăng ký',
       'requestLeave': 'Đăng ký nghỉ',
       'pending': 'Chờ duyệt',
       'approved': 'Đã duyệt',
@@ -447,8 +450,7 @@ class AppLocalizations {
       'registrationOpen': 'Đang mở đăng ký',
       'shortLeaveMessage':
           'Nghỉ ngắn dưới 5 ngày liên tục. Nghỉ dài hơn dùng đăng ký phép năm.',
-      'leaveWindowHint':
-          'Nghỉ tháng (≤5 ngày): đăng ký từ ngày 1–20 của tháng trước. Nghỉ phép năm (≥6 ngày): đăng ký trong năm trước.',
+      'leaveWindowHint': 'Môi trường dev: không giới hạn ngày đăng ký nghỉ.',
       'requests': 'Yêu cầu',
       'type': 'Loại',
       'dates': 'Thời gian',
@@ -550,6 +552,7 @@ class AppLocalizations {
       'scheduleEmptyMessage':
           'Chưa có lịch cho tháng này. Nhấn "Tạo lịch" để bắt đầu.',
       'scheduleGenerated': 'Đã tạo lịch.',
+      'ruleWarnings': 'cảnh báo quy tắc.',
       'scheduleInfeasible': 'Không tìm được lời giải hợp lệ cho lịch.',
       'regenerateTitle': 'Tạo lại lịch?',
       'regenerateWarning':
@@ -592,7 +595,8 @@ class AppLocalizations {
       // --- Month batch dialog
       'fillMonth': 'Điền cả tháng',
       'monthFlightsTitle': 'Điền cả tháng',
-      'monthFlightsHint': 'Tick mẫu cho từng ngày. Tối đa 2 mẫu mỗi hàng. Chỉ lưu ngày có thay đổi.',
+      'monthFlightsHint':
+          'Tick mẫu cho từng ngày. Tối đa 2 mẫu mỗi hàng. Chỉ lưu ngày có thay đổi.',
       'monthFlightsLoading': 'Đang tải mẫu — vui lòng thử lại.',
       'monthFlightsSaved': 'Đã lưu chuyến bay cả tháng.',
       'selectAllColumn': 'Chọn tất cả',
@@ -616,7 +620,7 @@ class AppLocalizations {
       'selfArrangeTitle': 'Tự sắp xếp ca',
       'selfArrangeHint':
           'Chạm vào ô của bạn để đổi làm/nghỉ. Mỗi block 7 ngày phải giữ đúng '
-              'số ngày nghỉ quy định. Thay đổi có hiệu lực sau khi admin duyệt.',
+          'số ngày nghỉ quy định. Thay đổi có hiệu lực sau khi admin duyệt.',
       'selfArrangeSubmit': 'Gửi admin duyệt',
       'selfArrangeNote': 'Ghi chú (không bắt buộc)',
       'selfArrangeSubmitted': 'Đã gửi yêu cầu — chờ admin duyệt.',
@@ -634,8 +638,8 @@ class AppLocalizations {
       'flightsMissingTitle': 'Tháng này chưa nhập lịch bay',
       'flightsMissingBody':
           'Chưa có chuyến bay nào được nhập cho tháng này, nên lịch tạo ra sẽ '
-              'không có ca bay (A/D) và có thể sai sót. Nên nhập lịch bay '
-              'trước, hoặc vẫn tạo lịch?',
+          'không có ca bay (A/D) và có thể sai sót. Nên nhập lịch bay '
+          'trước, hoặc vẫn tạo lịch?',
       'generateAnyway': 'Vẫn tạo lịch',
       // --- Admin cell edit (F-09 UI, owner 2026-07-17) ---
       'editCell': 'Sửa ô lịch',
@@ -647,13 +651,13 @@ class AppLocalizations {
       'registrationClosed': 'Đã đóng đăng ký nghỉ tháng',
       'registrationClosedMessage':
           'Đăng ký nghỉ tháng mở từ ngày 1 đến ngày 20 (cho tháng kế tiếp). '
-              'Nghỉ phép năm (từ 5 ngày) đăng ký trong năm trước.',
+          'Nghỉ phép năm (từ 5 ngày) đăng ký trong năm trước.',
       // --- Revoke approval (owner 2026-07-17) ---
       'revokeApproval': 'Hủy duyệt',
       'revokeConfirmMessage':
           'Thao tác này hoàn lại ngày phép cho nhân viên và chuyển đơn về '
-              'Từ chối. Nếu tháng liên quan đã tạo lịch, hãy tạo lại lịch '
-              'sau khi hủy.',
+          'Từ chối. Nếu tháng liên quan đã tạo lịch, hãy tạo lại lịch '
+          'sau khi hủy.',
       'requestRevoked': 'Đã hủy duyệt.',
     },
   };

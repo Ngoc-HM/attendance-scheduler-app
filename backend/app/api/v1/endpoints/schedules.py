@@ -7,6 +7,7 @@ from datetime import date
 from fastapi import APIRouter, HTTPException, status
 
 from app.api.deps import ActiveUser, AdminUser, DbSession
+from app.core.config import settings
 from app.core.i18n import t
 from app.schemas.schedule import (
     GenerateScheduleRequest,
@@ -26,7 +27,7 @@ def get_schedule(db: DbSession, year: int, month: int, current_user: ActiveUser)
     Non-admin visibility window (owner 2026-07-09): any past month, the current
     month, and at most 2 months ahead — published months only, as before.
     """
-    if not current_user.role.is_admin:
+    if not current_user.role.is_admin and settings.ENVIRONMENT != "dev":
         today = date.today()
         if year * 12 + month > today.year * 12 + today.month + 2:
             raise HTTPException(

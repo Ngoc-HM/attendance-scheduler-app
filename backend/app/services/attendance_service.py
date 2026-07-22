@@ -20,7 +20,7 @@ from app.models.enums import AttendanceCode, Role
 from app.models.schedule import MonthlySchedule, ShiftAssignment
 from app.models.user import User
 from app.schemas.attendance import AttendanceUpsert, SickCoverResult
-from app.services import sick_backfill
+from app.services import role_code_validation, sick_backfill
 
 
 def _month_bounds(year: int, month: int) -> tuple[date, date]:
@@ -47,6 +47,10 @@ def _get_cell(db: Session, user_id: int, day: date) -> AttendanceRecord | None:
 
 def upsert(db: Session, payload: AttendanceUpsert, recorded_by: int) -> AttendanceRecord:
     """F-11/F-12 — record/update the actual code for one (user, day)."""
+    user = db.get(User, payload.user_id)
+    if user is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=t("user.not_found"))
+    role_code_validation.validate(user.role, payload.code)
     cell = _get_cell(db, payload.user_id, payload.work_date)
     if cell is None:
         cell = AttendanceRecord(user_id=payload.user_id, work_date=payload.work_date)

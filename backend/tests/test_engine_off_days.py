@@ -79,8 +79,8 @@ def test_two_weekly_offs_are_adjacent_when_free() -> None:
             )
 
 
-def test_impossible_quota_reports_violation_not_infeasible() -> None:
-    """Slack path: a block fully pinned AL cannot fit 2 extra X → Violation."""
+def test_fully_pinned_block_caps_weekly_off_target() -> None:
+    """A fully approved-leave block cannot receive extra X and stays valid."""
     days = month_days(2026, 6)[:7]  # a single 7-day block
     pinned = {d: AttendanceCode.AL for d in days}  # every day approved off
     people = [PersonInput(1, Role.T)]
@@ -89,4 +89,4 @@ def test_impossible_quota_reports_violation_not_infeasible() -> None:
     assert out.feasible  # always-feasible architecture (decision #2)
     assert len(out.assignments) == len(days)
     offs = [v for v in out.violations if v.rule == "two_days_off_per_week"]
-    assert offs and offs[0].user_id == 1
+    assert not offs

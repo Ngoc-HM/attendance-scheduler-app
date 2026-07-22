@@ -225,7 +225,8 @@ ngày trong tháng được gán đúng MỘT trạng thái.
 
 3.  Không ai làm quá 5 ngày LÀM VIỆC liên tục (chuỗi ≥ 6 ngày là không
     hợp lệ). Tính chuỗi phải cộng dồn carryStreak\[p\] từ tháng trước
-    (mục 5.5).
+    (mục 5.5). Đồng thời, trong MỌI cửa sổ 7 ngày lịch liên tiếp (kể cả
+    cửa sổ vắt qua hai tháng), mỗi người phải có tối thiểu 2 ngày nghỉ.
 
 4.  Định biên ca cho nhóm cố định A1–A4 theo flightPairs\[d\]:
 
@@ -238,15 +239,20 @@ ngày trong tháng được gán đúng MỘT trạng thái.
 5.  Tôn trọng nghỉ đã duyệt và ngày lễ: các ô (người, ngày) đã duyệt
     AL/CD hoặc ngày lễ X phải giữ nguyên, không xếp ca.
 
-6.  Thiếu người (bất đắc dĩ): cho phép 1 người làm A/D (xuyên 2 ca) để
-    phủ ca trống. Người đó được +1 ngày làm việc và sinh 1 ngày nghỉ bù
-    (CD) cho tháng sau.
+6.  Lịch tự động của role A chỉ được sinh A, D, X, CD; TUYỆT ĐỐI không
+    tự sinh A/D. A/D chỉ phát sinh sau khi đã có lịch khi một ca bị trống
+    đột xuất (ví dụ người ca D nghỉ ốm), lúc đó một người đang làm A hoặc
+    D được chuyển thành A/D để bù. Người thực tế làm A/D sinh 1 ngày nghỉ
+    bù CD cho tháng sau. Mã AD của các role khác không sinh nghỉ bù.
 
 ## 5.4. Mục tiêu MỀM (tối ưu — không bắt buộc 100%)
 
 7.  Cân bằng ca A và ca D giữa các nhân sự TRONG THÁNG: tối thiểu hóa
     chênh lệch số ca A giữa người nhiều nhất và ít nhất; tương tự cho
-    ca D (ưu tiên cao nhất, đặc biệt nhóm A1–A4).
+    ca D (ưu tiên cao nhất, đặc biệt nhóm A1–A4). Mỗi người role A phải
+    có tối thiểu 2 ngày ca A thuần/tháng; đồng thời tối thiểu hóa chênh
+    lệch |tổng ca A - tổng ca D| của chính từng người trong lịch tự động,
+    trong giới hạn nhu cầu chuyến bay thực tế.
 
 8.  Ghép 2 ngày nghỉ trong tuần thành cặp liền kề theo thứ tự: (1) T7+CN
     tốt nhất; (2) T6+T7; (3) CN+T2.
@@ -256,32 +262,33 @@ ngày trong tháng được gán đúng MỘT trạng thái.
     ngày/tuần; (c) ưu tiên ghép cặp cuối tuần.
 
 Gợi ý cài đặt: gán trọng số cho từng mục tiêu mềm rồi cực tiểu hóa tổng
-hàm phạt (weighted sum). Trọng số cân bằng A/D nên cao nhất.
+hàm phạt (weighted sum). Trọng số cân bằng ca A và ca D nên cao nhất.
 
 ## 5.5. Xử lý chuỗi ngày làm liên tục vắt qua 2 tháng
 
 Để ràng buộc “không quá 5 ngày liên tục” vẫn đúng ở ranh giới giữa 2
 tháng:
 
-10. Khi kết thúc xếp một tháng, lưu carryStreak\[p\] = số ngày làm việc
-    liên tục tính ngược từ ngày cuối tháng (nếu ngày cuối là nghỉ thì =
-    0).
+10. Khi xếp tháng mới, hệ thống tự đọc lịch sử tháng trước: chấm công
+    thực tế được ưu tiên, nếu chưa có thì dùng lịch đã xếp. Từ đó tính
+    carryStreak\[p\], 6 trạng thái ngày liền trước và carryComp\[p\];
+    không cần thao tác đóng tháng thủ công.
 
 11. Khi xếp tháng mới, các ngày đầu tháng tính chuỗi liên tục CỘNG DỒN
     với carryStreak\[p\]. Ví dụ: đã làm 4 ngày liên tục cuối tháng
     trước thì sang tháng mới chỉ được làm tối đa 1 ngày nữa rồi phải
     nghỉ.
 
-Ràng buộc 2 ngày nghỉ/tuần áp theo từng tuần của tháng (≈4 tuần) nên về
-cơ bản đã đảm bảo nghỉ đều; quy tắc cộng dồn ở trên chỉ để chặn trường
-hợp biên.
+Ngoài quota theo block tuần của tháng, hệ thống kiểm tra mọi cửa sổ 7
+ngày liên tục với 6 ngày lịch sử trước tháng để bảo đảm quy tắc nghỉ vẫn
+đúng tại cả biên block và biên tháng.
 
 ## 5.6. Khi không tìm được lời giải hợp lệ (infeasible)
 
 12. Engine báo “không có lời giải” và chỉ rõ ngày/ràng buộc bị vi phạm
     (vd ngày X thiếu người ca D).
 
-13. Gợi ý hướng xử lý (vd dùng A/D bất đắc dĩ theo 5.3) và CHO PHÉP
+13. Báo rõ ca thiếu để admin xử lý; engine không được tự xếp A/D. CHO PHÉP
     admin chỉnh tay để hoàn thiện lịch (F-09).
 
 14. Không tự ý phá ràng buộc cứng mà không thông báo; mọi vi phạm phải
@@ -455,10 +462,12 @@ user trên hệ thống). Phân role như sau:
     ngày/tuần và có thể rơi vào bất kỳ ngày nào.
 
   - Đảm bảo cân bằng số ca A, ca D giữa các nhân sự (đặc biệt nhóm cố
-    định A1–A4).
+    định A1–A4). Mỗi người nhóm A có ít nhất 2 ngày A/tháng và số ca A
+    của từng người được tối ưu xấp xỉ số ca D theo nhu cầu chuyến bay.
 
   - **Giới hạn ngày làm liên tục:** không nhân sự nào được làm việc quá
-    5 ngày liên tục (từ 6 ngày liên tục trở lên là không hợp lệ).
+    5 ngày liên tục (từ 6 ngày liên tục trở lên là không hợp lệ); mọi
+    cửa sổ 7 ngày, kể cả vắt tháng, phải có tối thiểu 2 ngày nghỉ.
 
 **Quy tắc riêng cho nhóm cố định (A1–A4):**
 
@@ -466,9 +475,9 @@ Ngày có 2 cặp chuyến bay: bắt buộc 1 người ca A và 2 người ca D
 
 Ngày chỉ có 1 cặp chuyến bay: 1 người ca A và 1 người ca D.
 
-Trường hợp bất đắc dĩ: có thể phân 1 người làm A/D (làm xuyên 2 ca),
-nhưng người đó được tính thêm 1 ngày làm việc để nghỉ bù vào tháng tiếp
-theo.
+Lịch tự động không xếp A/D. Chỉ khi đã có lịch và phát sinh nghỉ đột xuất
+(ví dụ người ca D nghỉ ốm), một người đang làm A hoặc D mới được chuyển
+thành A/D; người đó được tính thêm 1 ngày làm việc để nghỉ bù tháng sau.
 
 # 5\. Quy tắc ưu tiên khi đăng ký & xếp lịch nghỉ
 

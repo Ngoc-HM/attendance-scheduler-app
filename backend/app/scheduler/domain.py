@@ -43,6 +43,9 @@ class SolverInput:
     # consecutive OFF days" rule (annual leave IS the sanctioned long break;
     # customer clarification 2026-06-12).
     long_leave_off: dict[int, set[date]] = field(default_factory=dict)
+    # Working/rest facts for the six calendar days immediately before this
+    # month. Used by rolling-seven-day constraints across the month boundary.
+    previous_working: dict[int, dict[date, bool]] = field(default_factory=dict)
     max_solve_seconds: float = 30.0
 
 

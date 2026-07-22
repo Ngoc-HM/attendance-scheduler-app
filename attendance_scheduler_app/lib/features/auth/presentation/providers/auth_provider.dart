@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../i18n/locale_provider.dart';
 import '../../data/repositories/auth_repository_impl.dart';
 import '../../domain/entities/user.dart';
 import '../../domain/repositories/auth_repository.dart';
@@ -30,14 +31,17 @@ class AuthState {
 }
 
 class AuthController extends StateNotifier<AuthState> {
-  AuthController(this._repository) : super(const AuthState());
+  AuthController(this._repository, this._localeController)
+    : super(const AuthState());
 
   final AuthRepository _repository;
+  final LocaleController _localeController;
 
   Future<bool> login(String username, String password) async {
     state = state.copyWith(isLoading: true, clearError: true);
     try {
       final user = await _repository.login(username, password);
+      await _localeController.activateUser(user.id);
       state = AuthState(user: user);
       return true;
     } on DioException catch (e) {
@@ -63,10 +67,14 @@ class AuthController extends StateNotifier<AuthState> {
 
   Future<void> logout() async {
     await _repository.logout();
+    _localeController.resetForLogin();
     state = const AuthState();
   }
 }
 
 final authControllerProvider = StateNotifierProvider<AuthController, AuthState>(
-  (ref) => AuthController(ref.watch(authRepositoryProvider)),
+  (ref) => AuthController(
+    ref.watch(authRepositoryProvider),
+    ref.read(localeControllerProvider.notifier),
+  ),
 );

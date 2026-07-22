@@ -16,7 +16,7 @@ from app.models.enums import UserStatus
 from app.models.user import User
 from app.scheduler.calendar_utils import build_weeks, month_days
 from app.scheduler.domain import PersonInput, SolverInput
-from app.services import flight_service, holiday_service, leave_service
+from app.services import flight_service, holiday_service, leave_service, schedule_history
 
 
 def build(db: Session, year: int, month: int) -> SolverInput:
@@ -27,12 +27,13 @@ def build(db: Session, year: int, month: int) -> SolverInput:
         .order_by(User.id)
         .all()
     )
+    boundary = schedule_history.build_boundary_states(db, users, year, month)
     people = [
         PersonInput(
             user_id=u.id,
             role=u.role,
-            carry_comp=u.carry_comp,
-            carry_streak=u.carry_streak,
+            carry_comp=boundary[u.id].carry_comp,
+            carry_streak=boundary[u.id].carry_streak,
             carry_premium_off=u.carry_premium_off,
         )
         for u in users
@@ -49,5 +50,8 @@ def build(db: Session, year: int, month: int) -> SolverInput:
         approved_off=leave_service.approved_off_map(db, year, month),
         holidays=holiday_service.holiday_dates(db, year, month),
         long_leave_off=leave_service.annual_off_dates(db, year, month),
+        previous_working={
+            u.id: boundary[u.id].previous_working for u in users
+        },
         max_solve_seconds=settings.SOLVER_MAX_TIME_SECONDS,
     )

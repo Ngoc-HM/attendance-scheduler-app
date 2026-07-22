@@ -2,7 +2,7 @@
 
 Each person's assignable code set depends on their role:
 
-    Role.A (fixed group)  → {A, D, A/D, X, CD}   full flight rules
+    Role.A (fixed group)  → {A, D, X, CD}        full flight rules
     Role.T (flexible)     → {AD, X}               full day, no shift split
     Role.M (admin)        → {O/D, X}              office duty
     Role.F (split from T) → {AD, X}               T-like: weekly-2-off AND the
@@ -12,9 +12,9 @@ Each person's assignable code set depends on their role:
 OFF_CODES are the non-working rest codes; a day is "working" if its assigned
 code is not in OFF_CODES (and not a pinned AL/S leave, which is also X).
 
-The CD code (comp-day off) appears only in the role-A domain; the constraint
-``constraints_comp_days`` enforces it role-A only.  AD (two shifts, no comp)
-appears only in the role-T domain.  O/D (office) appears only in role-M.
+The automatic solver NEVER creates A/D: that code is reserved for emergency
+cover after the roster exists, such as a sudden sickness. CD appears only in
+role A; AD appears in T/F and O/D appears in role M.
 """
 
 from __future__ import annotations
@@ -27,7 +27,6 @@ ROLE_CODES: dict[Role, tuple[AttendanceCode, ...]] = {
     Role.A: (
         AttendanceCode.A,
         AttendanceCode.D,
-        AttendanceCode.A_D,
         AttendanceCode.X,
         AttendanceCode.CD,
     ),
@@ -53,7 +52,7 @@ OFF_CODES: frozenset[AttendanceCode] = frozenset(
 
 # Role-A working codes (for clarity in constraints_consecutive / off_chain).
 ROLE_A_WORKING: frozenset[AttendanceCode] = frozenset(
-    {AttendanceCode.A, AttendanceCode.D, AttendanceCode.A_D}
+    {AttendanceCode.A, AttendanceCode.D}
 )
 
 

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from app.core.database import SessionLocal
-from app.models.enums import Role
 from app.models.user import User
 from app.services.demo_user_seed import DEMO_USERS, seed_demo_users
 
@@ -25,8 +24,7 @@ def test_seed_demo_users_is_idempotent(client) -> None:
         )
 
         assert [user.username for user in users] == [spec.username for spec in DEMO_USERS]
-        assert [user.role for user in users[:4]] == [Role.T] * 4
-        assert [user.role for user in users[4:]] == [Role.A] * 6
+        assert [user.role for user in users] == [spec.role for spec in DEMO_USERS]
         assert all(user.status.value == "active" for user in users)
     finally:
         db.close()

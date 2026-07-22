@@ -16,7 +16,7 @@ from datetime import date
 from sqlalchemy.orm import Session
 
 from app.models.attendance import AttendanceRecord
-from app.models.enums import AttendanceCode
+from app.models.enums import AttendanceCode, Role
 from app.models.holiday import Holiday
 from app.models.user import User
 from app.services import carry_over_math
@@ -52,7 +52,9 @@ def close_month(db: Session, year: int, month: int) -> dict:
         recs = per_user.get(u.id, [])
         month_recs = [(d, c) for d, c in recs if d >= first_of_month]
 
-        u.carry_comp = carry_over_math.comp_balance(recs)
+        u.carry_comp = (
+            carry_over_math.comp_balance(recs) if u.role is Role.A else 0
+        )
         u.carry_streak = carry_over_math.trailing_streak(month_recs)
         u.carry_premium_off = carry_over_math.premium_off_count(recs, holidays)
         summary[u.id] = {

@@ -10,8 +10,10 @@ Truly HARD (can never break, decision #2):
 
 SOFT with penalized slack (violations reported via ``SlackRegistry``):
     #2 two X per 7-day block                  — ``constraints_off_days``
+       two rest days in every rolling 7 days  — ``constraints_rolling_rest``
     #3 max 5 consecutive working (+ §5.5)     — ``constraints_consecutive``
     #4 fixed-group (role A) staffing per fp   — ``constraints_staffing``
+       at least 2 pure-A days per A person     — ``constraints_role_a_distribution``
 """
 
 from __future__ import annotations
@@ -26,6 +28,8 @@ from app.scheduler import (
     constraints_consecutive,
     constraints_off_chain,
     constraints_off_days,
+    constraints_role_a_distribution,
+    constraints_rolling_rest,
     constraints_staffing,
 )
 from app.scheduler.domain import SolverInput
@@ -42,10 +46,12 @@ def add_all(
     one_status_per_day(model, x, inp)
     respect_approved_off(model, x, inp)
     constraints_off_days.add(model, x, inp, registry)
+    constraints_rolling_rest.add(model, x, inp, registry)
     constraints_consecutive.add(model, x, inp, registry)
     constraints_off_chain.add(model, x, inp, registry)
     constraints_staffing.add(model, x, inp, registry)
     constraints_comp_days.add(model, x, inp, registry)
+    constraints_role_a_distribution.add(model, x, inp, registry)
 
 
 def one_status_per_day(

@@ -35,6 +35,7 @@ def test_zero_slack_when_fully_staffed() -> None:
         PersonInput(3, Role.T), PersonInput(4, Role.T), PersonInput(5, Role.T),
         PersonInput(6, Role.A), PersonInput(7, Role.A),
         PersonInput(8, Role.A), PersonInput(9, Role.A),
+        PersonInput(10, Role.A), PersonInput(11, Role.A),
     ]
     out = _solve(people, days, flight_pairs={d: 2 for d in days})
     assert out.feasible and out.violations == []

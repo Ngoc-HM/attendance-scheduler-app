@@ -1,13 +1,13 @@
 """Scheduling logic (F-07, F-08, F-09 + decision #8) — engine orchestration.
 
 Bridges persistence and ``app.scheduler``: gather inputs → solve → persist
-draft assignments / surface Violations (§5.6). Manual edits and approved
-shift-changes are ALWAYS saved and re-checked (warnings, never blocks).
+draft assignments / surface Violations (§5.6). Valid manual edits and approved
+shift-changes are saved and re-checked (warnings do not discard the edit).
 """
 
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session, selectinload
@@ -25,7 +25,12 @@ from app.schemas.schedule import (
     MonthlyScheduleRead,
     ScheduleResult,
 )
-from app.services import flight_service, schedule_input_builder
+from app.services import (
+    flight_service,
+    role_code_validation,
+    schedule_history,
+    schedule_input_builder,
+)
 from app.services.schedule_violation_checker import recheck
 
 
@@ -66,7 +71,7 @@ def generate(db: Session, year: int, month: int, force: bool = False) -> Schedul
         db.add(existing)
         db.flush()  # assign existing.id before deleting/inserting cells
     existing.status = ScheduleStatus.draft
-    existing.generated_at = datetime.now(timezone.utc)
+    existing.generated_at = datetime.now(UTC)
 
     # Hard-delete previous cells by schedule_id (business key) — the ORM
     # collection's id-based delete proved unreliable on regenerate (DELETE
@@ -97,8 +102,20 @@ def generate(db: Session, year: int, month: int, force: bool = False) -> Schedul
 def manual_override(
     db: Session, schedule_id: int, payload: ManualOverrideRequest
 ) -> ScheduleResult:
-    """F-09 — apply an admin edit; save ALWAYS, re-check, warn (§5.6 #14)."""
+    """F-09 — validate and apply an admin edit, then re-check and warn."""
     schedule = _get_by_id(db, schedule_id)
+    if (
+        payload.work_date.year != schedule.year
+        or payload.work_date.month != schedule.month
+    ):
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Override date must belong to the schedule month.",
+        )
+    user = db.get(User, payload.user_id)
+    if user is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=t("user.not_found"))
+    role_code_validation.validate(user.role, payload.code)
     cell = next(
         (
             a
@@ -108,8 +125,10 @@ def manual_override(
         None,
     )
     if cell is None:
-        cell = ShiftAssignment(user_id=payload.user_id, work_date=payload.work_date)
-        schedule.assignments.append(cell)
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            detail="Schedule cell not found.",
+        )
     cell.code = payload.code
     cell.is_manual_override = True
     db.commit()
@@ -126,6 +145,11 @@ def publish(db: Session, schedule_id: int) -> MonthlySchedule:
     schedule = _get_by_id(db, schedule_id)
     schedule.status = ScheduleStatus.published
     db.commit()
+    # Published assignments become the initial actual-attendance baseline.
+    # Existing actual edits are never overwritten by the seeding service.
+    from app.services import attendance_service
+
+    attendance_service.seed_from_schedule(db, schedule.year, schedule.month)
     db.refresh(schedule)
     return schedule
 
@@ -154,12 +178,27 @@ def apply_shift_change(db: Session, req: ShiftChangeRequest) -> list[str]:
         raise HTTPException(status.HTTP_409_CONFLICT, detail=t("swap.no_schedule"))
 
     if req.kind is SwapKind.change_code:
+        requester = db.get(User, req.requester_id)
+        if requester is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail=t("user.not_found"))
+        if req.requested_code is None:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="A requested code is required for a code change.",
+            )
+        role_code_validation.validate(requester.role, req.requested_code)
         mine.code = req.requested_code
         mine.is_manual_override = True
     else:  # swap_with — exchange the two users' codes for that date
         theirs = cells.get((req.counterpart_user_id, req.work_date))
         if theirs is None:
             raise HTTPException(status.HTTP_409_CONFLICT, detail=t("swap.no_schedule"))
+        requester = db.get(User, req.requester_id)
+        counterpart = db.get(User, req.counterpart_user_id)
+        if requester is None or counterpart is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail=t("user.not_found"))
+        role_code_validation.validate(requester.role, theirs.code)
+        role_code_validation.validate(counterpart.role, mine.code)
         mine.code, theirs.code = theirs.code, mine.code
         mine.is_manual_override = theirs.is_manual_override = True
 
@@ -190,11 +229,17 @@ def _recheck_violations(db: Session, schedule: MonthlySchedule) -> list[Constrai
     grid: dict[tuple[int, date], AttendanceCode] = {
         (a.user_id, a.work_date): a.code for a in schedule.assignments
     }
+    boundary = schedule_history.build_boundary_states(
+        db, users, schedule.year, schedule.month
+    )
     warnings = recheck(
         grid=grid,
         roles={u.id: u.role for u in users},
         carry_streaks={u.id: u.carry_streak for u in users},
         weeks=build_weeks(days),
         flight_pairs=flight_service.flight_pairs_map(db, days),
+        previous_working={
+            user_id: state.previous_working for user_id, state in boundary.items()
+        },
     )
     return [ConstraintViolation(rule="manual_recheck", message=w) for w in warnings]

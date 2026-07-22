@@ -9,7 +9,7 @@ Handles create / list / approve / reject for ShiftChangeRequest.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
@@ -19,7 +19,7 @@ from app.models.enums import LeaveStatus, SwapKind
 from app.models.shift_change_request import ShiftChangeRequest
 from app.models.user import User
 from app.schemas.shift_change import ShiftChangeCreate
-
+from app.services import role_code_validation
 
 # ---------------------------------------------------------------------------
 # Internal helpers
@@ -64,6 +64,8 @@ def create_request(
         )
 
     requester = _get_user_or_404(db, current_user_id)
+    if payload.requested_code is not None:
+        role_code_validation.validate(requester.role, payload.requested_code)
 
     req = ShiftChangeRequest(
         requester_id=current_user_id,
@@ -152,7 +154,7 @@ def decide(
 
     req.status = new_status
     req.decided_by_id = admin_id
-    req.decided_at = datetime.now(timezone.utc)
+    req.decided_at = datetime.now(UTC)
     db.commit()
     db.refresh(req)
 

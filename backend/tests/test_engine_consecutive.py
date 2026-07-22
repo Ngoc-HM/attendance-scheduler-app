@@ -37,7 +37,7 @@ def test_no_six_day_run_in_feasible_solution() -> None:
         PersonInput(1, Role.A), PersonInput(2, Role.A),
         PersonInput(3, Role.A), PersonInput(4, Role.A),
     ]
-    out = _solve(people, days, flight_pairs={d: 2 for d in days})
+    out = _solve(people, days, flight_pairs={d: 1 for d in days})
 
     assert out.feasible and not out.violations
     grid = {(a.user_id, a.day): a.code for a in out.assignments}

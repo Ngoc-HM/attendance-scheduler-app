@@ -2,13 +2,13 @@
 
 Pure functions over a plain ``{(user_id, date): AttendanceCode}`` grid — no DB,
 no solver — mirroring the engine's soft rules (§5.3 #2/#3/#4). The edit is
-ALWAYS saved (§5.6 #14: the admin confirms violations, the system never
-silently blocks); these warnings tell the admin what just broke.
+Saved after role/code validation (§5.6 #14); these warnings tell the admin
+which scheduling rules the edit just broke.
 """
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 
 from app.models.enums import AttendanceCode, Role
 from app.scheduler.calendar_utils import partial_block_off_target
@@ -26,12 +26,46 @@ def recheck(
     carry_streaks: dict[int, int],
     weeks: list[list[date]],
     flight_pairs: dict[date, int],
+    previous_working: dict[int, dict[date, bool]] | None = None,
 ) -> list[str]:
     """Run every §5.3 check over the grid; return human-readable warnings."""
     warnings: list[str] = []
     warnings += check_consecutive(grid, roles, carry_streaks, weeks)
+    warnings += check_rolling_rest(grid, roles, weeks, previous_working or {})
     warnings += check_off_quota(grid, roles, weeks)
     warnings += check_staffing(grid, roles, weeks, flight_pairs)
+    return warnings
+
+
+def check_rolling_rest(grid, roles, weeks, previous_working) -> list[str]:
+    """Every rolling 7 calendar days must contain at least 2 rest days."""
+    days = sorted({d for block in weeks for d in block})
+    if not days:
+        return []
+
+    previous_days = [days[0] - timedelta(days=n) for n in range(6, 0, -1)]
+    warnings: list[str] = []
+    for uid in roles:
+        historical = previous_working.get(uid, {})
+        timeline = [
+            (day, historical.get(day, False)) for day in previous_days
+        ] + [
+            (
+                day,
+                bool(
+                    (code := grid.get((uid, day))) is not None
+                    and code.is_working
+                ),
+            )
+            for day in days
+        ]
+        for start in range(len(timeline) - 6):
+            window = timeline[start : start + 7]
+            if sum(working for _, working in window) > 5:
+                warnings.append(
+                    f"User {uid}: fewer than 2 rest days in the 7-day window "
+                    f"starting {window[0][0]}"
+                )
     return warnings
 
 

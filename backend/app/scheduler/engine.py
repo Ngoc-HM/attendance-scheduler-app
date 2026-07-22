@@ -7,10 +7,10 @@ with a time limit and returns a ``SolverOutput``.
 Always-feasible architecture (locked decision #2): staffing and off-day rules
 carry penalized slack, so a solution is returned even when rules cannot all
 hold — each broken rule comes back as a ``Violation`` (§5.6 #12–14) for the
-admin to resolve (A/D fallback suggestion, manual edit F-09).
+admin to resolve without automatically forcing a double shift.
 
 Role-aware model (owner decision 2026-06-26):
-    Role.A (fixed group): {A, D, A/D, X, CD} — full flight rules + comp days.
+    Role.A (fixed group): {A, D, X, CD} — full flight rules + comp days.
     Role.T (flexible):    {AD, X}            — full-day duty, no shift split.
     Role.M (admin):       {O/D, X}           — office duty.
     Role.F (split of T):  {AD, X}            — T-like: weekly-2-off AND the
@@ -21,10 +21,10 @@ Variable domains are built PER PERSON from ``role_codes.codes_for(role)``.
 The legacy ``ASSIGNABLE_CODES`` constant is kept for backward-compat import;
 it is no longer used as the per-person var domain inside the engine.
 
-Flight-staffing demand, balance, A/D usage, and comp-day constraints are
-scoped to role-A people only (they are the only ones with A/D/A_D vars).
-Off-day (2 X/block), consecutive-working, and off-chain rules apply to ALL
-roles, each using their own working-code set for "working" detection.
+Flight-staffing demand, A-versus-D balance, and comp-day constraints are scoped to
+role-A people only. Emergency A/D is outside the automatic solver domain.
+Off-day (2 X/block), rolling-seven-day rest, consecutive-working, and off-chain
+rules apply to ALL roles, using each role's own working-code set.
 """
 
 from __future__ import annotations
@@ -44,7 +44,6 @@ from app.scheduler.slack_registry import SlackRegistry
 ASSIGNABLE_CODES: tuple[AttendanceCode, ...] = (
     AttendanceCode.A,
     AttendanceCode.D,
-    AttendanceCode.A_D,
     AttendanceCode.X,
     AttendanceCode.CD,
 )

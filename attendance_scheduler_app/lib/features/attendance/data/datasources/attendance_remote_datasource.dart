@@ -107,7 +107,7 @@ class AttendanceRemoteDataSource {
     try {
       await _dio.post(
         ApiEndpoints.attendanceSeed,
-        data: {'year': year, 'month': month},
+        queryParameters: {'year': year, 'month': month},
       );
     } on DioException catch (e) {
       throw ApiException.fromDio(e, 'attendance_seed_failed');

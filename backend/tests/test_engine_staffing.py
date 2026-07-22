@@ -1,4 +1,4 @@
-"""§5.3 #4 + #6 — flight-shift staffing FLOOR, A/D substitution, slack.
+"""§5.3 #4 — flight staffing floor without automatic A/D assignment.
 
 Role-aware (owner decision 2026-06-26): flight-pair coverage is counted across
 role-A people only.  Role T gets AD (full-day, no shift split); role M gets
@@ -13,7 +13,7 @@ from app.scheduler import PersonInput, SchedulerEngine, SolverInput
 from app.scheduler.calendar_utils import build_weeks, month_days
 
 DEMAND = {0: (0, 0), 1: (1, 1), 2: (1, 2)}  # minimum (A, D) per flight pairs
-FLIGHT_A = {AttendanceCode.A, AttendanceCode.D, AttendanceCode.A_D}  # role-A codes
+FLIGHT_A = {AttendanceCode.A, AttendanceCode.D}
 
 
 def _solve(people, days, flight_pairs):
@@ -31,11 +31,10 @@ def _solve(people, days, flight_pairs):
 
 
 def _coverage(grid, role_a_ids, d):
-    """Count A/D coverage across role-A people only."""
+    """Count A and D coverage across role-A people only."""
     a = sum(1 for u in role_a_ids if grid[(u, d)] is AttendanceCode.A)
     dd = sum(1 for u in role_a_ids if grid[(u, d)] is AttendanceCode.D)
-    ad = sum(1 for u in role_a_ids if grid[(u, d)] is AttendanceCode.A_D)
-    return a + ad, dd + ad  # A/D covers one of each (§5.3 #6)
+    return a, dd
 
 
 def test_daily_demand_floor_met_per_flight_pairs() -> None:
@@ -77,7 +76,7 @@ def test_role_t_gets_ad_and_role_m_gets_od() -> None:
     days = month_days(2026, 6)[:14]
     people = [
         PersonInput(1, Role.M), PersonInput(2, Role.T),
-        PersonInput(6, Role.A), PersonInput(7, Role.A),
+        PersonInput(6, Role.A), PersonInput(7, Role.A), PersonInput(8, Role.A),
     ]
     out = _solve(people, days, {d: 1 for d in days})
 
@@ -88,14 +87,14 @@ def test_role_t_gets_ad_and_role_m_gets_od() -> None:
     # Role T: only AD or X
     t_codes = {a.code for a in out.assignments if a.user_id == 2}
     assert t_codes <= {AttendanceCode.AD, AttendanceCode.X}
-    # Role A: only A, D, A/D, X, CD
-    a_codes = {a.code for a in out.assignments if a.user_id in (6, 7)}
+    # Role A automatic schedule: only A, D, X, CD.
+    a_codes = {a.code for a in out.assignments if a.user_id in (6, 7, 8)}
     assert a_codes <= FLIGHT_A | {AttendanceCode.X, AttendanceCode.CD}
 
 
-def test_understaffed_day_reports_violation_with_ad_suggestion() -> None:
+def test_understaffed_day_reports_violation_without_auto_ad() -> None:
     """Slack path (§5.6): coverage gap → schedule still returned + Violation
-    naming the day and suggesting the A/D fallback."""
+    while the automatic schedule still contains no A/D."""
     days = month_days(2026, 6)[:7]
     people = [PersonInput(6, Role.A)]  # one person, demand needs 1 A + 2 D
     out = _solve(people, days, {d: 2 for d in days})
@@ -105,4 +104,5 @@ def test_understaffed_day_reports_violation_with_ad_suggestion() -> None:
     staffing = [v for v in out.violations if v.rule == "flight_staffing"]
     assert staffing
     assert staffing[0].day is not None
-    assert "A/D" in staffing[0].message  # §5.6 #13 suggestion
+    assert "will not assign an A/D" in staffing[0].message
+    assert all(item.code is not AttendanceCode.A_D for item in out.assignments)

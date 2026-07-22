@@ -16,7 +16,7 @@ import pytest
 from app.models.enums import AttendanceCode, Role
 from app.scheduler import PersonInput, SchedulerEngine, SolverInput
 from app.scheduler.calendar_utils import build_weeks, month_days
-from app.scheduler.role_codes import OFF_CODES, ROLE_CODES
+from app.scheduler.role_codes import ROLE_CODES
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -70,7 +70,7 @@ def solved():
 # ---------------------------------------------------------------------------
 
 def test_role_a_codes_only(solved) -> None:
-    """Every role-A assignment uses a code in {A, D, A/D, X, CD}."""
+    """Every automatic role-A assignment uses {A, D, X, CD}, never A/D."""
     for a in solved.assignments:
         if a.user_id in _A_IDS:
             assert a.code in ROLE_A_CODES, (
@@ -112,7 +112,7 @@ def test_role_a_d_count_positive_when_flights_present(solved) -> None:
         1
         for uid in _A_IDS
         for d in _DAYS
-        if grid[(uid, d)] in (AttendanceCode.D, AttendanceCode.A_D)
+        if grid[(uid, d)] is AttendanceCode.D
     )
     assert total_d > 0, "D count across role-A is 0 — the original D=0 bug is still present"
 
@@ -143,12 +143,11 @@ def test_two_x_per_block_all_roles(solved) -> None:
 def test_role_a_a_and_d_spread_is_small(solved) -> None:
     """F-08: max − min of A-totals and D-totals across role-A people <= 2."""
     grid = {(a.user_id, a.day): a.code for a in solved.assignments}
-    for shift, extra in ((AttendanceCode.A, AttendanceCode.A_D),
-                         (AttendanceCode.D, AttendanceCode.A_D)):
+    for shift in (AttendanceCode.A, AttendanceCode.D):
         totals = [
             sum(
                 1 for d in _DAYS
-                if grid[(uid, d)] in (shift, extra)
+                if grid[(uid, d)] is shift
             )
             for uid in _A_IDS
         ]
@@ -171,3 +170,7 @@ def test_role_t_and_m_have_no_flight_codes(solved) -> None:
                 f"role-{'T' if a.user_id in _T_IDS else 'M'} user "
                 f"{a.user_id} on {a.day}: unexpected flight code {a.code}"
             )
+
+
+def test_automatic_schedule_never_assigns_a_slash_d(solved) -> None:
+    assert all(a.code is not AttendanceCode.A_D for a in solved.assignments)

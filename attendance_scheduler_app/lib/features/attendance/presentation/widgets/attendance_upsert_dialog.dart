@@ -53,19 +53,19 @@ class _AttendanceUpsertDialogState
   }
 
   ShiftCode _parseCode(String c) => switch (c) {
-        'A' => ShiftCode.a,
-        'D' => ShiftCode.d,
-        'A/D' => ShiftCode.aD,
-        'AD' => ShiftCode.ad,
-        'X' => ShiftCode.x,
-        'CD' => ShiftCode.cd,
-        'O/D' => ShiftCode.oD,
-        'T' => ShiftCode.t,
-        'B' => ShiftCode.b,
-        'S' => ShiftCode.s,
-        'AL' => ShiftCode.al,
-        _ => ShiftCode.x,
-      };
+    'A' => ShiftCode.a,
+    'D' => ShiftCode.d,
+    'A/D' => ShiftCode.aD,
+    'AD' => ShiftCode.ad,
+    'X' => ShiftCode.x,
+    'CD' => ShiftCode.cd,
+    'O/D' => ShiftCode.oD,
+    'T' => ShiftCode.t,
+    'B' => ShiftCode.b,
+    'S' => ShiftCode.s,
+    'AL' => ShiftCode.al,
+    _ => ShiftCode.x,
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -76,90 +76,88 @@ class _AttendanceUpsertDialogState
       title: l.text('updateAttendance'),
       width: 360,
       content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Employee selector
-            DropdownButton<int>(
-              value: _userId,
-              isExpanded: true,
-              hint: Text(l.text('selectEmployee')),
-              items: widget.users
-                  .map(
-                    (u) => DropdownMenuItem(
-                      value: u.id,
-                      child: Text(
-                          u.fullName.isNotEmpty ? u.fullName : u.username),
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Employee selector
+          DropdownButton<int>(
+            value: _userId,
+            isExpanded: true,
+            hint: Text(l.text('selectEmployee')),
+            items: widget.users
+                .map(
+                  (u) => DropdownMenuItem(
+                    value: u.id,
+                    child: Text(
+                      u.fullName.isNotEmpty ? u.fullName : u.username,
                     ),
-                  )
-                  .toList(),
-              onChanged: (v) => setState(() => _userId = v),
-            ),
-            const SizedBox(height: DsSpacing.x3),
-            // Date picker
-            OutlinedButton.icon(
-              icon: const Icon(Icons.calendar_today, size: 16),
-              label: Text(
-                _workDate == null
-                    ? l.text('pickDate')
-                    : '${_workDate!.year}-'
+                  ),
+                )
+                .toList(),
+            onChanged: (v) => setState(() => _userId = v),
+          ),
+          const SizedBox(height: DsSpacing.x3),
+          // Date picker
+          OutlinedButton.icon(
+            icon: const Icon(Icons.calendar_today, size: 16),
+            label: Text(
+              _workDate == null
+                  ? l.text('pickDate')
+                  : '${_workDate!.year}-'
                         '${_workDate!.month.toString().padLeft(2, '0')}-'
                         '${_workDate!.day.toString().padLeft(2, '0')}',
-              ),
-              onPressed: () => _pickDate(context),
             ),
-            const SizedBox(height: DsSpacing.x3),
-            // Code selector
-            DropdownButton<ShiftCode>(
-              value: _code,
-              isExpanded: true,
-              items: ShiftCode.values
-                  .map(
-                    (c) => DropdownMenuItem(
-                      value: c,
-                      child: Text(c.code),
-                    ),
-                  )
-                  .toList(),
-              onChanged: (v) {
-                if (v != null) {
-                  setState(() {
-                    _code = v;
-                    // Auto-enable sick-cover mode when S is selected.
-                    _sickCoverMode = v == ShiftCode.s;
-                  });
-                }
-              },
+            onPressed: () => _pickDate(context),
+          ),
+          const SizedBox(height: DsSpacing.x3),
+          // Code selector
+          DropdownButton<ShiftCode>(
+            value: _code,
+            isExpanded: true,
+            items: ShiftCode.values
+                .map((c) => DropdownMenuItem(value: c, child: Text(c.code)))
+                .toList(),
+            onChanged: (v) {
+              if (v != null) {
+                setState(() {
+                  _code = v;
+                  // Auto-enable sick-cover mode when S is selected.
+                  _sickCoverMode = v == ShiftCode.s;
+                });
+              }
+            },
+          ),
+          if (_code == ShiftCode.s) ...[
+            const SizedBox(height: DsSpacing.x2),
+            CheckboxListTile(
+              value: _sickCoverMode,
+              title: Text(l.text('autoAssignCover')),
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              onChanged: (v) => setState(() => _sickCoverMode = v ?? true),
             ),
-            if (_code == ShiftCode.s) ...[
-              const SizedBox(height: DsSpacing.x2),
-              CheckboxListTile(
-                value: _sickCoverMode,
-                title: Text(l.text('autoAssignCover')),
-                dense: true,
-                contentPadding: EdgeInsets.zero,
-                onChanged: (v) =>
-                    setState(() => _sickCoverMode = v ?? true),
-              ),
-            ],
-            const SizedBox(height: DsSpacing.x3),
-            TextField(
-              controller: _noteCtrl,
-              decoration: InputDecoration(
-                labelText: l.text('note'),
-                border: const OutlineInputBorder(),
-                isDense: true,
-              ),
-            ),
-            if (state.error != null) ...[
-              const SizedBox(height: DsSpacing.x2),
-              Text(
-                state.error!,
-                style: const TextStyle(color: DsColors.danger, fontSize: DsFontSize.caption),
-              ),
-            ],
           ],
-        ),
+          const SizedBox(height: DsSpacing.x3),
+          TextField(
+            controller: _noteCtrl,
+            decoration: InputDecoration(
+              labelText: l.text('note'),
+              border: const OutlineInputBorder(),
+              isDense: true,
+            ),
+          ),
+          if (state.error != null) ...[
+            const SizedBox(height: DsSpacing.x2),
+            Text(
+              state.error!,
+              style: const TextStyle(
+                color: DsColors.danger,
+                fontSize: DsFontSize.caption,
+              ),
+            ),
+          ],
+        ],
+      ),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
@@ -181,8 +179,8 @@ class _AttendanceUpsertDialogState
     final picked = await showDatePicker(
       context: context,
       initialDate: _workDate ?? now,
-      firstDate: DateTime(now.year - 1),
-      lastDate: DateTime(now.year + 1),
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
     );
     if (picked != null) setState(() => _workDate = picked);
   }
@@ -198,8 +196,11 @@ class _AttendanceUpsertDialogState
         final msg = cover?.cover != null
             ? l.text('sickCoverAssigned')
             : (cover?.message ?? l.text('sickCoverNoneAvailable'));
-        DsFeedback.show(context, msg,
-            tone: cover?.cover != null ? DsTone.success : DsTone.warning);
+        DsFeedback.show(
+          context,
+          msg,
+          tone: cover?.cover != null ? DsTone.success : DsTone.warning,
+        );
       }
     } else {
       ok = await ctrl.upsert(
@@ -209,8 +210,11 @@ class _AttendanceUpsertDialogState
         note: _noteCtrl.text.isNotEmpty ? _noteCtrl.text : null,
       );
       if (context.mounted && ok) {
-        DsFeedback.show(context, l.text('attendanceUpdated'),
-            tone: DsTone.success);
+        DsFeedback.show(
+          context,
+          l.text('attendanceUpdated'),
+          tone: DsTone.success,
+        );
       }
     }
 

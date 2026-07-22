@@ -23,6 +23,8 @@ dependencies:
   go_router: ^14.2.0
   # Secure JWT storage
   flutter_secure_storage: ^9.2.2
+  # Non-sensitive per-user UI preferences (language)
+  shared_preferences: ^2.5.3
   # Value equality for entities
   equatable: ^2.0.5
   # Date formatting / i18n

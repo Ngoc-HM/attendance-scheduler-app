@@ -4,10 +4,9 @@ Customer decision 2026-06-12 (hướng B): a person who worked an A/D double
 shift earns a comp day (CD, §5.3 #6). The following month the system itself
 schedules those owed CD rest days — the person does NOT register them.
 
-CD is in the role-A domain only (owner decision 2026-06-26); role T and M
-never accumulate comp debt through the auto-scheduler.  Any non-zero
-carry_comp for a T/M person is left untouched by the solver (they have no CD
-var to assign).
+CD is in the role-A domain only (owner decision 2026-06-26); roles T, F and M
+never accumulate comp debt through the auto-scheduler. Any legacy non-zero
+carry for those roles is normalized to zero before solving.
 
 Modeled as a SOFT rule so it never makes the model infeasible and, crucially,
 **yields to flight staffing**: the comp slack carries a lower weight than the

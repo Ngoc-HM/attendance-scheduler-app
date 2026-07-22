@@ -31,14 +31,13 @@ def test_balance_spread_is_minimal_across_fixed_group() -> None:
     days = month_days(2026, 6)
     fixed_ids = (6, 7, 8, 9)
     people = [PersonInput(u, Role.A) for u in fixed_ids]
-    out = _solve(people, days, flight_pairs={d: 2 for d in days})
+    out = _solve(people, days, flight_pairs={d: 1 for d in days})
 
     assert out.feasible and not out.violations
     grid = {(a.user_id, a.day): a.code for a in out.assignments}
     for shift in (AttendanceCode.A, AttendanceCode.D):
         totals = [
-            sum(1 for d in days
-                if grid[(u, d)] in (shift, AttendanceCode.A_D))
+            sum(1 for d in days if grid[(u, d)] is shift)
             for u in fixed_ids
         ]
         assert max(totals) - min(totals) <= 1, f"{shift}: {totals}"
@@ -50,7 +49,9 @@ def test_weekend_offs_not_all_piled_up_under_flights() -> None:
     bias, so what actually keeps a weekend STAFFED is the flight demand: with
     2 pairs every day the fixed group is never all off on the same Sat/Sun."""
     days = month_days(2026, 6)
-    fixed_ids = (1, 2, 3, 4)
+    # Six people keep the final 2-day partial block feasible: each person must
+    # take one X there, leaving exactly 3 workers per day for 1A + 2D.
+    fixed_ids = (1, 2, 3, 4, 5, 6)
     people = [PersonInput(u, Role.A) for u in fixed_ids]
     out = _solve(people, days, flight_pairs={d: 2 for d in days})
 

@@ -21,15 +21,6 @@ class _SelfArrangePageState extends ConsumerState<SelfArrangePage> {
   DateTime _month = DateTime(DateTime.now().year, DateTime.now().month);
   final _noteCtrl = TextEditingController();
 
-  static int _idx(DateTime m) => m.year * 12 + m.month;
-
-  /// Employees may look at most 2 months ahead (server enforces too).
-  bool get _canGoNext {
-    final now = DateTime.now();
-    return _idx(DateTime(_month.year, _month.month + 1)) <=
-        _idx(DateTime(now.year, now.month)) + 2;
-  }
-
   @override
   void initState() {
     super.initState();
@@ -66,7 +57,7 @@ class _SelfArrangePageState extends ConsumerState<SelfArrangePage> {
       ok
           ? l.text('selfArrangeSubmitted')
           : (ref.read(selfArrangeControllerProvider).error ??
-              l.text('selfArrangeSubmitFailed')),
+                l.text('selfArrangeSubmitFailed')),
       tone: ok ? DsTone.success : DsTone.danger,
     );
   }
@@ -94,8 +85,7 @@ class _SelfArrangePageState extends ConsumerState<SelfArrangePage> {
               ),
               IconButton(
                 icon: const Icon(Icons.chevron_right),
-                tooltip: _canGoNext ? null : l.text('selfArrangeMonthCap'),
-                onPressed: _canGoNext ? () => _shiftMonth(1) : null,
+                onPressed: () => _shiftMonth(1),
               ),
             ],
           ),
@@ -127,7 +117,8 @@ class _SelfArrangePageState extends ConsumerState<SelfArrangePage> {
                 DsPrimaryButton(
                   label: l.text('selfArrangeSubmit'),
                   loading: state.isSubmitting,
-                  onPressed: state.draft.isEmpty ||
+                  onPressed:
+                      state.draft.isEmpty ||
                           !state.draftKeepsQuota ||
                           state.isSubmitting
                       ? null
@@ -135,8 +126,7 @@ class _SelfArrangePageState extends ConsumerState<SelfArrangePage> {
                 ),
                 const SizedBox(width: DsSpacing.x3),
                 TextButton(
-                  onPressed:
-                      state.draft.isEmpty ? null : ctrl.discardDraft,
+                  onPressed: state.draft.isEmpty ? null : ctrl.discardDraft,
                   child: Text(l.text('selfArrangeDiscard')),
                 ),
                 const SizedBox(width: DsSpacing.x3),
