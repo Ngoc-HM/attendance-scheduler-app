@@ -22,7 +22,9 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
   final _fullName = TextEditingController();
   final _password = TextEditingController();
 
-  static const _selectableRoles = [UserRole.t, UserRole.a];
+  // Self-registration offers the non-admin roles; the admin activates the
+  // account and may still reassign the role afterwards (owner 2026-07-09).
+  static const _selectableRoles = [UserRole.t, UserRole.f, UserRole.a];
 
   UserRole _role = UserRole.t;
   bool _isLoading = false;

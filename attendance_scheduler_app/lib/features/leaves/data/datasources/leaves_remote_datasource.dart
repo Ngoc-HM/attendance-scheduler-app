@@ -22,10 +22,7 @@ class LeavesRemoteDataSource {
       final response = await _dio.get(ApiEndpoints.leaves);
       return _parseList(response.data);
     } on DioException catch (e) {
-      throw ApiException(
-        e.message ?? 'Failed to load leave requests',
-        statusCode: e.response?.statusCode,
-      );
+      throw ApiException.fromDio(e, 'Failed to load leave requests');
     }
   }
 
@@ -38,10 +35,7 @@ class LeavesRemoteDataSource {
       );
       return _parseList(response.data);
     } on DioException catch (e) {
-      throw ApiException(
-        e.message ?? 'Failed to load all leave requests',
-        statusCode: e.response?.statusCode,
-      );
+      throw ApiException.fromDio(e, 'Failed to load all leave requests');
     }
   }
 
@@ -51,10 +45,7 @@ class LeavesRemoteDataSource {
       final response = await _dio.get(ApiEndpoints.leavesPending);
       return _parseList(response.data);
     } on DioException catch (e) {
-      throw ApiException(
-        e.message ?? 'Failed to load pending leaves',
-        statusCode: e.response?.statusCode,
-      );
+      throw ApiException.fromDio(e, 'Failed to load pending leaves');
     }
   }
 
@@ -75,26 +66,42 @@ class LeavesRemoteDataSource {
       );
       return LeaveModel.fromJson(response.data as Map<String, dynamic>);
     } on DioException catch (e) {
-      throw ApiException(
-        e.message ?? 'Failed to submit leave request',
-        statusCode: e.response?.statusCode,
-      );
+      throw ApiException.fromDio(e, 'Failed to submit leave request');
     }
   }
 
   /// POST /leaves/{id}/decide — admin approve or reject.
-  Future<LeaveModel> decide(int id, String status) async {
+  ///
+  /// Returns the decided leave plus decision-time warnings (e.g. the leave
+  /// overlaps an already-generated month, which is now stale).
+  Future<(LeaveModel, List<String>)> decide(int id, String status) async {
     try {
       final response = await _dio.post(
         ApiEndpoints.leaveDecide(id),
         data: {'status': status},
       );
-      return LeaveModel.fromJson(response.data as Map<String, dynamic>);
+      final json = response.data as Map<String, dynamic>;
+      final warnings = (json['warnings'] as List<dynamic>? ?? const [])
+          .map((e) => e.toString())
+          .toList();
+      return (LeaveModel.fromJson(json), warnings);
     } on DioException catch (e) {
-      throw ApiException(
-        e.message ?? 'Failed to process leave decision',
-        statusCode: e.response?.statusCode,
-      );
+      throw ApiException.fromDio(e, 'Failed to process leave decision');
+    }
+  }
+
+  /// POST /leaves/{id}/revoke — admin revokes a previously approved leave
+  /// (restores balance, marks rejected). Returns decision-time warnings.
+  Future<(LeaveModel, List<String>)> revoke(int id) async {
+    try {
+      final response = await _dio.post(ApiEndpoints.leaveRevoke(id));
+      final json = response.data as Map<String, dynamic>;
+      final warnings = (json['warnings'] as List<dynamic>? ?? const [])
+          .map((e) => e.toString())
+          .toList();
+      return (LeaveModel.fromJson(json), warnings);
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e, 'Failed to revoke leave approval');
     }
   }
 

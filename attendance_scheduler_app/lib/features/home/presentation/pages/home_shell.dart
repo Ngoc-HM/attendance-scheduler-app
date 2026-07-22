@@ -15,44 +15,80 @@ class HomeShell extends ConsumerWidget {
   final String location;
   final Widget child;
 
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final l = AppLocalizations.of(context);
-    final locale = ref.watch(localeControllerProvider);
-    final auth = ref.watch(authControllerProvider);
-    final destinations = [
+  /// Role-gated navigation (owner 2026-07-09): admin keeps the full shell;
+  /// other roles get View schedule / Register leave / Check-in-out, and the
+  /// self-arrange tab only for T & F.
+  static List<DsNavigationDestination> _destinationsFor(
+    User? user,
+    AppLocalizations l,
+  ) {
+    // While the user is still loading, show the admin set (matches the old
+    // `?? true` behavior; the router guard protects admin-only pages anyway).
+    if (user == null || user.isAdmin) {
+      return [
+        DsNavigationDestination(
+          path: AppRoute.schedule,
+          label: l.navSchedule,
+          icon: Icons.calendar_today_outlined,
+        ),
+        DsNavigationDestination(
+          path: AppRoute.flights,
+          label: l.navFlights,
+          icon: Icons.flight_takeoff_outlined,
+        ),
+        DsNavigationDestination(
+          path: AppRoute.leaves,
+          label: l.navLeaves,
+          icon: Icons.event_available_outlined,
+        ),
+        DsNavigationDestination(
+          path: AppRoute.attendance,
+          label: l.navAttendance,
+          icon: Icons.fact_check_outlined,
+        ),
+        DsNavigationDestination(
+          path: AppRoute.reports,
+          label: l.navReports,
+          icon: Icons.bar_chart_outlined,
+        ),
+        DsNavigationDestination(
+          path: AppRoute.users,
+          label: l.navUsers,
+          icon: Icons.people_outline,
+        ),
+      ];
+    }
+    return [
       DsNavigationDestination(
         path: AppRoute.schedule,
         label: l.navSchedule,
         icon: Icons.calendar_today_outlined,
       ),
-      DsNavigationDestination(
-        path: AppRoute.flights,
-        label: l.navFlights,
-        icon: Icons.flight_takeoff_outlined,
-      ),
+      if (user.role.canSelfArrange)
+        DsNavigationDestination(
+          path: AppRoute.selfArrange,
+          label: l.text('navSelfArrange'),
+          icon: Icons.edit_calendar_outlined,
+        ),
       DsNavigationDestination(
         path: AppRoute.leaves,
         label: l.navLeaves,
         icon: Icons.event_available_outlined,
       ),
       DsNavigationDestination(
-        path: AppRoute.attendance,
-        label: l.navAttendance,
-        icon: Icons.fact_check_outlined,
+        path: AppRoute.clock,
+        label: l.text('navClock'),
+        icon: Icons.timer_outlined,
       ),
-      DsNavigationDestination(
-        path: AppRoute.reports,
-        label: l.navReports,
-        icon: Icons.bar_chart_outlined,
-      ),
-      if (auth.user?.isAdmin ?? true)
-        DsNavigationDestination(
-          path: AppRoute.users,
-          label: l.navUsers,
-          icon: Icons.people_outline,
-        ),
     ];
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l = AppLocalizations.of(context);
+    final locale = ref.watch(localeControllerProvider);
+    final auth = ref.watch(authControllerProvider);
+    final destinations = _destinationsFor(auth.user, l);
     final selected = destinations.indexWhere(
       (item) => location.startsWith(item.path),
     );

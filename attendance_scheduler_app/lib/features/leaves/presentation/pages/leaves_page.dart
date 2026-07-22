@@ -39,12 +39,19 @@ class LeavesPage extends ConsumerWidget {
       data: (rows) => DsLeavesView(
         rows: rows,
         onNewRequest: () => _showRequestDialog(context, ref, l),
+        // Null for employees → the actions column disappears entirely
+        // (no-op Approve/Reject buttons looked like a permissions hole).
         onApprove: isAdmin
             ? (index) => _decide(context, ref, ctrl, index, true, l)
-            : (_) {},
+            : null,
         onReject: isAdmin
             ? (index) => _decide(context, ref, ctrl, index, false, l)
-            : (_) {},
+            : null,
+        onRevoke: isAdmin
+            ? (index) => _confirmRevoke(context, ref, ctrl, index, l)
+            : null,
+        // Monthly window = day 1–20 (leave_windows.py) — keep the banner honest.
+        registrationOpen: DateTime.now().day <= 20,
       ),
     );
   }
@@ -62,16 +69,64 @@ class LeavesPage extends ConsumerWidget {
     AppLocalizations l,
   ) async {
     try {
-      if (approve) {
-        await ctrl.approve(index);
-      } else {
-        await ctrl.reject(index);
-      }
+      final warnings =
+          approve ? await ctrl.approve(index) : await ctrl.reject(index);
       if (context.mounted) {
+        final base =
+            approve ? l.text('requestApproved') : l.text('requestRejected');
+        // Decision-time warnings (e.g. an already-generated month is now
+        // stale and must be regenerated) must reach the admin's eyes.
         DsFeedback.show(
           context,
-          approve ? l.text('requestApproved') : l.text('requestRejected'),
-          tone: approve ? DsTone.success : DsTone.danger,
+          warnings.isEmpty ? base : '$base ${warnings.join('; ')}',
+          tone: warnings.isNotEmpty
+              ? DsTone.warning
+              : (approve ? DsTone.success : DsTone.danger),
+        );
+      }
+    } on ApiException catch (e) {
+      if (context.mounted) {
+        DsFeedback.show(context, e.message, tone: DsTone.danger);
+      }
+    }
+  }
+
+  /// Revoking undoes an approval (balance restored, request rejected) —
+  /// destructive enough to warrant an explicit confirm (owner 2026-07-17).
+  Future<void> _confirmRevoke(
+    BuildContext context,
+    WidgetRef ref,
+    LeavesController ctrl,
+    int index,
+    AppLocalizations l,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => DsFormDialog(
+        title: l.text('revokeApproval'),
+        width: 380,
+        content: Text(l.text('revokeConfirmMessage')),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(l.cancel),
+          ),
+          DsPrimaryButton(
+            label: l.text('revokeApproval'),
+            onPressed: () => Navigator.of(ctx).pop(true),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    try {
+      final warnings = await ctrl.revoke(index);
+      if (context.mounted) {
+        final base = l.text('requestRevoked');
+        DsFeedback.show(
+          context,
+          warnings.isEmpty ? base : '$base ${warnings.join('; ')}',
+          tone: warnings.isEmpty ? DsTone.success : DsTone.warning,
         );
       }
     } on ApiException catch (e) {
@@ -96,6 +151,12 @@ class LeavesPage extends ConsumerWidget {
     final startCtrl = TextEditingController();
     final endCtrl = TextEditingController();
 
+    // Earliest selectable leave date = first day of next month. Monthly leave
+    // for the current month can no longer be registered (window already
+    // closed), so blocking past/current months prevents the most common 400.
+    final now = DateTime.now();
+    final firstAllowed = DateTime(now.year, now.month + 1, 1);
+
     String fmtDate(DateTime d) =>
         '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
 
@@ -107,7 +168,14 @@ class LeavesPage extends ConsumerWidget {
           width: 340,
           content: Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Registration-window guidance (matches backend leave_windows).
+              Text(
+                l.text('leaveWindowHint'),
+                style: Theme.of(ctx).textTheme.bodySmall,
+              ),
+              const SizedBox(height: DsSpacing.x3),
               // Start date picker
               TextField(
                 controller: startCtrl,
@@ -119,8 +187,8 @@ class LeavesPage extends ConsumerWidget {
                 onTap: () async {
                   final picked = await showDatePicker(
                     context: ctx,
-                    initialDate: DateTime.now(),
-                    firstDate: DateTime(2020),
+                    initialDate: startDate ?? firstAllowed,
+                    firstDate: firstAllowed,
                     lastDate: DateTime(2030),
                   );
                   if (picked != null) {
@@ -148,8 +216,8 @@ class LeavesPage extends ConsumerWidget {
                 onTap: () async {
                   final picked = await showDatePicker(
                     context: ctx,
-                    initialDate: startDate ?? DateTime.now(),
-                    firstDate: startDate ?? DateTime(2020),
+                    initialDate: endDate ?? startDate ?? firstAllowed,
+                    firstDate: startDate ?? firstAllowed,
                     lastDate: DateTime(2030),
                   );
                   if (picked != null) {
@@ -176,8 +244,11 @@ class LeavesPage extends ConsumerWidget {
             DsPrimaryButton(
               label: l.text('submitRequest'),
               onPressed: () async {
-                if (startDate == null || endDate == null) return;
-                Navigator.of(ctx).pop();
+                // Empty dates used to silently no-op — tell the user.
+                if (startDate == null || endDate == null) {
+                  DsFeedback.show(ctx, l.fieldRequired, tone: DsTone.warning);
+                  return;
+                }
                 final ctrl = ref.read(leavesControllerProvider.notifier);
                 try {
                   await ctrl.submitRequest(
@@ -187,6 +258,9 @@ class LeavesPage extends ConsumerWidget {
                         ? null
                         : noteCtrl.text.trim(),
                   );
+                  // Close only AFTER success — a window-closed 400 used to
+                  // wipe the user's input because the dialog popped first.
+                  if (ctx.mounted) Navigator.of(ctx).pop();
                   if (context.mounted) {
                     DsFeedback.show(
                       context,
@@ -195,8 +269,8 @@ class LeavesPage extends ConsumerWidget {
                     );
                   }
                 } on ApiException catch (e) {
-                  if (context.mounted) {
-                    DsFeedback.show(context, e.message, tone: DsTone.danger);
+                  if (ctx.mounted) {
+                    DsFeedback.show(ctx, e.message, tone: DsTone.danger);
                   }
                 }
               },

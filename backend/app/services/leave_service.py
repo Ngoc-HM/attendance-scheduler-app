@@ -3,20 +3,20 @@
 Implements:
 - create_request: window validation, classification, overlap guard, persist.
 - list_for_user / list_all / list_pending: query helpers.
-- decide: approve/reject with annual_leave_balance decrement/restore.
+- decide / revoke: approve, reject or revoke (no quota; advisory warnings only).
 - approved_off_map: scheduler input — approved requests → {user_id: {date: AL}}.
 - conflicts_for_date: returns ranked competing requests for a given date.
 """
 
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.i18n import t
-from app.models.enums import AttendanceCode, LeaveStatus, LeaveType
+from app.models.enums import AttendanceCode, LeaveStatus, LeaveType, UserStatus
 from app.models.leave import LeaveRequest
 from app.models.user import User
 from app.schemas.leave import LeaveCreate
@@ -49,11 +49,6 @@ def _has_overlap(db: Session, user_id: int, start: date, end: date, exclude_id: 
     if exclude_id is not None:
         q = q.filter(LeaveRequest.id != exclude_id)
     return q.first() is not None
-
-
-def _day_count(start: date, end: date) -> int:
-    """Inclusive calendar-day count between start and end."""
-    return (end - start).days + 1
 
 
 # ---------------------------------------------------------------------------
@@ -134,44 +129,150 @@ def list_pending(db: Session) -> list[LeaveRequest]:
     )
 
 
-def decide(db: Session, leave_id: int, new_status: LeaveStatus, admin_id: int) -> LeaveRequest:
+def decide(
+    db: Session, leave_id: int, new_status: LeaveStatus, admin_id: int
+) -> tuple[LeaveRequest, list[str]]:
     """Admin approve or reject a leave request.
 
-    On approval: decrement user.annual_leave_balance by the day count.
-    On rejection of a previously approved request: restore the balance.
-    Idempotent re-decision → 409.
+    There is NO leave quota/balance (owner 2026-07-18): the only registration
+    rule is the timing window (≤5 days = monthly window; >5 days must be filed
+    the previous year). Approving simply flips the status. Idempotent
+    re-decision → 409.
+
+    Returns (request, warnings): warnings surface an already-generated month
+    (stale schedule) and any flight-coverage impact — advisory only, the admin
+    always decides.
     """
     req = _get_or_404(db, leave_id)
 
     if req.status != LeaveStatus.pending:
         raise HTTPException(status.HTTP_409_CONFLICT, detail=t("leave.already_decided"))
 
+    warnings: list[str] = []
     if new_status == LeaveStatus.approved:
-        user = db.get(User, req.user_id)
-        if user is not None:
-            days = _day_count(req.start_date, req.end_date)
-            if user.annual_leave_balance < days:
-                raise HTTPException(
-                    status.HTTP_400_BAD_REQUEST, detail=t("leave.balance_insufficient")
-                )
-            user.annual_leave_balance -= days
+        if _overlaps_generated_schedule(db, req):
+            warnings.append(t("leave.schedule_stale"))
+        # Approving must never silently break flight coverage — check every
+        # day of the span against the 1A+1D / 1A+2D demand and warn (admin
+        # still decides; never a hard block).
+        warnings.extend(_staffing_warnings(db, req))
 
     req.status = new_status
     db.commit()
     db.refresh(req)
-    return req
+    return req, warnings
 
 
-def revoke_balance_on_reject(db: Session, req: LeaveRequest) -> None:
-    """Restore annual_leave_balance when an approved request is later rejected.
+def revoke(
+    db: Session, leave_id: int, admin_id: int
+) -> tuple[LeaveRequest, list[str]]:
+    """Admin revokes a previously APPROVED leave (owner decision 2026-07-17).
 
-    Called internally; not exposed as an endpoint — admin decides via decide().
+    Flips the request back to rejected and — like approval — warns when the
+    span overlaps an already-generated month (that schedule still shows the
+    leave until the admin regenerates it).
     """
-    if req.leave_type is LeaveType.annual:
-        user = db.get(User, req.user_id)
-        if user is not None:
-            user.annual_leave_balance += _day_count(req.start_date, req.end_date)
-            db.commit()
+    req = _get_or_404(db, leave_id)
+    if req.status != LeaveStatus.approved:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, detail=t("leave.revoke_only_approved")
+        )
+
+    warnings: list[str] = []
+    if _overlaps_generated_schedule(db, req):
+        warnings.append(t("leave.schedule_stale"))
+
+    req.status = LeaveStatus.rejected
+    db.commit()
+    db.refresh(req)
+    return req, warnings
+
+
+def _staffing_warnings(db: Session, req: LeaveRequest) -> list[str]:
+    """Flight-coverage impact of approving this leave (role-A people only).
+
+    For each day of the span, compare the remaining role-A staff (active,
+    not already on approved leave that day, minus this requester) against the
+    day's demand from the flight schedule: 1 pair → 1A+1D, 2 pairs → 1A+2D.
+    Two severities:
+    - remaining < max(A,D) people → the day CANNOT be covered at all;
+    - remaining < A+D people → coverable only via an A/D double (last resort).
+    """
+    from app.models.enums import Role
+    from app.services import flight_service
+    from app.services.schedule_violation_checker import DEMAND
+
+    requester = db.get(User, req.user_id)
+    if requester is None or requester.role is not Role.A:
+        return []  # T/M/F never count toward flight coverage
+
+    days = [
+        req.start_date + timedelta(days=i)
+        for i in range((req.end_date - req.start_date).days + 1)
+    ]
+    pairs_by_day = flight_service.flight_pairs_map(db, days)
+
+    role_a_ids = {
+        uid
+        for (uid,) in db.query(User.id).filter(
+            User.role == Role.A, User.status == UserStatus.active
+        )
+    }
+    role_a_ids.discard(req.user_id)
+
+    # Approved leaves of OTHER role-A people overlapping the span.
+    others_on_leave = (
+        db.query(LeaveRequest)
+        .filter(
+            LeaveRequest.status == LeaveStatus.approved,
+            LeaveRequest.user_id.in_(role_a_ids),
+            LeaveRequest.start_date <= req.end_date,
+            LeaveRequest.end_date >= req.start_date,
+        )
+        .all()
+    )
+
+    warnings: list[str] = []
+    for day in days:
+        need_a, need_d = DEMAND.get(pairs_by_day.get(day, 0), (0, 0))
+        if need_a + need_d == 0:
+            continue
+        away = {
+            o.user_id
+            for o in others_on_leave
+            if o.start_date <= day <= o.end_date
+        }
+        remaining = len(role_a_ids - away)
+        if remaining < max(need_a, need_d):
+            warnings.append(f"{day.isoformat()}: {t('leave.staffing_impossible')}")
+        elif remaining < need_a + need_d:
+            warnings.append(f"{day.isoformat()}: {t('leave.staffing_needs_double')}")
+    return warnings
+
+
+def _overlaps_generated_schedule(db: Session, req: LeaveRequest) -> bool:
+    """True when any month of the leave span already has a schedule row.
+
+    The schedule only consumes approved leave at GENERATE time, so approving
+    afterwards leaves the existing (draft or published) grid stale — the
+    admin must regenerate that month for the leave to appear.
+    """
+    from app.models.schedule import MonthlySchedule  # local: avoid cycle
+
+    months: set[tuple[int, int]] = set()
+    day = req.start_date
+    while day <= req.end_date:
+        months.add((day.year, day.month))
+        day += timedelta(days=1)
+    for year, month in months:
+        exists = (
+            db.query(MonthlySchedule.id)
+            .filter(MonthlySchedule.year == year, MonthlySchedule.month == month)
+            .first()
+        )
+        if exists is not None:
+            return True
+    return False
 
 
 def approved_off_map(

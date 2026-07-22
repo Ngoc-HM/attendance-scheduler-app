@@ -73,7 +73,6 @@ def summary(db: Session) -> dict:
             "carry_comp": u.carry_comp,
             "carry_streak": u.carry_streak,
             "carry_premium_off": u.carry_premium_off,
-            "annual_leave_balance": u.annual_leave_balance,
         }
         for u in users
     }

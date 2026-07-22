@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -717,12 +718,92 @@ DsToneColors dsToneColors(DsTone tone) => switch (tone) {
   ),
 };
 
+/// Blocking "please wait" overlay for slow actions (owner 2026-07-18: the
+/// schedule solve runs up to ~30s and the button gave no feedback, so users
+/// thought the app had frozen). [DsBusy.run] shows a dimmed, non-dismissible
+/// dialog with a spinner + message, runs the action, then always closes it.
+abstract final class DsBusy {
+  static Future<T> run<T>(
+    BuildContext context,
+    String message,
+    Future<T> Function() action,
+  ) async {
+    final navigator = Navigator.of(context, rootNavigator: true);
+    // Fire-and-forget: the barrier stays up until we pop it below.
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      barrierColor: const Color(0x59000000),
+      builder: (_) => const _DsBusyDialog(),
+      routeSettings: RouteSettings(arguments: message),
+    );
+    try {
+      return await action();
+    } finally {
+      if (navigator.canPop()) navigator.pop();
+    }
+  }
+}
+
+class _DsBusyDialog extends StatelessWidget {
+  const _DsBusyDialog();
+
+  @override
+  Widget build(BuildContext context) {
+    final message = ModalRoute.of(context)?.settings.arguments as String? ?? '';
+    // Back-button / swipe must not dismiss a critical in-flight operation.
+    return PopScope(
+      canPop: false,
+      child: Dialog(
+        backgroundColor: DsColors.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(DsRadius.large),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: DsSpacing.x6,
+            vertical: DsSpacing.x5,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(strokeWidth: 2.5),
+              ),
+              const SizedBox(width: DsSpacing.x4),
+              Flexible(
+                child: Text(
+                  message,
+                  style: const TextStyle(
+                    fontSize: DsFontSize.body,
+                    fontWeight: FontWeight.w600,
+                    color: DsColors.textPrimary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// App-wide toast, anchored TOP-RIGHT (owner 2026-07-17: "mọi noti để ở góc
+/// trên bên phải"). Overlay-based so it floats above every page; a new toast
+/// replaces the current one; tap to dismiss early.
 abstract final class DsFeedback {
+  static OverlayEntry? _entry;
+  static Timer? _timer;
+
   static void show(
     BuildContext context,
     String message, {
     DsTone tone = DsTone.primary,
   }) {
+    final overlay = Overlay.of(context, rootOverlay: true);
     final colors = dsToneColors(tone);
     final icon = switch (tone) {
       DsTone.success => Icons.check_circle_outline,
@@ -731,30 +812,75 @@ abstract final class DsFeedback {
       DsTone.primary => Icons.info_outline,
       DsTone.neutral => Icons.info_outline,
     };
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          duration: tone == DsTone.danger
-              ? const Duration(seconds: 8)
-              : const Duration(seconds: 4),
-          backgroundColor: colors.background,
-          content: Row(
-            children: [
-              Icon(icon, color: colors.foreground, size: 18),
-              const SizedBox(width: DsSpacing.x2),
-              Expanded(
-                child: Text(
-                  message,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: colors.foreground,
-                    fontWeight: FontWeight.w600,
+
+    _dismiss();
+    final entry = OverlayEntry(
+      builder: (_) => Positioned(
+        top: DsSpacing.x4,
+        right: DsSpacing.x4,
+        child: Material(
+          color: const Color(0x00000000),
+          child: GestureDetector(
+            onTap: _dismiss,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 440),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: DsSpacing.x4,
+                  vertical: DsSpacing.x3,
+                ),
+                decoration: BoxDecoration(
+                  color: colors.background,
+                  borderRadius: BorderRadius.circular(DsRadius.medium),
+                  border: Border.all(
+                    color: colors.foreground.withValues(alpha: 0.25),
                   ),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x1F0F172A),
+                      blurRadius: 12,
+                      offset: Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(icon, color: colors.foreground, size: 18),
+                    const SizedBox(width: DsSpacing.x2),
+                    Flexible(
+                      child: Text(
+                        message,
+                        style: TextStyle(
+                          fontSize: DsFontSize.footnote,
+                          color: colors.foreground,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ],
+            ),
           ),
         ),
-      );
+      ),
+    );
+    overlay.insert(entry);
+    _entry = entry;
+    // Errors and warnings carry consequences — give them longer to be read.
+    _timer = Timer(
+      tone == DsTone.danger || tone == DsTone.warning
+          ? const Duration(seconds: 8)
+          : const Duration(seconds: 4),
+      _dismiss,
+    );
+  }
+
+  static void _dismiss() {
+    _timer?.cancel();
+    _timer = null;
+    _entry?.remove();
+    _entry = null;
   }
 }

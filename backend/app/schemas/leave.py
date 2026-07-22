@@ -32,6 +32,8 @@ class LeaveRead(ORMModel):
     leave_type: LeaveType
     status: LeaveStatus
     note: str | None
+    # Decision-time notices (e.g. an already-generated month is now stale).
+    warnings: list[str] = []
 
 
 class ConflictEntry(ORMModel):

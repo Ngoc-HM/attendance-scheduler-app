@@ -84,7 +84,24 @@ def decide_leave(
             status.HTTP_400_BAD_REQUEST,
             detail="Decision status must be 'approved' or 'rejected'.",
         )
-    decided = leave_service.decide(db, leave_id, payload.status, admin.id)
+    decided, warnings = leave_service.decide(db, leave_id, payload.status, admin.id)
     audit_service.record(db, admin.id, f"leave.{payload.status.value}", "LeaveRequest",
                          leave_id, detail=f"user={decided.user_id}")
-    return decided
+    return LeaveRead.model_validate(decided).model_copy(
+        update={"warnings": warnings}
+    )
+
+
+@router.post("/{leave_id}/revoke", response_model=LeaveRead)
+def revoke_leave(db: DbSession, leave_id: int, admin: AdminUser):
+    """Admin revokes a previously APPROVED leave (owner 2026-07-17).
+
+    Restores the balance and rejects the request; warns when an
+    already-generated month still shows the leave until regenerated.
+    """
+    revoked, warnings = leave_service.revoke(db, leave_id, admin.id)
+    audit_service.record(db, admin.id, "leave.revoked", "LeaveRequest",
+                         leave_id, detail=f"user={revoked.user_id}")
+    return LeaveRead.model_validate(revoked).model_copy(
+        update={"warnings": warnings}
+    )

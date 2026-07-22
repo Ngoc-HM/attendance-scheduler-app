@@ -1,21 +1,26 @@
 import 'package:equatable/equatable.dart';
 
-/// Personnel roles (spec §3): M = admin+flexible, T = flexible, A = fixed.
+/// Personnel roles (spec §3 + owner 2026-07-09): M = admin+flexible,
+/// T = flexible, A = fixed, F = split from T (T-like, only weekly-off rule).
 /// The per-person unique identifier (e.g. "A3") is the separate [User.code] field.
-enum UserRole { m, t, a }
+enum UserRole { m, t, a, f }
 
 extension UserRoleX on UserRole {
   bool get isAdmin => this == UserRole.m;
   bool get isFixed => this == UserRole.a;
 
-  /// Backend enum value: `UserRole.m` → `'M'`, `UserRole.t` → `'T'`, `UserRole.a` → `'A'`.
+  /// T and F may propose their own shift arrangement (admin approves).
+  bool get canSelfArrange => this == UserRole.t || this == UserRole.f;
+
+  /// Backend enum value: `UserRole.m` → `'M'`, `UserRole.t` → `'T'`, ...
   String get apiValue => name.toUpperCase();
 
-  /// Parse a backend role letter (`'M'`/`'T'`/`'A'`) back into a [UserRole];
-  /// anything unrecognised falls back to the flexible `T` role.
+  /// Parse a backend role letter (`'M'`/`'T'`/`'A'`/`'F'`) back into a
+  /// [UserRole]; anything unrecognised falls back to the flexible `T` role.
   static UserRole fromApi(String value) => switch (value.toUpperCase()) {
     'M' => UserRole.m,
     'A' => UserRole.a,
+    'F' => UserRole.f,
     _ => UserRole.t,
   };
 }

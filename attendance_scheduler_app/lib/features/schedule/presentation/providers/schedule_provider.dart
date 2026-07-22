@@ -88,24 +88,31 @@ class ScheduleController extends StateNotifier<ScheduleState> {
     }
   }
 
-  Future<void> overrideCell({
+  /// Admin cell edit (F-09). Returns the recheck warnings (empty = clean);
+  /// null when the call itself failed (error is set on the state).
+  Future<List<String>?> overrideCell({
     required int userId,
     required DateTime workDate,
     required String code,
   }) async {
     final scheduleId = state.schedule?.id;
-    if (scheduleId == null) return;
+    if (scheduleId == null) return null;
     state = state.copyWith(isMutating: true, clearError: true);
     try {
-      final updated = await _ds.override(
+      final result = await _ds.override(
         scheduleId: scheduleId,
         userId: userId,
         workDate: workDate,
         code: code,
       );
-      state = state.copyWith(isMutating: false, schedule: updated);
+      state = state.copyWith(
+        isMutating: false,
+        schedule: result.schedule ?? state.schedule,
+      );
+      return result.violations.map((v) => v.message).toList();
     } catch (e) {
       state = state.copyWith(isMutating: false, error: e.toString());
+      return null;
     }
   }
 

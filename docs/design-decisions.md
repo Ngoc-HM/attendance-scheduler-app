@@ -17,6 +17,7 @@ customer. Recorded 2026-06-11.
 | 9 | **Day-20 autorun** (APScheduler, 02:00, config `AUTORUN_*`): closes M+1 registration and generates next month's DRAFT, never clobbering an existing schedule. Manual generate always available | Implements the "day 20 closes & schedules" rule without removing admin control | §4.3 / F-07 |
 | 10 | **Leave registration cycle**: during month M, days 1–20, users register for month M+1 | Concrete reading of "register early month, close on the 20th" | §4.3, §7 |
 | 11 | **Max 5 consecutive OFF days** (soft): the scheduler keeps ordinary off-runs (weekly X + monthly leave/CD) to ≤5 in a row; a run of >5 (≥6) off must be registered ANNUAL leave, which is exempt from this rule. Classification threshold also moved to >5 (≥6) → annual | Customer clarification 2026-06-12 ("các ngày nghỉ nối lại quá 5 ngày liên tục phải đăng ký nghỉ năm") | §4.3/F-06 (refines "≥5"→">5") |
+| 12 | **Role F is T-like for rest rules** (2026-07-22): F obeys BOTH the weekly-2-off rule AND the max-5-consecutive-working / max-5-consecutive-OFF rules — exactly like T. Supersedes the 2026-07-09 "F = weekly-2-off only" exemption, which let offs cluster at 7-day-block edges and produced 6+ consecutive working days before 2 off | Owner 2026-07-22: "F giống y hệt T; tuần nghỉ 2 ngày thì làm tối đa 5 ngày" | §5.3 #2/#3 |
 
 ## Objective weights (engine)
 `Minimize( slack·10000 + balanceAD·100 + premiumOff·30 + weekendPair·10 + adUsage·1000 + nonFixedFlightDuty·1 )`.

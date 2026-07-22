@@ -9,7 +9,9 @@ import '../../../flights/data/datasources/flights_remote_datasource.dart';
 import '../../../flights/data/models/flight_day_model.dart';
 import '../../domain/entities/schedule_entities.dart';
 import '../providers/schedule_provider.dart';
+import '../providers/self_arrange_provider.dart';
 import '../providers/shift_change_provider.dart';
+import '../widgets/self_arrange_pending_panel.dart';
 import '../widgets/shift_change_dialog.dart';
 
 class SchedulePage extends ConsumerStatefulWidget {
@@ -39,6 +41,7 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
         );
     if (isAdmin) {
       ref.read(shiftChangeControllerProvider.notifier).load(all: true);
+      ref.read(selfArrangeAdminControllerProvider.notifier).load();
     }
     _loadFlights();
   }
@@ -120,6 +123,9 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
             onNextMonth: _nextMonth,
             onGenerate: isAdmin ? () => _onGenerate(context, l) : () {},
             onPublish: isAdmin ? () => _onPublish(context, l) : () {},
+            onCellTap: isAdmin
+                ? (row, dayIndex) => _onEditCell(context, l, row, dayIndex)
+                : null,
           ),
         ),
         if (scheduleState.lastResult != null)
@@ -150,6 +156,9 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
             ),
           ),
           const ShiftChangePendingPanel(),
+          // Batch self-arrange approvals (owner 2026-07-09) — approving
+          // rewrites schedule cells, so reload the grid afterwards.
+          SelfArrangePendingPanel(onDecided: _loadMonth),
         ],
         if (isAdmin)
           Padding(
@@ -205,6 +214,7 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
       final offDays = shifts.where((s) => s == ShiftCode.x).length;
 
       return DsRosterRowData(
+        id: userId,
         name: name,
         role: role,
         shifts: shifts,
@@ -250,12 +260,64 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
 
   // ── Admin actions ─────────────────────────────────────────────────────────────
 
+  /// True when the month has at least one day with flight data entered.
+  Future<bool> _monthHasFlights() async {
+    try {
+      final days = await ref
+          .read(flightsDataSourceProvider)
+          .listDays(_month.year, _month.month);
+      return days.any((d) => d.flightPairs > 0 || d.flights.isNotEmpty);
+    } catch (_) {
+      return true; // can't tell → don't block the admin with a false warning
+    }
+  }
+
+  /// Confirm dialog when generating a month with NO flight data (owner
+  /// 2026-07-17): without flights the roster gets zero A/D duties, which
+  /// looks broken — warn first instead of silently producing it.
+  Future<bool> _confirmGenerateWithoutFlights(
+    BuildContext context,
+    AppLocalizations l,
+  ) async {
+    final proceed = await showDialog<bool>(
+      context: context,
+      builder: (context) => DsFormDialog(
+        title: l.text('flightsMissingTitle'),
+        width: 400,
+        content: Text(l.text('flightsMissingBody')),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(l.text('cancel')),
+          ),
+          DsPrimaryButton(
+            label: l.text('generateAnyway'),
+            onPressed: () => Navigator.of(context).pop(true),
+          ),
+        ],
+      ),
+    );
+    return proceed == true;
+  }
+
   Future<void> _onGenerate(BuildContext context, AppLocalizations l) async {
+    // Months without flight data still solve, but yield zero flight duties —
+    // surface that BEFORE generating so the admin isn't surprised.
+    if (!await _monthHasFlights()) {
+      if (!context.mounted) return;
+      if (!await _confirmGenerateWithoutFlights(context, l)) return;
+    }
+    if (!context.mounted) return;
     // Testing mode: admin regenerates freely — the backend no longer blocks a
     // published or manually-edited month, so no confirm dialog is needed.
-    await ref
-        .read(scheduleControllerProvider.notifier)
-        .generate(_month.year, _month.month);
+    // The solve can take ~30s, so block with a spinner overlay meanwhile.
+    await DsBusy.run(
+      context,
+      l.text('generatingSchedule'),
+      () => ref
+          .read(scheduleControllerProvider.notifier)
+          .generate(_month.year, _month.month),
+    );
     final state = ref.read(scheduleControllerProvider);
     if (!context.mounted) return;
     if (state.error != null) {
@@ -278,8 +340,79 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
     }
   }
 
+  /// F-09 admin cell edit: tap a roster cell → pick a code → save. The edit
+  /// is ALWAYS saved server-side; recheck warnings come back for display.
+  Future<void> _onEditCell(
+    BuildContext context,
+    AppLocalizations l,
+    DsRosterRowData row,
+    int dayIndex,
+  ) async {
+    final userId = row.id;
+    if (userId == null) return;
+    final workDate = DateTime(_month.year, _month.month, dayIndex + 1);
+    var selected = row.shifts[dayIndex];
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => DsFormDialog(
+          title:
+              '${l.text('editCell')} — ${row.name} · ${workDate.day}/${workDate.month}',
+          width: 320,
+          content: DropdownButton<ShiftCode>(
+            value: selected,
+            isExpanded: true,
+            items: ShiftCode.values
+                .map((c) => DropdownMenuItem(value: c, child: Text(c.code)))
+                .toList(),
+            onChanged: (v) {
+              if (v != null) setState(() => selected = v);
+            },
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text(l.text('cancel')),
+            ),
+            DsPrimaryButton(
+              label: l.text('save'),
+              onPressed: () => Navigator.of(context).pop(true),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    final warnings = await ref
+        .read(scheduleControllerProvider.notifier)
+        .overrideCell(userId: userId, workDate: workDate, code: selected.code);
+    if (!context.mounted) return;
+    if (warnings == null) {
+      DsFeedback.show(
+        context,
+        ref.read(scheduleControllerProvider).error ?? l.text('loadFailed'),
+        tone: DsTone.danger,
+      );
+    } else if (warnings.isEmpty) {
+      DsFeedback.show(context, l.text('cellSaved'), tone: DsTone.success);
+    } else {
+      // Saved, but the edit broke hard rules — admin sees exactly what.
+      DsFeedback.show(
+        context,
+        '${l.text('cellSaved')} ${warnings.join('; ')}',
+        tone: DsTone.warning,
+      );
+    }
+  }
+
   Future<void> _onPublish(BuildContext context, AppLocalizations l) async {
-    await ref.read(scheduleControllerProvider.notifier).publish();
+    await DsBusy.run(
+      context,
+      l.text('publishingSchedule'),
+      () => ref.read(scheduleControllerProvider.notifier).publish(),
+    );
     final state = ref.read(scheduleControllerProvider);
     if (!context.mounted) return;
     if (state.error != null) {

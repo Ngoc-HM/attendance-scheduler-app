@@ -1,8 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../design_system/view_models.dart';
+import '../../../auth/domain/entities/user.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
-import '../../../users/presentation/providers/users_provider.dart';
+import '../../../users/data/user_management_datasource.dart';
 import '../../data/datasources/leaves_remote_datasource.dart';
 import '../../data/models/leave_model.dart';
 
@@ -45,9 +46,9 @@ class LeavesController extends StateNotifier<LeavesState> {
     state = state.copyWith(
       entries: await AsyncValue.guard(() async {
         final leaves = _isAdmin ? await _ds.listAll() : await _ds.listOwn();
-        final userMap = _buildUserMap();
+        final userById = await _loadUserMap();
         return leaves
-            .map((l) => LeaveEntry(id: l.id, row: _toRow(l, userMap)))
+            .map((l) => LeaveEntry(id: l.id, row: _toRow(l, userById)))
             .toList();
       }),
     );
@@ -63,20 +64,33 @@ class LeavesController extends StateNotifier<LeavesState> {
     await load();
   }
 
-  /// Admin: approve the leave at display [index].
-  Future<void> approve(int index) async {
+  /// Admin: approve the leave at display [index]. Returns decision warnings
+  /// (e.g. an already-generated month is now stale and needs a regenerate).
+  Future<List<String>> approve(int index) async {
     final id = _idAt(index);
-    if (id == null) return;
-    await _ds.decide(id, 'approved');
+    if (id == null) return const [];
+    final (_, warnings) = await _ds.decide(id, 'approved');
     await load();
+    return warnings;
   }
 
   /// Admin: reject the leave at display [index].
-  Future<void> reject(int index) async {
+  Future<List<String>> reject(int index) async {
     final id = _idAt(index);
-    if (id == null) return;
-    await _ds.decide(id, 'rejected');
+    if (id == null) return const [];
+    final (_, warnings) = await _ds.decide(id, 'rejected');
     await load();
+    return warnings;
+  }
+
+  /// Admin: revoke an APPROVED leave at display [index] (owner 2026-07-17) —
+  /// balance restored server-side, request flips to rejected.
+  Future<List<String>> revoke(int index) async {
+    final id = _idAt(index);
+    if (id == null) return const [];
+    final (_, warnings) = await _ds.revoke(id);
+    await load();
+    return warnings;
   }
 
   // ---------------------------------------------------------------------------
@@ -87,24 +101,34 @@ class LeavesController extends StateNotifier<LeavesState> {
     return data[index].id;
   }
 
-  Map<int, String> _buildUserMap() {
-    final usersValue = _ref.read(usersControllerProvider);
-    return usersValue.whenOrNull(
-          data: (users) => {for (final u in users) u.id: u.fullName},
-        ) ??
-        {};
+  /// id → User, for showing each request's confidential code + role.
+  ///
+  /// Admin fetches the full roster directly (fresh, no provider-lifecycle
+  /// race that used to leave rows as "User id"). Employees only see their
+  /// own rows and GET /users is admin-only, so they use the signed-in user.
+  Future<Map<int, User>> _loadUserMap() async {
+    if (_isAdmin) {
+      final users = await _ref.read(userManagementDataSourceProvider).list();
+      return {for (final u in users) u.id: u};
+    }
+    final me = _ref.read(authControllerProvider).user;
+    return me == null ? {} : {me.id: me};
   }
 
-  static DsLeaveRowData _toRow(LeaveModel m, Map<int, String> userMap) =>
-      DsLeaveRowData(
-        employee: userMap[m.userId] ?? 'User ${m.userId}',
-        role: '—',
-        type: m.typeLabel,
-        range: m.dateRange,
-        days: m.days,
-        status: m.statusDisplay,
-        carryComp: 0,
-      );
+  static DsLeaveRowData _toRow(LeaveModel m, Map<int, User> userById) {
+    final u = userById[m.userId];
+    return DsLeaveRowData(
+      // Confidential per-person code (e.g. "T3", "A1", "F1") — the app's
+      // anonymous identity, shown instead of names (fallback if not found).
+      employee: (u != null && u.code.isNotEmpty) ? u.code : 'ID ${m.userId}',
+      role: u?.role.apiValue ?? '—',
+      type: m.typeLabel,
+      range: m.dateRange,
+      days: m.days,
+      status: m.statusDisplay,
+      carryComp: 0,
+    );
+  }
 }
 
 final leavesControllerProvider =

@@ -48,6 +48,16 @@ if settings.BACKEND_CORS_ORIGINS:
         allow_headers=["*"],
     )
 
+@app.middleware("http")
+async def _accept_language_middleware(request, call_next):  # noqa: ANN001, ANN201
+    """Serve error messages in the caller's language (Flutter sends vi/en)."""
+    from app.core.i18n import set_request_language
+
+    accept = request.headers.get("accept-language", "")
+    set_request_language("vi" if accept.lower().startswith("vi") else None)
+    return await call_next(request)
+
+
 app.include_router(api_router, prefix=settings.API_V1_STR)
 
 

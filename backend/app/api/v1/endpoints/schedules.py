@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter
+from datetime import date
+
+from fastapi import APIRouter, HTTPException, status
 
 from app.api.deps import ActiveUser, AdminUser, DbSession
+from app.core.i18n import t
 from app.schemas.schedule import (
     GenerateScheduleRequest,
     ManualOverrideRequest,
@@ -18,7 +21,17 @@ router = APIRouter()
 
 @router.get("/{year}/{month}", response_model=MonthlyScheduleRead)
 def get_schedule(db: DbSession, year: int, month: int, current_user: ActiveUser):
-    """View the month's schedule. Drafts are visible to admins only (G4)."""
+    """View the month's schedule. Drafts are visible to admins only (G4).
+
+    Non-admin visibility window (owner 2026-07-09): any past month, the current
+    month, and at most 2 months ahead — published months only, as before.
+    """
+    if not current_user.role.is_admin:
+        today = date.today()
+        if year * 12 + month > today.year * 12 + today.month + 2:
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN, detail=t("schedule.month_out_of_range")
+            )
     return schedule_service.get(
         db, year, month, include_draft=current_user.role.is_admin
     )

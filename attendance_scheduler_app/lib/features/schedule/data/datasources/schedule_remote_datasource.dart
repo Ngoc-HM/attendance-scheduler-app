@@ -39,6 +39,11 @@ class ScheduleRemoteDataSource {
       final response = await _dio.post(
         ApiEndpoints.generateSchedule,
         data: {'year': year, 'month': month, 'force': force},
+        // The CP-SAT solve alone can run up to ~30s (SOLVER_MAX_TIME_SECONDS)
+        // — the default 30s Dio receiveTimeout aborts the request just as the
+        // server finishes (backend logs 200 while the client shows a timeout).
+        // Give this one long call plenty of headroom; other calls stay snappy.
+        options: Options(receiveTimeout: const Duration(minutes: 3)),
       );
       return ScheduleResultModel.fromJson(
           response.data as Map<String, dynamic>);
@@ -48,7 +53,7 @@ class ScheduleRemoteDataSource {
   }
 
   /// POST /schedules/{id}/override
-  Future<MonthlySchedule> override({
+  Future<ScheduleResult> override({
     required int scheduleId,
     required int userId,
     required DateTime workDate,
@@ -64,7 +69,9 @@ class ScheduleRemoteDataSource {
           'code': code,
         },
       );
-      return MonthlyScheduleModel.fromJson(
+      // The endpoint returns a ScheduleResult (updated schedule + the
+      // hard-rule recheck warnings), NOT a bare MonthlySchedule.
+      return ScheduleResultModel.fromJson(
           response.data as Map<String, dynamic>);
     } on DioException catch (e) {
       throw ApiException.fromDio(e, 'override_failed');

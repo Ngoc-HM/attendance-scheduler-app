@@ -15,14 +15,10 @@ class UserModel extends User {
     id: json['id'] as int,
     username: json['username'] as String,
     fullName: json['full_name'] as String? ?? '',
-    role: _roleFromApi(json['role'] as String? ?? 'T'),
+    // Single source of truth for role parsing — a private duplicate here once
+    // missed role F and silently rendered F users as T.
+    role: UserRoleX.fromApi(json['role'] as String? ?? 'T'),
     status: json['status'] as String? ?? 'pending',
     code: json['code'] as String? ?? '',
   );
-
-  static UserRole _roleFromApi(String role) => switch (role) {
-    'M' => UserRole.m,
-    'A' => UserRole.a,
-    _ => UserRole.t,
-  };
 }

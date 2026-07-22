@@ -13,6 +13,9 @@ Role-aware model (owner decision 2026-06-26):
     Role.A (fixed group): {A, D, A/D, X, CD} — full flight rules + comp days.
     Role.T (flexible):    {AD, X}            — full-day duty, no shift split.
     Role.M (admin):       {O/D, X}           — office duty.
+    Role.F (split of T):  {AD, X}            — T-like: weekly-2-off AND the
+                                               max-5-consecutive-working rule
+                                               apply (owner 2026-07-22).
 
 Variable domains are built PER PERSON from ``role_codes.codes_for(role)``.
 The legacy ``ASSIGNABLE_CODES`` constant is kept for backward-compat import;

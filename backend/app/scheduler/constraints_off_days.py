@@ -36,7 +36,11 @@ def add(
         pinned = inp.approved_off.get(p.user_id, {})
         for block in inp.weeks:
             pinned_in_block = sum(1 for d in block if d in pinned)
-            target = partial_block_off_target(len(block)) + pinned_in_block
+            # Genuine X on top of the pins, capped so the target can never
+            # exceed the block length (a near-full-block leave would otherwise
+            # demand more off days than the block has → guaranteed violation).
+            base = partial_block_off_target(len(block))
+            target = pinned_in_block + min(base, len(block) - pinned_in_block)
 
             label = f"off_{p.user_id}_{block[0].isoformat()}"
             under = model.NewIntVar(0, 9, f"{label}_under")

@@ -15,6 +15,8 @@ class Role(str, enum.Enum):
     M = "M"  # Admin + flexible
     T = "T"  # Flexible (may request changes; not forced)
     A = "A"  # Fixed / mandatory (must follow system schedule strictly)
+    F = "F"  # Split from T (owner 2026-07-09): T-like, no admin rights; in the
+             # solver F keeps ONLY the weekly-2-off rule (no consecutive/off-chain)
 
     @property
     def is_admin(self) -> bool:
@@ -27,7 +29,7 @@ class Role(str, enum.Enum):
 
     @property
     def is_flexible(self) -> bool:
-        return self in {Role.M, Role.T}
+        return self in {Role.M, Role.T, Role.F}
 
 
 class UserStatus(str, enum.Enum):

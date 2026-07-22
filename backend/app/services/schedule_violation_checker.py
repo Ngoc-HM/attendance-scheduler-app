@@ -40,6 +40,7 @@ def check_consecutive(grid, roles, carry_streaks, weeks) -> list[str]:
     days = sorted({d for block in weeks for d in block})
     warnings: list[str] = []
     for uid in roles:
+        # Role F is T-like (owner 2026-07-22): the consecutive rule applies.
         run = carry_streaks.get(uid, 0)
         for d in days:
             code = grid.get((uid, d))
@@ -55,15 +56,27 @@ def check_consecutive(grid, roles, carry_streaks, weeks) -> list[str]:
     return warnings
 
 
+# Codes the persisted grid stores for approved leave/sick days — they occupy
+# block days without consuming the genuine-X quota (decision #4).
+LEAVE_CODES = {AttendanceCode.AL, AttendanceCode.CD, AttendanceCode.S}
+
+
 def check_off_quota(grid, roles, weeks) -> list[str]:
     """§5.3 #2 — genuine X per 7-day block must meet the pro-rated target.
 
     AL/CD/S days do not consume the quota (decision #4) — only X counts.
+    The target shrinks when leave fills the block (mirrors the engine's cap,
+    2026-07-17): a person on a 6-day leave has only 1 day left for genuine X.
     """
     warnings: list[str] = []
     for uid in roles:
         for block in weeks:
-            target = partial_block_off_target(len(block))
+            leave_days = sum(
+                1 for d in block if grid.get((uid, d)) in LEAVE_CODES
+            )
+            target = min(
+                partial_block_off_target(len(block)), len(block) - leave_days
+            )
             got = sum(1 for d in block if grid.get((uid, d)) is AttendanceCode.X)
             if got != target:
                 warnings.append(

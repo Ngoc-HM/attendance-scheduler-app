@@ -34,6 +34,5 @@ class UserRead(ORMModel):
     full_name: str
     role: Role
     status: UserStatus
-    annual_leave_balance: int
     carry_comp: int
     carry_streak: int

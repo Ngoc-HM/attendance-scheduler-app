@@ -15,6 +15,7 @@ Two pieces per person:
     Role.A → working = {A, D, A/D}
     Role.T → working = {AD}
     Role.M → working = {O/D}
+    Role.F → working = {AD}   (T-like, owner 2026-07-22)
 
 This makes the consecutive rule role-safe: only vars that actually exist for
 the person are referenced.
@@ -26,7 +27,7 @@ from datetime import date
 
 from ortools.sat.python import cp_model
 
-from app.models.enums import AttendanceCode
+from app.models.enums import AttendanceCode, Role
 from app.scheduler.domain import SolverInput
 from app.scheduler.role_codes import OFF_CODES, codes_for
 from app.scheduler.slack_registry import SlackRegistry
@@ -55,6 +56,8 @@ def add(
     days = sorted(inp.days)
 
     for p in inp.people:
+        # Role F is T-like (owner 2026-07-22): same working domain {AD}, so the
+        # max-5-consecutive rule applies to F exactly as it does to T.
         person_codes = codes_for(p.role)
 
         # --- 1. Sliding 6-day windows inside the month --------------------

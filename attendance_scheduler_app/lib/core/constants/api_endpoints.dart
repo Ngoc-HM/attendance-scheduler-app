@@ -24,11 +24,22 @@ class ApiEndpoints {
   static const String leaves = '/leaves';
   static const String leavesPending = '/leaves/pending';
   static String leaveDecide(int id) => '/leaves/$id/decide';
+  static String leaveRevoke(int id) => '/leaves/$id/revoke';
   static const String leaveConflicts = '/leaves/conflicts'; // ?date=YYYY-MM-DD
 
   // Shift-change requests (decision #8)
   static const String shiftChanges = '/shift-changes';
   static String shiftChangeDecide(int id) => '/shift-changes/$id/decide';
+
+  // Self-arrange batch requests (owner 2026-07-09)
+  static const String selfArrange = '/self-arrange';
+  static String selfArrangeDecide(int id) => '/self-arrange/$id/decide';
+
+  // Time clock — check-in/out (owner 2026-07-09)
+  static const String clockCheckIn = '/attendance/clock/check-in';
+  static const String clockCheckOut = '/attendance/clock/check-out';
+  static const String clockToday = '/attendance/clock/today';
+  static const String clockMe = '/attendance/clock/me';
 
   // Schedules (F-07..F-09)
   static const String generateSchedule = '/schedules/generate';

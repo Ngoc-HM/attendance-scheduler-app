@@ -126,6 +126,8 @@ class AppLocalizations {
       'registrationOpen': 'Registration open',
       'shortLeaveMessage':
           'Short leave is under 5 consecutive days. Longer leave uses the annual request.',
+      'leaveWindowHint':
+          'Monthly leave (≤5 days): register on days 1–20 of the previous month. Annual leave (≥6 days): register during the previous year.',
       'requests': 'Requests',
       'type': 'Type',
       'dates': 'Dates',
@@ -277,6 +279,63 @@ class AppLocalizations {
       'applyMonth': 'Apply whole month',
       'columnDay': 'Day',
       'columnWeekday': 'Wday',
+      // --- Employee shell (owner 2026-07-09) ---
+      'navSelfArrange': 'Self-arrange',
+      'navClock': 'Check-in/out',
+      // --- Time clock ---
+      'clockTitle': 'Check-in / Check-out',
+      'clockCheckIn': 'Check-in',
+      'clockCheckOut': 'Check-out',
+      'clockCheckedInAt': 'Checked in at',
+      'clockCheckedOutAt': 'Checked out at',
+      'clockNotCheckedIn': 'Not checked in yet today.',
+      'clockHistory': 'This month',
+      'clockNoEntries': 'No entries this month yet.',
+      'clockActionFailed': 'Action failed.',
+      // --- Self-arrange ---
+      'selfArrangeTitle': 'Self-arrange shifts',
+      'selfArrangeHint':
+          'Tap your own cells to swap work/off. Every 7-day block must keep '
+              'exactly its required off days. Changes apply after admin approval.',
+      'selfArrangeSubmit': 'Submit for approval',
+      'selfArrangeNote': 'Note (optional)',
+      'selfArrangeSubmitted': 'Request submitted — waiting for admin approval.',
+      'selfArrangeQuotaBroken':
+          'A 7-day block would not keep its required off days.',
+      'selfArrangeNoDraft': 'No changes yet.',
+      'selfArrangeDiscard': 'Discard draft',
+      'selfArrangeHistory': 'My requests',
+      'selfArrangePanelTitle': 'Pending self-arrange requests',
+      'selfArrangeChanges': 'changes',
+      'selfArrangeMonthCap': 'Only up to 2 months ahead can be viewed.',
+      'selfArrangeSubmitFailed': 'Submitting the request failed.',
+      'selfArrangeDecided': 'Request decided.',
+      // --- Generate guard (owner 2026-07-17) ---
+      'flightsMissingTitle': 'No flight data for this month',
+      'flightsMissingBody':
+          'No flights have been entered for this month yet, so the generated '
+              'roster will contain no flight duties (A/D) and may be wrong. '
+              'Enter flights first, or generate anyway?',
+      'generateAnyway': 'Generate anyway',
+      // --- Admin cell edit (F-09 UI, owner 2026-07-17) ---
+      'editCell': 'Edit cell',
+      'cellSaved': 'Cell saved.',
+      // --- Busy overlays (owner 2026-07-18) ---
+      'generatingSchedule': 'Generating schedule, please wait…',
+      'publishingSchedule': 'Publishing schedule…',
+      // --- Leave window banner (audit fix 2026-07-17) ---
+      'registrationClosed': 'Monthly registration closed',
+      'registrationClosedMessage':
+          'Monthly-leave registration is open from day 1 to day 20 (for the '
+              'next month). Annual leave (5+ days) is registered during the '
+              'previous year.',
+      // --- Revoke approval (owner 2026-07-17) ---
+      'revokeApproval': 'Revoke approval',
+      'revokeConfirmMessage':
+          'This returns the leave days to the employee\'s balance and marks '
+              'the request as rejected. If the month was already scheduled, '
+              'regenerate it afterwards.',
+      'requestRevoked': 'Approval revoked.',
     },
     'vi': {
       'appTitle': 'Xếp lịch & Chấm công',
@@ -388,6 +447,8 @@ class AppLocalizations {
       'registrationOpen': 'Đang mở đăng ký',
       'shortLeaveMessage':
           'Nghỉ ngắn dưới 5 ngày liên tục. Nghỉ dài hơn dùng đăng ký phép năm.',
+      'leaveWindowHint':
+          'Nghỉ tháng (≤5 ngày): đăng ký từ ngày 1–20 của tháng trước. Nghỉ phép năm (≥6 ngày): đăng ký trong năm trước.',
       'requests': 'Yêu cầu',
       'type': 'Loại',
       'dates': 'Thời gian',
@@ -538,6 +599,62 @@ class AppLocalizations {
       'applyMonth': 'Áp dụng cả tháng',
       'columnDay': 'Ngày',
       'columnWeekday': 'Thứ',
+      // --- Employee shell (owner 2026-07-09) ---
+      'navSelfArrange': 'Tự sắp ca',
+      'navClock': 'Chấm công vào/ra',
+      // --- Time clock ---
+      'clockTitle': 'Chấm công vào / ra',
+      'clockCheckIn': 'Check-in',
+      'clockCheckOut': 'Check-out',
+      'clockCheckedInAt': 'Đã check-in lúc',
+      'clockCheckedOutAt': 'Đã check-out lúc',
+      'clockNotCheckedIn': 'Hôm nay chưa check-in.',
+      'clockHistory': 'Trong tháng',
+      'clockNoEntries': 'Chưa có dữ liệu trong tháng.',
+      'clockActionFailed': 'Thao tác thất bại.',
+      // --- Self-arrange ---
+      'selfArrangeTitle': 'Tự sắp xếp ca',
+      'selfArrangeHint':
+          'Chạm vào ô của bạn để đổi làm/nghỉ. Mỗi block 7 ngày phải giữ đúng '
+              'số ngày nghỉ quy định. Thay đổi có hiệu lực sau khi admin duyệt.',
+      'selfArrangeSubmit': 'Gửi admin duyệt',
+      'selfArrangeNote': 'Ghi chú (không bắt buộc)',
+      'selfArrangeSubmitted': 'Đã gửi yêu cầu — chờ admin duyệt.',
+      'selfArrangeQuotaBroken':
+          'Có block 7 ngày không giữ đúng số ngày nghỉ quy định.',
+      'selfArrangeNoDraft': 'Chưa có thay đổi.',
+      'selfArrangeDiscard': 'Huỷ nháp',
+      'selfArrangeHistory': 'Yêu cầu của tôi',
+      'selfArrangePanelTitle': 'Yêu cầu tự sắp ca chờ duyệt',
+      'selfArrangeChanges': 'thay đổi',
+      'selfArrangeMonthCap': 'Chỉ xem được tối đa 2 tháng tương lai.',
+      'selfArrangeSubmitFailed': 'Gửi yêu cầu thất bại.',
+      'selfArrangeDecided': 'Đã quyết định yêu cầu.',
+      // --- Generate guard (owner 2026-07-17) ---
+      'flightsMissingTitle': 'Tháng này chưa nhập lịch bay',
+      'flightsMissingBody':
+          'Chưa có chuyến bay nào được nhập cho tháng này, nên lịch tạo ra sẽ '
+              'không có ca bay (A/D) và có thể sai sót. Nên nhập lịch bay '
+              'trước, hoặc vẫn tạo lịch?',
+      'generateAnyway': 'Vẫn tạo lịch',
+      // --- Admin cell edit (F-09 UI, owner 2026-07-17) ---
+      'editCell': 'Sửa ô lịch',
+      'cellSaved': 'Đã lưu ô lịch.',
+      // --- Busy overlays (owner 2026-07-18) ---
+      'generatingSchedule': 'Đang tạo lịch, vui lòng đợi…',
+      'publishingSchedule': 'Đang công bố lịch…',
+      // --- Leave window banner (audit fix 2026-07-17) ---
+      'registrationClosed': 'Đã đóng đăng ký nghỉ tháng',
+      'registrationClosedMessage':
+          'Đăng ký nghỉ tháng mở từ ngày 1 đến ngày 20 (cho tháng kế tiếp). '
+              'Nghỉ phép năm (từ 5 ngày) đăng ký trong năm trước.',
+      // --- Revoke approval (owner 2026-07-17) ---
+      'revokeApproval': 'Hủy duyệt',
+      'revokeConfirmMessage':
+          'Thao tác này hoàn lại ngày phép cho nhân viên và chuyển đơn về '
+              'Từ chối. Nếu tháng liên quan đã tạo lịch, hãy tạo lại lịch '
+              'sau khi hủy.',
+      'requestRevoked': 'Đã hủy duyệt.',
     },
   };
 
@@ -685,6 +802,7 @@ class AppLocalizations {
     'M' => isVietnamese ? 'M — Quản trị' : 'M — Admin',
     'T' => isVietnamese ? 'T — Linh hoạt' : 'T — Flexible',
     'A' => isVietnamese ? 'A — Cố định' : 'A — Fixed',
+    'F' => isVietnamese ? 'F — Linh hoạt' : 'F — Flexible',
     _ => role,
   };
 

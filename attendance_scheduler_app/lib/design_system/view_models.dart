@@ -8,7 +8,12 @@ class DsRosterRowData {
     required this.arrivals,
     required this.departures,
     required this.offDays,
+    this.id,
   });
+
+  /// Backing user id — needed by cell-edit callbacks (admin F-09); null for
+  /// read-only rosters that never edit cells.
+  final int? id;
 
   final String name;
   final String role;

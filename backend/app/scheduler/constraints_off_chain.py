@@ -20,7 +20,7 @@ from datetime import date
 
 from ortools.sat.python import cp_model
 
-from app.models.enums import AttendanceCode
+from app.models.enums import AttendanceCode, Role
 from app.scheduler.domain import SolverInput
 from app.scheduler.slack_registry import SlackRegistry
 
@@ -36,6 +36,8 @@ def add(
     days = sorted(inp.days)
 
     for p in inp.people:
+        # Role F is T-like (owner 2026-07-22): the max-5-consecutive-OFF rule
+        # applies to F exactly as it does to T.
         annual = inp.long_leave_off.get(p.user_id, set())
         for i in range(len(days) - WINDOW + 1):
             window = days[i : i + WINDOW]

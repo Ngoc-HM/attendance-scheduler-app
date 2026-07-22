@@ -26,8 +26,8 @@ class DemoUserSpec:
 DEMO_USERS: tuple[DemoUserSpec, ...] = (
     DemoUserSpec("nguyenvana", "Nguyen Van A", Role.T),
     DemoUserSpec("nguyenvanb", "Nguyen Van B", Role.T),
-    DemoUserSpec("nguyenvanc", "Nguyen Van C", Role.T),
-    DemoUserSpec("nguyenvand", "Nguyen Van D", Role.T),
+    DemoUserSpec("nguyenvanc", "Nguyen Van C", Role.F),
+    DemoUserSpec("nguyenvand", "Nguyen Van D", Role.F),
     DemoUserSpec("nguyenvane", "Nguyen Van E", Role.A),
     DemoUserSpec("nguyenvanf", "Nguyen Van F", Role.A),
     DemoUserSpec("nguyenvang", "Nguyen Van G", Role.A),

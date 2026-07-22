@@ -241,6 +241,7 @@ class DsScheduleView extends StatelessWidget {
     required this.onGenerate,
     required this.onPublish,
     this.flightLabels = const {},
+    this.onCellTap,
   });
 
   final DateTime month;
@@ -250,6 +251,10 @@ class DsScheduleView extends StatelessWidget {
   final VoidCallback onNextMonth;
   final VoidCallback onGenerate;
   final VoidCallback onPublish;
+
+  /// Admin cell edit (F-09): tapped (person row, 0-based day index). Null →
+  /// read-only roster (employee views).
+  final void Function(DsRosterRowData row, int dayIndex)? onCellTap;
 
   @override
   Widget build(BuildContext context) {
@@ -343,6 +348,7 @@ class DsScheduleView extends StatelessWidget {
                     rows: rows,
                     days: days,
                     flightLabels: flightLabels,
+                    onCellTap: onCellTap,
                   ),
               ],
             ),
@@ -363,12 +369,14 @@ class _DsRosterTable extends StatelessWidget {
     required this.rows,
     required this.days,
     this.flightLabels = const {},
+    this.onCellTap,
   });
 
   final DateTime month;
   final List<DsRosterRowData> rows;
   final int days;
   final Map<int, String> flightLabels; // day-of-month → FLT codes
+  final void Function(DsRosterRowData row, int dayIndex)? onCellTap;
 
   static const double _dayColW = 40;
   static const double _wdColW = 48;
@@ -461,7 +469,10 @@ class _DsRosterTable extends StatelessWidget {
     final weekend = date.weekday == DateTime.saturday ||
         date.weekday == DateTime.sunday;
     final dayColor = weekend ? DsColors.primary : DsColors.textPrimary;
-    return Padding(
+    // Weekend rows get a soft background tint so Sat/Sun stand out at a
+    // glance (owner 2026-07-09) — the roster is transposed: days are rows.
+    return Container(
+      color: weekend ? DsColors.primarySoft : null,
       padding: const EdgeInsets.symmetric(horizontal: DsSpacing.x3, vertical: 4),
       child: Row(
         children: [
@@ -500,10 +511,17 @@ class _DsRosterTable extends StatelessWidget {
           for (final row in rows)
             SizedBox(
               width: personW,
-              child: Center(
-                child: i < row.shifts.length
-                    ? DsShiftBadge(code: row.shifts[i], compact: true)
-                    : const Text('—', style: TextStyle(color: DsColors.textMuted)),
+              child: InkWell(
+                onTap: onCellTap != null && i < row.shifts.length
+                    ? () => onCellTap!(row, i)
+                    : null,
+                borderRadius: BorderRadius.circular(6),
+                child: Center(
+                  child: i < row.shifts.length
+                      ? DsShiftBadge(code: row.shifts[i], compact: true)
+                      : const Text('—',
+                          style: TextStyle(color: DsColors.textMuted)),
+                ),
               ),
             ),
         ],
@@ -990,14 +1008,25 @@ class DsLeavesView extends StatelessWidget {
     super.key,
     required this.rows,
     required this.onNewRequest,
-    required this.onApprove,
-    required this.onReject,
+    this.onApprove,
+    this.onReject,
+    this.onRevoke,
+    this.registrationOpen = true,
   });
 
   final List<DsLeaveRowData> rows;
   final VoidCallback onNewRequest;
-  final ValueChanged<int> onApprove;
-  final ValueChanged<int> onReject;
+
+  /// Null → viewer cannot decide (employee): the actions column is hidden.
+  final ValueChanged<int>? onApprove;
+  final ValueChanged<int>? onReject;
+
+  /// Admin: revoke a previously APPROVED leave (owner 2026-07-17).
+  final ValueChanged<int>? onRevoke;
+
+  /// Whether the monthly registration window (day 1–20) is currently open —
+  /// drives the banner so it never claims "open" on day 21+.
+  final bool registrationOpen;
 
   @override
   Widget build(BuildContext context) {
@@ -1042,9 +1071,13 @@ class DsLeavesView extends StatelessWidget {
           ),
           const SizedBox(height: DsSpacing.x6),
           DsInlineAlert(
-            title: l.text('registrationOpen'),
-            message: l.text('shortLeaveMessage'),
-            tone: DsTone.primary,
+            title: registrationOpen
+                ? l.text('registrationOpen')
+                : l.text('registrationClosed'),
+            message: registrationOpen
+                ? l.text('shortLeaveMessage')
+                : l.text('registrationClosedMessage'),
+            tone: registrationOpen ? DsTone.primary : DsTone.warning,
           ),
           const SizedBox(height: DsSpacing.x6),
           DsSurface(
@@ -1060,6 +1093,7 @@ class DsLeavesView extends StatelessWidget {
                   rows: rows,
                   onApprove: onApprove,
                   onReject: onReject,
+                  onRevoke: onRevoke,
                 ),
               ],
             ),
@@ -1074,18 +1108,24 @@ class DsLeavesView extends StatelessWidget {
 class _LeavesTable extends StatelessWidget {
   const _LeavesTable({
     required this.rows,
-    required this.onApprove,
-    required this.onReject,
+    this.onApprove,
+    this.onReject,
+    this.onRevoke,
   });
 
   final List<DsLeaveRowData> rows;
-  final ValueChanged<int> onApprove;
-  final ValueChanged<int> onReject;
+
+  /// Null → decisions hidden entirely (employee view had no-op buttons that
+  /// looked like a permissions hole).
+  final ValueChanged<int>? onApprove;
+  final ValueChanged<int>? onReject;
+  final ValueChanged<int>? onRevoke;
 
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
-    // employee | role | type | dates | days | carry | status | actions
+    final canDecide = onApprove != null && onReject != null;
+    // employee | role | type | dates | days | carry | status | actions(admin)
     final columns = [
       DsTableColumn(header: l.text('employee'), flex: 3),
       DsTableColumn(header: l.role, flex: 2),
@@ -1094,7 +1134,7 @@ class _LeavesTable extends StatelessWidget {
       DsTableColumn(header: l.text('days'), flex: 1),
       DsTableColumn(header: l.text('carry'), flex: 1),
       DsTableColumn(header: l.status, flex: 2),
-      DsTableColumn(header: l.actions, flex: 3),
+      if (canDecide) DsTableColumn(header: l.actions, flex: 3),
     ];
 
     return DsDataTable(
@@ -1116,25 +1156,33 @@ class _LeavesTable extends StatelessWidget {
                 _ => DsTone.warning,
               },
             ),
-            rows[index].status == 'Pending'
-                ? Row(
+            if (canDecide)
+              switch (rows[index].status) {
+                'Pending' => Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       DsTextAction(
                         label: l.approve,
                         icon: Icons.check,
                         tone: DsTone.success,
-                        onPressed: () => onApprove(index),
+                        onPressed: () => onApprove!(index),
                       ),
                       DsTextAction(
                         label: l.text('reject'),
                         icon: Icons.close,
                         tone: DsTone.danger,
-                        onPressed: () => onReject(index),
+                        onPressed: () => onReject!(index),
                       ),
                     ],
-                  )
-                : const SizedBox.shrink(),
+                  ),
+                'Approved' when onRevoke != null => DsTextAction(
+                    label: l.text('revokeApproval'),
+                    icon: Icons.undo,
+                    tone: DsTone.danger,
+                    onPressed: () => onRevoke!(index),
+                  ),
+                _ => const SizedBox.shrink(),
+              },
           ],
       ],
     );
@@ -1650,7 +1698,7 @@ class _RoleChangeMenu extends StatelessWidget {
   final String currentRole;
   final ValueChanged<String> onSelected;
 
-  static const _roles = ['M', 'T', 'A'];
+  static const _roles = ['M', 'T', 'A', 'F'];
 
   @override
   Widget build(BuildContext context) {

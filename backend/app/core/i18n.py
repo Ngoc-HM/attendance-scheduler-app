@@ -7,7 +7,19 @@ only for server-generated messages (errors, scheduler diagnostics, ...).
 
 from __future__ import annotations
 
+from contextvars import ContextVar
+
 from app.core.config import settings
+
+# Per-request language (set by the Accept-Language middleware in main.py).
+# ContextVars survive FastAPI's run_in_threadpool, so sync endpoints see it.
+_request_language: ContextVar[str | None] = ContextVar(
+    "request_language", default=None
+)
+
+
+def set_request_language(lang: str | None) -> None:
+    _request_language.set(lang)
 
 MESSAGES: dict[str, dict[str, str]] = {
     "en": {
@@ -33,8 +45,11 @@ MESSAGES: dict[str, dict[str, str]] = {
         "leave.window_closed_annual": "Annual leave (>= 5 consecutive days) must be registered during the previous calendar year.",
         "leave.already_decided": "This leave request was already decided.",
         "leave.overlap": "An overlapping leave request already exists.",
-        "leave.balance_insufficient": "Insufficient annual leave balance.",
         "leave.invalid_range": "End date must not be before start date.",
+        "leave.schedule_stale": "This leave overlaps a month whose schedule was already generated — regenerate that month so the leave appears in it.",
+        "leave.revoke_only_approved": "Only an approved leave can be revoked.",
+        "leave.staffing_impossible": "flights CANNOT be covered — too few group-A staff remain that day.",
+        "leave.staffing_needs_double": "flights only coverable with an A/D double shift that day.",
         # --- Shift changes (decision #8) ---
         "swap.not_found": "Shift-change request not found.",
         "swap.own_cell_only": "You can only request changes for your own scheduled day.",
@@ -47,6 +62,20 @@ MESSAGES: dict[str, dict[str, str]] = {
         "holiday.not_found": "Holiday not found.",
         "attendance.sick_no_cover": "No eligible colleague to cover the sick shift; resolve manually (F-09).",
         "attendance.sick_only": "This endpoint only handles sick (S) days.",
+        # --- Time clock (owner 2026-07-09) ---
+        "clock.already_checked_in": "Already checked in today.",
+        "clock.not_checked_in": "You have not checked in today.",
+        "clock.already_checked_out": "Already checked out today.",
+        # --- Self-arrange (owner 2026-07-09) ---
+        "selfarrange.forbidden_role": "Your role cannot self-arrange shifts.",
+        "selfarrange.empty_changes": "The request contains no changes.",
+        "selfarrange.cell_not_found": "One of the selected days has no scheduled cell of yours.",
+        "selfarrange.invalid_code": "A requested code is not allowed for your role.",
+        "selfarrange.breaks_weekly_off": "The arrangement must keep exactly the required off days in every 7-day block.",
+        "selfarrange.cell_locked": "Leave/sick days cannot be rearranged — only regular working (AD) and off (X) days.",
+        "selfarrange.not_found": "Self-arrange request not found.",
+        "selfarrange.already_decided": "This self-arrange request was already decided.",
+        "schedule.month_out_of_range": "Future months beyond next-next month are not visible.",
     },
     "vi": {
         "auth.invalid_credentials": "Sai tên đăng nhập hoặc mật khẩu.",
@@ -71,8 +100,11 @@ MESSAGES: dict[str, dict[str, str]] = {
         "leave.window_closed_annual": "Nghỉ phép năm (>= 5 ngày liên tục) phải đăng ký trong năm trước.",
         "leave.already_decided": "Đơn nghỉ này đã được quyết định.",
         "leave.overlap": "Đã tồn tại đơn nghỉ trùng thời gian.",
-        "leave.balance_insufficient": "Số ngày phép năm còn lại không đủ.",
         "leave.invalid_range": "Ngày kết thúc không được trước ngày bắt đầu.",
+        "leave.schedule_stale": "Ngày nghỉ này trùng tháng đã tạo lịch — cần tạo lại lịch tháng đó để ngày nghỉ được cập nhật.",
+        "leave.revoke_only_approved": "Chỉ hủy được đơn nghỉ đã duyệt.",
+        "leave.staffing_impossible": "KHÔNG thể phủ chuyến bay — nhóm A còn lại quá ít người ngày này.",
+        "leave.staffing_needs_double": "chuyến bay ngày này chỉ phủ được nếu có người làm ca đúp A/D.",
         # --- Shift changes (decision #8) ---
         "swap.not_found": "Không tìm thấy yêu cầu đổi ca.",
         "swap.own_cell_only": "Chỉ được yêu cầu đổi ca cho ngày làm của chính mình.",
@@ -85,11 +117,29 @@ MESSAGES: dict[str, dict[str, str]] = {
         "holiday.not_found": "Không tìm thấy ngày lễ.",
         "attendance.sick_no_cover": "Không có đồng nghiệp phù hợp để bù ca ốm; admin xử lý tay (F-09).",
         "attendance.sick_only": "Endpoint này chỉ xử lý ngày nghỉ ốm (S).",
+        # --- Time clock (owner 2026-07-09) ---
+        "clock.already_checked_in": "Hôm nay đã check-in rồi.",
+        "clock.not_checked_in": "Bạn chưa check-in hôm nay.",
+        "clock.already_checked_out": "Hôm nay đã check-out rồi.",
+        # --- Self-arrange (owner 2026-07-09) ---
+        "selfarrange.forbidden_role": "Vai trò của bạn không được tự sắp xếp ca.",
+        "selfarrange.empty_changes": "Yêu cầu không có thay đổi nào.",
+        "selfarrange.cell_not_found": "Có ngày được chọn không có ô lịch của bạn.",
+        "selfarrange.invalid_code": "Có mã ca không hợp lệ với vai trò của bạn.",
+        "selfarrange.breaks_weekly_off": "Sắp xếp phải giữ đúng số ngày nghỉ quy định trong mỗi block 7 ngày.",
+        "selfarrange.cell_locked": "Không được sắp xếp lại ngày nghỉ phép/ốm — chỉ ngày làm (AD) và nghỉ (X) thường.",
+        "selfarrange.not_found": "Không tìm thấy yêu cầu tự sắp ca.",
+        "selfarrange.already_decided": "Yêu cầu tự sắp ca này đã được quyết định.",
+        "schedule.month_out_of_range": "Chỉ xem được tối đa 2 tháng tương lai.",
     },
 }
 
 
 def t(key: str, lang: str | None = None) -> str:
-    """Translate a message key; falls back to the key itself if missing."""
-    language = lang or settings.DEFAULT_LANGUAGE
+    """Translate a message key; falls back to the key itself if missing.
+
+    Language resolution: explicit arg > the request's Accept-Language
+    (middleware) > DEFAULT_LANGUAGE.
+    """
+    language = lang or _request_language.get() or settings.DEFAULT_LANGUAGE
     return MESSAGES.get(language, MESSAGES["en"]).get(key, key)
