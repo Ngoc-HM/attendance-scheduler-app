@@ -58,9 +58,15 @@ class LeavesController extends StateNotifier<LeavesState> {
   Future<void> submitRequest({
     required DateTime startDate,
     required DateTime endDate,
+    required String leaveType,
     String? note,
   }) async {
-    await _ds.create(startDate: startDate, endDate: endDate, note: note);
+    await _ds.create(
+      startDate: startDate,
+      endDate: endDate,
+      leaveType: leaveType,
+      note: note,
+    );
     await load();
   }
 

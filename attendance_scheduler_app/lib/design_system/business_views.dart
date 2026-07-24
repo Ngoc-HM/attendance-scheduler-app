@@ -564,113 +564,160 @@ class _DsRosterTable extends StatelessWidget {
       );
 }
 
-/// Shared, full-width day-by-day grid used by the roster and attendance boards:
-/// employee · role · one cell per day · trailing summary columns. Columns are
-/// distributed evenly across the full surface width (min widths double as flex
-/// weights so proportions hold while stretching); it only scrolls horizontally
-/// when a long month genuinely can't fit the viewport.
+/// Horizontally-scrollable day-by-day grid with frozen employee/role columns.
+///
+/// The left two columns (employee, role) stay visible while the day and summary
+/// columns scroll. Header and data rows share exact widths so they never drift.
 class _DsDayGrid extends StatelessWidget {
   const _DsDayGrid({
     required this.month,
-    required this.days,
     required this.trailingHeaders,
     required this.rows,
   });
 
   final DateTime month;
-  final int days;
   final List<String> trailingHeaders;
   final List<_DsDayGridRow> rows;
 
-  static const double _nameMin = 150;
-  static const double _roleMin = 80;
-  static const double _dayMin = 46;
-  static const double _trailMin = 72;
+  static const double _nameW = 150;
+  static const double _roleW = 80;
+  static const double _dayW = 46;
+  static const double _trailW = 72;
+  static const double _headerH = 48;
+  static const double _rowH = 44;
 
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
-    final naturalWidth = _nameMin +
-        _roleMin +
-        days * _dayMin +
-        trailingHeaders.length * _trailMin;
+    final daysInMonth = DateTime(month.year, month.month + 1, 0).day;
+    final leftWidth = _nameW + _roleW;
+    final rightNatural = daysInMonth * _dayW +
+        trailingHeaders.length * _trailW;
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final tableWidth = math.max(constraints.maxWidth, naturalWidth);
-        return SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: SizedBox(
-            width: tableWidth,
-            child: Column(
-              children: [
-                _gridRow(
-                  background: DsColors.surfaceSubtle,
-                  name: _headerText(l.text('employee'), align: TextAlign.left),
-                  role: _headerText(l.role),
-                  days: [
-                    for (var day = 1; day <= days; day++)
-                      _DsDayHeader(date: DateTime(month.year, month.month, day)),
-                  ],
-                  trailing: [for (final h in trailingHeaders) _headerText(h)],
-                ),
-                for (final row in rows) ...[
-                  const Divider(height: 1, color: DsColors.border),
-                  _gridRow(
-                    name: Text(
-                      row.name,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontWeight: FontWeight.w600),
-                    ),
-                    role: Center(child: DsBadge(label: row.role)),
-                    days: [
-                      for (final shift in row.shifts)
-                        Center(child: DsShiftBadge(code: shift, compact: true)),
-                    ],
-                    trailing: [
-                      for (final value in row.trailing)
-                        Center(
-                          child: Text(
-                            value,
-                            style: const TextStyle(color: DsColors.textPrimary),
-                          ),
-                        ),
+        final rightWidth = math.max(rightNatural, constraints.maxWidth - leftWidth);
+
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              width: leftWidth,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _frozenHeader(l),
+                  for (final row in rows) _frozenRow(row),
+                ],
+              ),
+            ),
+            Expanded(
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: SizedBox(
+                  width: rightWidth,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _scrollHeader(l, daysInMonth),
+                      for (final row in rows) _scrollRow(row, daysInMonth),
                     ],
                   ),
-                ],
-              ],
+                ),
+              ),
             ),
-          ),
+          ],
         );
       },
     );
   }
 
-  Widget _gridRow({
-    required Widget name,
-    required Widget role,
-    required List<Widget> days,
-    required List<Widget> trailing,
-    Color? background,
-  }) {
-    return Container(
-      color: background,
-      padding: const EdgeInsets.symmetric(
-        horizontal: DsSpacing.x4,
-        vertical: DsSpacing.x3,
-      ),
-      child: Row(
-        children: [
-          _cell(_nameMin, name),
-          _cell(_roleMin, role),
-          for (final day in days) _cell(_dayMin, day),
-          for (final cell in trailing) _cell(_trailMin, cell),
-        ],
-      ),
-    );
-  }
+  Widget _frozenHeader(AppLocalizations l) => Container(
+        height: _headerH,
+        color: DsColors.surfaceSubtle,
+        child: Row(
+          children: [
+            _frozenCell(_nameW, _headerText(l.text('employee'), align: TextAlign.left)),
+            _frozenCell(_roleW, _headerText(l.role)),
+          ],
+        ),
+      );
 
-  Widget _cell(double weight, Widget child) => Expanded(
+  Widget _frozenRow(_DsDayGridRow row) => Container(
+        height: _rowH,
+        decoration: const BoxDecoration(
+          border: Border(bottom: BorderSide(color: DsColors.border)),
+        ),
+        child: Row(
+          children: [
+            _frozenCell(
+              _nameW,
+              Text(
+                row.name,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ),
+            _frozenCell(_roleW, Center(child: DsBadge(label: row.role))),
+          ],
+        ),
+      );
+
+  Widget _frozenCell(double width, Widget child) => SizedBox(
+        width: width,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: DsSpacing.x3),
+          child: child,
+        ),
+      );
+
+  Widget _scrollHeader(AppLocalizations l, int daysInMonth) => Container(
+        height: _headerH,
+        color: DsColors.surfaceSubtle,
+        child: Row(
+          children: [
+            for (var day = 1; day <= daysInMonth; day++)
+              _scrollCell(
+                _dayW,
+                Center(child: _DsDayHeader(date: DateTime(month.year, month.month, day))),
+              ),
+            for (final h in trailingHeaders)
+              _scrollCell(_trailW, _headerText(h)),
+          ],
+        ),
+      );
+
+  Widget _scrollRow(_DsDayGridRow row, int daysInMonth) => Container(
+        height: _rowH,
+        decoration: const BoxDecoration(
+          border: Border(bottom: BorderSide(color: DsColors.border)),
+        ),
+        child: Row(
+          children: [
+            for (var i = 0; i < daysInMonth; i++)
+              _scrollCell(
+                _dayW,
+                Center(
+                  child: i < row.shifts.length
+                      ? DsShiftBadge(code: row.shifts[i], compact: true)
+                      : const Text('—', style: TextStyle(color: DsColors.textMuted)),
+                ),
+              ),
+            for (final value in row.trailing)
+              _scrollCell(
+                _trailW,
+                Center(
+                  child: Text(
+                    value,
+                    style: const TextStyle(color: DsColors.textPrimary),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      );
+
+  Widget _scrollCell(double weight, Widget child) => Expanded(
         flex: weight.round(),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 2),
@@ -806,7 +853,6 @@ class DsFlightsView extends StatelessWidget {
     required this.rows,
     required this.onPreviousMonth,
     required this.onNextMonth,
-    required this.onImport,
     required this.onAdd,
     this.onManagePresets,
   });
@@ -815,7 +861,6 @@ class DsFlightsView extends StatelessWidget {
   final List<DsFlightRowData> rows;
   final VoidCallback onPreviousMonth;
   final VoidCallback onNextMonth;
-  final VoidCallback onImport;
   final VoidCallback onAdd;
 
   /// If non-null an admin "Manage presets" toolbar action is shown.
@@ -839,11 +884,6 @@ class DsFlightsView extends StatelessWidget {
             icon: Icons.tune_outlined,
             onPressed: onManagePresets!,
           ),
-        DsSecondaryButton(
-          label: l.text('importExcel'),
-          icon: Icons.upload_file_outlined,
-          onPressed: onImport,
-        ),
         DsPrimaryButton(
           label: l.text('addFlight'),
           icon: Icons.add,
@@ -897,13 +937,6 @@ class DsFlightsView extends StatelessWidget {
                 _FlightsTable(rows: rows),
               ],
             ),
-          ),
-          const SizedBox(height: DsSpacing.x6),
-          DsUploadZone(
-            title: l.text('importMonthlyFlights'),
-            hint: l.text('excelFileHint'),
-            buttonLabel: l.text('chooseFile'),
-            onPressed: onImport,
           ),
         ],
       ),
@@ -1007,7 +1040,8 @@ class DsLeavesView extends StatelessWidget {
   const DsLeavesView({
     super.key,
     required this.rows,
-    required this.onNewRequest,
+    required this.onMonthlyRequest,
+    required this.onAnnualRequest,
     this.onApprove,
     this.onReject,
     this.onRevoke,
@@ -1015,7 +1049,8 @@ class DsLeavesView extends StatelessWidget {
   });
 
   final List<DsLeaveRowData> rows;
-  final VoidCallback onNewRequest;
+  final VoidCallback onMonthlyRequest;
+  final VoidCallback onAnnualRequest;
 
   /// Null → viewer cannot decide (employee): the actions column is hidden.
   final ValueChanged<int>? onApprove;
@@ -1038,10 +1073,15 @@ class DsLeavesView extends StatelessWidget {
       title: l.text('leaveRequests'),
       subtitle: l.text('leaveSubtitle'),
       actions: [
+        DsSecondaryButton(
+          label: l.text('requestAnnualLeave'),
+          icon: Icons.calendar_month_outlined,
+          onPressed: onAnnualRequest,
+        ),
         DsPrimaryButton(
-          label: l.text('requestLeave'),
+          label: l.text('requestMonthlyLeave'),
           icon: Icons.add,
-          onPressed: onNewRequest,
+          onPressed: onMonthlyRequest,
         ),
       ],
       child: Column(
@@ -1216,7 +1256,6 @@ class DsAttendanceView extends StatelessWidget {
         .expand((row) => row.shifts)
         .where((shift) => shift == ShiftCode.s)
         .length;
-    final days = rows.isEmpty ? 0 : rows.first.shifts.length;
     return DsPage(
       title: l.text('attendanceTitle'),
       subtitle: l.text('attendanceSubtitle'),
@@ -1311,7 +1350,6 @@ class DsAttendanceView extends StatelessWidget {
                 else
                   _DsDayGrid(
                     month: month,
-                    days: days,
                     trailingHeaders: [l.text('work'), l.text('absent')],
                     rows: [
                       for (final row in rows)

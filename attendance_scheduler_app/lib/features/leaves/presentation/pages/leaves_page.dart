@@ -38,7 +38,8 @@ class LeavesPage extends ConsumerWidget {
       ),
       data: (rows) => DsLeavesView(
         rows: rows,
-        onNewRequest: () => _showRequestDialog(context, ref, l),
+        onMonthlyRequest: () => _showMonthlyRequestDialog(context, ref, l),
+        onAnnualRequest: () => _showAnnualRequestDialog(context, ref, l),
         // Null for employees → the actions column disappears entirely
         // (no-op Approve/Reject buttons looked like a permissions hole).
         onApprove: isAdmin
@@ -142,11 +143,28 @@ class LeavesPage extends ConsumerWidget {
   // Submit request dialog
   // ---------------------------------------------------------------------------
 
-  Future<void> _showRequestDialog(
+  Future<void> _showMonthlyRequestDialog(
     BuildContext context,
     WidgetRef ref,
     AppLocalizations l,
   ) async {
+    await _showRequestDialog(context, ref, l, isAnnual: false);
+  }
+
+  Future<void> _showAnnualRequestDialog(
+    BuildContext context,
+    WidgetRef ref,
+    AppLocalizations l,
+  ) async {
+    await _showRequestDialog(context, ref, l, isAnnual: true);
+  }
+
+  Future<void> _showRequestDialog(
+    BuildContext context,
+    WidgetRef ref,
+    AppLocalizations l, {
+    required bool isAnnual,
+  }) async {
     DateTime? startDate;
     DateTime? endDate;
     final noteCtrl = TextEditingController();
@@ -155,15 +173,24 @@ class LeavesPage extends ConsumerWidget {
 
     final now = DateTime.now();
     final firstAllowed = DateTime(2000);
+    final annualFirst = DateTime(now.year + 1, 1, 1);
+    final annualLast = DateTime(now.year + 1, 12, 31);
 
     String fmtDate(DateTime d) =>
         '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
+
+    DateTime pickerFirstDate() =>
+        isAnnual ? (startDate ?? annualFirst) : (startDate ?? firstAllowed);
+
+    DateTime pickerLastDate() => isAnnual ? annualLast : DateTime(2100);
 
     await showDialog<void>(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setS) => DsFormDialog(
-          title: l.text('requestLeave'),
+          title: l.text(
+            isAnnual ? 'requestAnnualLeave' : 'requestMonthlyLeave',
+          ),
           width: 340,
           content: Column(
             mainAxisSize: MainAxisSize.min,
@@ -189,9 +216,9 @@ class LeavesPage extends ConsumerWidget {
                 onTap: () async {
                   final picked = await showDatePicker(
                     context: ctx,
-                    initialDate: startDate ?? now,
-                    firstDate: firstAllowed,
-                    lastDate: DateTime(2100),
+                    initialDate: startDate ?? (isAnnual ? annualFirst : now),
+                    firstDate: isAnnual ? annualFirst : firstAllowed,
+                    lastDate: pickerLastDate(),
                   );
                   if (picked != null) {
                     setS(() {
@@ -218,12 +245,13 @@ class LeavesPage extends ConsumerWidget {
                     size: 20,
                   ),
                 ),
-                onTap: () async {
+                  onTap: () async {
                   final picked = await showDatePicker(
                     context: ctx,
-                    initialDate: endDate ?? startDate ?? now,
-                    firstDate: startDate ?? firstAllowed,
-                    lastDate: DateTime(2100),
+                    initialDate:
+                        endDate ?? startDate ?? (isAnnual ? annualFirst : now),
+                    firstDate: pickerFirstDate(),
+                    lastDate: pickerLastDate(),
                   );
                   if (picked != null) {
                     setS(() {
@@ -232,6 +260,34 @@ class LeavesPage extends ConsumerWidget {
                     });
                   }
                 },
+              ),
+              const SizedBox(height: DsSpacing.x3),
+              // Static type indicator: the two buttons are separate flows, so
+              // the badge matches the button the user pressed.
+              Row(
+                children: [
+                  Text(
+                    '${l.text('leaveType')}:',
+                    style: Theme.of(ctx).textTheme.bodySmall,
+                  ),
+                  const SizedBox(width: DsSpacing.x2),
+                  DsBadge(
+                    label: l.text(
+                      isAnnual ? 'annualLeave' : 'monthlyLeave',
+                    ),
+                    tone: isAnnual ? DsTone.success : DsTone.primary,
+                  ),
+                ],
+              ),
+              const SizedBox(height: DsSpacing.x1),
+              Text(
+                isAnnual
+                    ? l.text('annualLeaveHint')
+                    : l.text('monthlyLeaveHint'),
+                style: const TextStyle(
+                  fontSize: DsFontSize.caption,
+                  color: DsColors.textMuted,
+                ),
               ),
               const SizedBox(height: DsSpacing.x3),
               TextField(
@@ -259,6 +315,7 @@ class LeavesPage extends ConsumerWidget {
                   await ctrl.submitRequest(
                     startDate: startDate!,
                     endDate: endDate!,
+                    leaveType: isAnnual ? 'annual' : 'monthly',
                     note: noteCtrl.text.trim().isEmpty
                         ? null
                         : noteCtrl.text.trim(),
@@ -285,4 +342,5 @@ class LeavesPage extends ConsumerWidget {
       ),
     );
   }
+
 }

@@ -1,5 +1,30 @@
 # Project Changelog
 
+## 2026-07-25 — Navigation, attendance scroll, flights import, and leave split
+
+### Fixed
+- **Flight Presets page navigation freeze**: moved `/flights/presets` into the
+  ShellRoute so the side menu stays usable instead of opening as a full-screen
+  overlay.
+- **Attendance horizontal scroll**: froze the employee name + role columns on
+  the left and made the day/summary area scrollable, keeping header and data
+  rows aligned.
+
+### Changed
+- **Flights page**: removed the "Import Excel" button (monthly Excel import is
+  still available via the dedicated import flow).
+- **Leave registration**: split the single "Đăng ký nghỉ" action into two
+  distinct buttons — "Đăng ký nghỉ tháng" and "Đăng ký nghỉ phép năm". The
+  selected type is now sent to the backend as `leave_type`, and the backend
+  honors it when provided; otherwise it still falls back to span-based
+  classification.
+
+### Design-system alignment
+- Flight preset / batch dialogs, role-change confirm dialog, and leave form
+  now use `DsFormDialog`, `DsTextField`, `DsTextAction`, `DsPrimaryButton`,
+  `DsSecondaryButton`, `DsSurface`, and `DsGridCell` instead of raw Material
+  widgets.
+
 ## 2026-06-17 — Demo user seed tool
 
 - Added a small backend CLI tool to seed 10 deterministic active demo users.

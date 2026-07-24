@@ -1,6 +1,5 @@
 // Smoke test: the app boots and lands on the login screen.
 
-import 'package:animations/animations.dart';
 import 'package:attendance_scheduler_app/app.dart';
 import 'package:attendance_scheduler_app/design_system/design_system.dart';
 import 'package:attendance_scheduler_app/i18n/app_localizations.dart';
@@ -47,34 +46,26 @@ void main() {
     expect(find.text('Use your approved account to continue.'), findsNothing);
   });
 
-  testWidgets('tab content follows the navigation direction', (tester) async {
+  testWidgets('tab content updates on navigation', (tester) async {
     await tester.binding.setSurfaceSize(const Size(1280, 800));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
     await tester.pumpWidget(const _NavigationHarness(index: 0, label: 'First'));
     await tester.pumpAndSettle();
+    expect(_contentLabel(tester), 'First');
 
-    // Selecting a LOWER tab → forward shared-axis (right→left): reverse=false.
     await tester.pumpWidget(const _NavigationHarness(index: 2, label: 'Third'));
-    await tester.pump();
-    expect(_switcherReverse(tester), isFalse);
     await tester.pumpAndSettle();
+    expect(_contentLabel(tester), 'Third');
 
-    // Selecting a HIGHER tab → reverse shared-axis (left→right): reverse=true.
-    await tester.pumpWidget(
-      const _NavigationHarness(index: 1, label: 'Second'),
-    );
-    await tester.pump();
-    expect(_switcherReverse(tester), isTrue);
+    await tester.pumpWidget(const _NavigationHarness(index: 1, label: 'Second'));
+    await tester.pumpAndSettle();
+    expect(_contentLabel(tester), 'Second');
   });
 }
 
-/// Direction flag of the tab-transition switcher (all instances agree).
-bool _switcherReverse(WidgetTester tester) {
-  return tester
-      .widgetList<PageTransitionSwitcher>(find.byType(PageTransitionSwitcher))
-      .first
-      .reverse;
+String _contentLabel(WidgetTester tester) {
+  return tester.widget<Text>(find.byKey(const Key('page-content'))).data!;
 }
 
 class _NavigationHarness extends StatelessWidget {

@@ -5,9 +5,7 @@ Business rules (locked decision #10, spec §4.3 / F-05 / F-06):
   (Customer clarification 2026-06-12: "quá 5 ngày liên tục" = more than 5.)
 - Monthly window: during month M, days 1–20 inclusive, register for month M+1.
   Submission outside that window for the target month → window_closed_monthly.
-- Annual window: target leave must start in year Y+1 or later; submission must
-  occur during calendar year Y (i.e. prior year).  Submitting for the current
-  or past year → window_closed_annual.
+- Annual window: leave year is hardcoded to Y+1 (the year after today).
 - Sick (S) is NOT a leave request — not validated here.
 """
 
@@ -50,9 +48,5 @@ def is_monthly_window_open(today: date, target_month: int, target_year: int) -> 
 
 
 def is_annual_window_open(today: date, leave_start_year: int) -> bool:
-    """Return True iff today falls within the annual-leave registration window.
-
-    Annual leave for year Y+1 must be submitted during calendar year Y
-    (i.e. today.year == leave_start_year - 1).
-    """
-    return today.year == leave_start_year - 1
+    """Return True iff the leave year is exactly Y+1 (the year after today)."""
+    return leave_start_year == today.year + 1

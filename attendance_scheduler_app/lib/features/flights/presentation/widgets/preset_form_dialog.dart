@@ -113,26 +113,26 @@ class _PresetFormDialogState extends State<PresetFormDialog> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Label (required)
-            TextFormField(
+            DsTextField(
               controller: _label,
-              decoration: InputDecoration(labelText: l.text('presetLabel')),
+              label: l.text('presetLabel'),
               validator: (v) =>
                   (v == null || v.trim().isEmpty) ? l.fieldRequired : null,
             ),
             const SizedBox(height: DsSpacing.x4),
             // Route (optional)
-            TextField(
+            DsTextField(
               controller: _route,
-              decoration: InputDecoration(labelText: l.text('presetRoute')),
+              label: l.text('presetRoute'),
             ),
             const SizedBox(height: DsSpacing.x4),
             // FLT ARR / FLT DEP
             Row(
               children: [
                 Expanded(
-                  child: TextFormField(
+                  child: DsTextField(
                     controller: _fltArr,
-                    decoration: InputDecoration(labelText: l.text('fltArr')),
+                    label: l.text('fltArr'),
                     keyboardType: TextInputType.number,
                     inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                     validator: (v) =>
@@ -141,9 +141,9 @@ class _PresetFormDialogState extends State<PresetFormDialog> {
                 ),
                 const SizedBox(width: DsSpacing.x4),
                 Expanded(
-                  child: TextFormField(
+                  child: DsTextField(
                     controller: _fltDep,
-                    decoration: InputDecoration(labelText: l.text('fltDep')),
+                    label: l.text('fltDep'),
                     keyboardType: TextInputType.number,
                     inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                     validator: (v) =>
@@ -181,9 +181,9 @@ class _PresetFormDialogState extends State<PresetFormDialog> {
             ),
             const SizedBox(height: DsSpacing.x4),
             // Sort order (optional)
-            TextField(
+            DsTextField(
               controller: _sortOrder,
-              decoration: InputDecoration(labelText: l.text('sortOrder')),
+              label: l.text('sortOrder'),
               keyboardType: TextInputType.number,
               inputFormatters: [FilteringTextInputFormatter.digitsOnly],
             ),
@@ -199,9 +199,9 @@ class _PresetFormDialogState extends State<PresetFormDialog> {
         ),
       ),
       actions: [
-        TextButton(
+        DsTextAction(
+          label: l.cancel,
           onPressed: () => Navigator.of(context).pop(),
-          child: Text(l.cancel),
         ),
         DsPrimaryButton(
           label: l.text('save'),

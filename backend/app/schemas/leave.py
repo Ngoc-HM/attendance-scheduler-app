@@ -13,7 +13,8 @@ from app.schemas.common import ORMModel
 class LeaveCreate(BaseModel):
     start_date: date
     end_date: date
-    # leave_type is accepted from caller but overridden by auto-classification
+    # leave_type is honored when supplied (two distinct UI flows); otherwise
+    # the service falls back to span-based auto-classification.
     leave_type: LeaveType | None = None
     note: str | None = None
 

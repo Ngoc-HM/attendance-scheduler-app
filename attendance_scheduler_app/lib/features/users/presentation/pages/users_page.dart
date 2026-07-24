@@ -54,17 +54,17 @@ class UsersPage extends ConsumerWidget {
     final l = AppLocalizations.of(context);
     final ok = await showDialog<bool>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text('${l.text('changeRole')} → ${l.roleLabel(role)}'),
+      builder: (dialogContext) => DsFormDialog(
+        title: '${l.text('changeRole')} → ${l.roleLabel(role)}',
         content: Text(l.text('changeRoleMessage')),
         actions: [
-          TextButton(
+          DsTextAction(
+            label: l.cancel,
             onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: Text(l.cancel),
           ),
-          FilledButton(
+          DsPrimaryButton(
+            label: l.text('confirm'),
             onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: Text(l.text('confirm')),
           ),
         ],
       ),

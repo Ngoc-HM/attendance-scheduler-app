@@ -176,105 +176,106 @@ class _MonthBatchDialogState extends ConsumerState<MonthBatchDialog> {
     return Dialog(
       insetPadding: EdgeInsets.zero,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(DsRadius.xLarge),
+        borderRadius: BorderRadius.circular(DsRadius.large),
       ),
       clipBehavior: Clip.antiAlias,
-      child: SizedBox(
-        // 90% of the app window — big canvas; days spread across the width.
-        width: screen.width * 0.9,
-        height: screen.height * 0.9,
-        child: Column(
-          children: [
-            // ─── Title bar + month switcher ───────────────────────────────
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                DsSpacing.x6,
-                DsSpacing.x5,
-                DsSpacing.x4,
-                DsSpacing.x4,
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          l.text('monthFlightsTitle'),
-                          style: Theme.of(context)
-                              .textTheme
-                              .titleLarge
-                              ?.copyWith(fontWeight: FontWeight.w700),
-                        ),
-                        const SizedBox(height: DsSpacing.x1),
-                        Text(
-                          l.text('monthFlightsHint'),
-                          style: const TextStyle(
-                            fontSize: DsFontSize.footnote,
-                            color: DsColors.textMuted,
+      child: DsSurface(
+        padding: EdgeInsets.zero,
+        child: SizedBox(
+          // 90% of the app window — big canvas; days spread across the width.
+          width: screen.width * 0.9,
+          height: screen.height * 0.9,
+          child: Column(
+            children: [
+              // ─── Title bar + month switcher ───────────────────────────────
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  DsSpacing.x6,
+                  DsSpacing.x5,
+                  DsSpacing.x4,
+                  DsSpacing.x4,
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            l.text('monthFlightsTitle'),
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleLarge
+                                ?.copyWith(fontWeight: FontWeight.w700),
                           ),
-                        ),
-                      ],
+                          const SizedBox(height: DsSpacing.x1),
+                          Text(
+                            l.text('monthFlightsHint'),
+                            style: const TextStyle(
+                              fontSize: DsFontSize.footnote,
+                              color: DsColors.textMuted,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  // Pick which month to fill (current / next / any).
-                  _MonthSwitcher(
-                    label: l.monthYear(_month),
-                    enabled: !_loading,
-                    onPrev: () =>
-                        _goToMonth(DateTime(_month.year, _month.month - 1)),
-                    onNext: () =>
-                        _goToMonth(DateTime(_month.year, _month.month + 1)),
-                  ),
-                  const SizedBox(width: DsSpacing.x2),
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    color: DsColors.textMuted,
-                    onPressed: () => Navigator.of(context).pop(),
-                  ),
-                ],
-              ),
-            ),
-
-            // ─── Grid (transposed: days across, presets down) ─────────────
-            Expanded(
-              child: _loading
-                  ? const Center(child: CircularProgressIndicator())
-                  : _TransposedGrid(
-                      month: _month,
-                      daysInMonth: daysInMonth,
-                      presets: widget.presets,
-                      selection: view,
-                      onToggleCell: _toggle,
-                      onTogglePresetAll: _togglePresetAll,
+                    // Pick which month to fill (current / next / any).
+                    _MonthSwitcher(
+                      label: l.monthYear(_month),
+                      enabled: !_loading,
+                      onPrev: () =>
+                          _goToMonth(DateTime(_month.year, _month.month - 1)),
+                      onNext: () =>
+                          _goToMonth(DateTime(_month.year, _month.month + 1)),
                     ),
-            ),
+                    const SizedBox(width: DsSpacing.x2),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      color: DsColors.textMuted,
+                      onPressed: () => Navigator.of(context).pop(),
+                    ),
+                  ],
+                ),
+              ),
 
-            // ─── Footer ───────────────────────────────────────────────────
-            Container(
-              decoration: const BoxDecoration(
-                border: Border(top: BorderSide(color: DsColors.border)),
+              // ─── Grid (transposed: days across, presets down) ─────────────
+              Expanded(
+                child: _loading
+                    ? const Center(child: CircularProgressIndicator())
+                    : _TransposedGrid(
+                        month: _month,
+                        daysInMonth: daysInMonth,
+                        presets: widget.presets,
+                        selection: view,
+                        onToggleCell: _toggle,
+                        onTogglePresetAll: _togglePresetAll,
+                      ),
               ),
-              padding: const EdgeInsets.symmetric(
-                horizontal: DsSpacing.x6,
-                vertical: DsSpacing.x4,
+
+              // ─── Footer ───────────────────────────────────────────────────
+              const Divider(height: 1, color: DsColors.border),
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: DsSpacing.x6,
+                  vertical: DsSpacing.x4,
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: Text(l.cancel),
+                    ),
+                    const SizedBox(width: DsSpacing.x3),
+                    DsPrimaryButton(
+                      label: l.text('applyMonth'),
+                      onPressed: _submit,
+                    ),
+                  ],
+                ),
               ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    child: Text(l.cancel),
-                  ),
-                  const SizedBox(width: DsSpacing.x3),
-                  DsPrimaryButton(
-                    label: l.text('applyMonth'),
-                    onPressed: _submit,
-                  ),
-                ],
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -297,9 +298,10 @@ class _MonthSwitcher extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        border: Border.all(color: DsColors.border),
+    return Material(
+      color: const Color(0x00000000),
+      shape: RoundedRectangleBorder(
+        side: const BorderSide(color: DsColors.border),
         borderRadius: BorderRadius.circular(DsRadius.medium),
       ),
       child: Row(
@@ -429,34 +431,6 @@ class _TransposedGrid extends StatelessWidget {
   }
 }
 
-/// Shared cell container so the fixed column and scroll band align pixel-perfect.
-Widget _cell({
-  required double width,
-  required double height,
-  Widget? child,
-  Color? background,
-  bool rightBorder = false,
-  AlignmentGeometry alignment = Alignment.center,
-  EdgeInsetsGeometry padding = EdgeInsets.zero,
-}) {
-  return Container(
-    width: width,
-    height: height,
-    alignment: alignment,
-    padding: padding,
-    decoration: BoxDecoration(
-      color: background,
-      border: Border(
-        bottom: const BorderSide(color: DsColors.border),
-        right: rightBorder
-            ? const BorderSide(color: DsColors.border)
-            : BorderSide.none,
-      ),
-    ),
-    child: child,
-  );
-}
-
 /// Fixed left column: a corner cell + one labelled row per preset, each with a
 /// tri-state "select all days" checkbox.
 class _PresetLabelColumn extends StatelessWidget {
@@ -477,14 +451,14 @@ class _PresetLabelColumn extends StatelessWidget {
     return Column(
       children: [
         // Corner (sits above the day numbers).
-        _cell(
+        DsGridCell(
           width: _presetColW,
           height: _headerH,
           background: DsColors.surfaceSubtle,
           rightBorder: true,
         ),
         for (final preset in presets)
-          _cell(
+          DsGridCell(
             width: _presetColW,
             height: _rowH,
             rightBorder: true,
@@ -591,7 +565,7 @@ class _DayHeaderRow extends StatelessWidget {
     final weekend = date.weekday == DateTime.saturday ||
         date.weekday == DateTime.sunday;
     final color = weekend ? DsColors.primary : DsColors.textPrimary;
-    return _cell(
+    return DsGridCell(
       width: dayW,
       height: _headerH,
       background: DsColors.surfaceSubtle,
@@ -642,7 +616,7 @@ class _PresetCheckboxRow extends StatelessWidget {
     return Row(
       children: [
         for (var dom = 1; dom <= daysInMonth; dom++)
-          _cell(
+          DsGridCell(
             width: dayW,
             height: _rowH,
             child: Checkbox(

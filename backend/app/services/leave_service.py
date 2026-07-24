@@ -90,8 +90,9 @@ def create_request(
     if end < start:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=t("leave.invalid_range"))
 
-    # 2. Auto-classify (ignore caller-supplied leave_type per spec).
-    leave_type = classify(start, end)
+    # 2. Honor caller-supplied leave_type when provided (two distinct UI flows);
+    # fall back to span-based classification otherwise.
+    leave_type = payload.leave_type or classify(start, end)
 
     # 3. Window enforcement.
     if enforce_window:

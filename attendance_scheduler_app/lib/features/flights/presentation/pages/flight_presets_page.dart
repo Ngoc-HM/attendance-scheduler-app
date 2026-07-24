@@ -121,19 +121,17 @@ class FlightPresetsPage extends ConsumerWidget {
   ) async {
     final ok = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(l.text('delete')),
-        content: Text(
-          '${l.text('deletePresetConfirm')} "${preset.label}"?',
-        ),
+      builder: (ctx) => DsFormDialog(
+        title: l.text('delete'),
+        content: Text('${l.text('deletePresetConfirm')} "${preset.label}"?'),
         actions: [
-          TextButton(
+          DsTextAction(
+            label: l.cancel,
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: Text(l.cancel),
           ),
-          FilledButton(
+          DsPrimaryButton(
+            label: l.text('delete'),
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: Text(l.text('delete')),
           ),
         ],
       ),

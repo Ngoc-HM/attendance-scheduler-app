@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../i18n/app_localizations.dart';
 import 'components.dart';
@@ -124,6 +125,7 @@ class DsTextField extends StatelessWidget {
     this.onSubmitted,
     this.prefixIcon,
     this.keyboardType,
+    this.inputFormatters,
     this.hint,
     this.enabled = true,
   });
@@ -135,6 +137,7 @@ class DsTextField extends StatelessWidget {
   final ValueChanged<String>? onSubmitted;
   final IconData? prefixIcon;
   final TextInputType? keyboardType;
+  final List<TextInputFormatter>? inputFormatters;
   final String? hint;
   final bool enabled;
 
@@ -146,6 +149,7 @@ class DsTextField extends StatelessWidget {
       obscureText: obscureText,
       onFieldSubmitted: onSubmitted,
       keyboardType: keyboardType,
+      inputFormatters: inputFormatters,
       enabled: enabled,
       decoration: InputDecoration(
         labelText: label,

@@ -73,16 +73,16 @@ class TestMonthlyWindow:
 
 
 class TestAnnualWindow:
-    def test_prior_year_ok(self):
-        # Leave starts 2026-06-01; today is 2025-11-01 → prior year.
+    def test_year_plus_one_ok(self):
+        # Leave starts 2026-06-01; today is 2025-11-01 → Y+1.
         assert is_annual_window_open(date(2025, 11, 1), leave_start_year=2026)
 
     def test_same_year_rejected(self):
-        # Leave starts 2025-06-01; today is 2025-01-01 → same year.
+        # Leave starts 2025-06-01; today is 2025-01-01 → not Y+1.
         assert not is_annual_window_open(date(2025, 1, 1), leave_start_year=2025)
 
     def test_two_years_ahead_rejected(self):
-        # Leave starts 2027; today is 2025 → too early (must be year-1).
+        # Leave starts 2027; today is 2025 → not exactly Y+1.
         assert not is_annual_window_open(date(2025, 6, 1), leave_start_year=2027)
 
 

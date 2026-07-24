@@ -2,6 +2,8 @@ import 'package:attendance_scheduler_app/design_system/design_system.dart';
 import 'package:attendance_scheduler_app/features/auth/presentation/pages/login_page.dart';
 import 'package:attendance_scheduler_app/features/home/presentation/pages/home_shell.dart';
 import 'package:attendance_scheduler_app/features/schedule/data/datasources/schedule_remote_datasource.dart';
+import 'package:attendance_scheduler_app/features/flights/data/datasources/flights_remote_datasource.dart';
+import 'package:attendance_scheduler_app/features/flights/data/models/flight_day_model.dart';
 import 'package:attendance_scheduler_app/features/schedule/presentation/pages/schedule_page.dart';
 import 'package:attendance_scheduler_app/features/schedule/presentation/providers/schedule_provider.dart';
 import 'package:attendance_scheduler_app/features/schedule/presentation/providers/shift_change_provider.dart';
@@ -28,10 +30,18 @@ class _FakeShiftChangeController extends ShiftChangeController {
   Future<void> load({bool all = false}) async {}
 }
 
+class _FakeFlightsDataSource extends FlightsRemoteDataSource {
+  _FakeFlightsDataSource() : super(Dio());
+  @override
+  Future<List<FlightDayModel>> listDays(int year, int month) async => [];
+}
+
 List<Override> _scheduleOverrides() => [
       scheduleControllerProvider.overrideWith((ref) => _FakeScheduleController()),
       shiftChangeControllerProvider
           .overrideWith((ref) => _FakeShiftChangeController()),
+      flightsDataSourceProvider
+          .overrideWith((ref) => _FakeFlightsDataSource()),
     ];
 
 void main() {

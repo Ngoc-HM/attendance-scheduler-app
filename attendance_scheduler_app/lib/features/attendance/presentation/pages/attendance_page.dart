@@ -97,10 +97,16 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
 
     final userMap = <int, User>{for (final u in state.users) u.id: u};
 
+    final daysInMonth = DateTime(_month.year, _month.month + 1, 0).day;
+
     return byUser.entries.map((entry) {
       final userId = entry.key;
       final records = entry.value;
-      final shifts = records.map((r) => _codeToShiftCode(r.code)).toList();
+      final recordByDay = {for (final r in records) r.workDate.day: r};
+      final shifts = [
+        for (var day = 1; day <= daysInMonth; day++)
+          _codeToShiftCode(recordByDay[day]?.code ?? 'X'),
+      ];
       final user = userMap[userId];
       final name = user != null
           ? (user.fullName.isNotEmpty ? user.fullName : user.username)

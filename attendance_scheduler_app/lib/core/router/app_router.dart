@@ -7,6 +7,7 @@ import '../../features/auth/domain/entities/user.dart';
 import '../../features/auth/presentation/pages/login_page.dart';
 import '../../features/auth/presentation/pages/register_page.dart';
 import '../../features/auth/presentation/providers/auth_provider.dart';
+import '../../features/flights/presentation/pages/flight_presets_page.dart';
 import '../../features/flights/presentation/pages/flights_page.dart';
 import '../../features/home/presentation/pages/home_shell.dart';
 import '../../features/leaves/presentation/pages/leaves_page.dart';
@@ -18,6 +19,7 @@ import '../../features/users/presentation/pages/users_page.dart';
 /// Routes only role M may open (client-side UX guard; the API re-checks).
 const _adminOnlyPaths = {
   AppRoute.flights,
+  AppRoute.flightPresets,
   AppRoute.attendance,
   AppRoute.reports,
   AppRoute.users,
@@ -65,6 +67,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 const NoTransitionPage(child: FlightsPage()),
           ),
           GoRoute(
+            path: AppRoute.flightPresets,
+            pageBuilder: (context, state) =>
+                const NoTransitionPage(child: FlightPresetsPage()),
+          ),
+          GoRoute(
             path: AppRoute.leaves,
             pageBuilder: (context, state) =>
                 const NoTransitionPage(child: LeavesPage()),
@@ -108,6 +115,7 @@ class AppRoute {
   static const String register = '/register';
   static const String schedule = '/schedule';
   static const String flights = '/flights';
+  static const String flightPresets = '/flights/presets';
   static const String leaves = '/leaves';
   static const String attendance = '/attendance';
   static const String reports = '/reports';

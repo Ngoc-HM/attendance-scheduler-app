@@ -1,20 +1,20 @@
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../../core/network/api_exception.dart';
+import '../../../../core/router/app_router.dart';
 import '../../../../design_system/design_system.dart';
 import '../../../../i18n/app_localizations.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../data/datasources/flights_remote_datasource.dart';
 import '../providers/flights_provider.dart';
 import '../widgets/month_batch_dialog.dart';
-import 'flight_presets_page.dart';
 
 /// Flights page (F-04) — live data from GET /flights/days.
 ///
 /// Admin primary action: "Add flight" opens the month-batch preset grid.
-/// Admin secondary actions: Excel import, manage presets.
+/// Admin secondary action: manage presets.
 /// All users: month navigation + table view.
 class FlightsPage extends ConsumerWidget {
   const FlightsPage({super.key});
@@ -55,52 +55,14 @@ class FlightsPage extends ConsumerWidget {
         rows: rows,
         onPreviousMonth: ctrl.previousMonth,
         onNextMonth: ctrl.nextMonth,
-        onImport: isAdmin ? () => _pickAndImport(context, ref, l) : () {},
         onAdd: isAdmin
             ? () => _showMonthBatchDialog(context, ref, state.month, l)
             : () {},
         onManagePresets: isAdmin
-            ? () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) => const FlightPresetsPage(),
-                  ),
-                )
+            ? () => context.push(AppRoute.flightPresets)
             : null,
       ),
     );
-  }
-
-  // ---------------------------------------------------------------------------
-  // Excel import
-  // ---------------------------------------------------------------------------
-
-  Future<void> _pickAndImport(
-    BuildContext context,
-    WidgetRef ref,
-    AppLocalizations l,
-  ) async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['xlsx'],
-      withData: true,
-    );
-    if (result == null || result.files.isEmpty) return;
-
-    final ctrl = ref.read(flightsControllerProvider.notifier);
-    try {
-      await ctrl.importExcel(result.files.first);
-      if (context.mounted) {
-        DsFeedback.show(
-          context,
-          l.text('flightsImportSuccess'),
-          tone: DsTone.success,
-        );
-      }
-    } on ApiException catch (e) {
-      if (context.mounted) {
-        DsFeedback.show(context, e.message, tone: DsTone.danger);
-      }
-    }
   }
 
   // ---------------------------------------------------------------------------

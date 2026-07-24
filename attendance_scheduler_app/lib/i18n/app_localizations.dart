@@ -113,7 +113,8 @@ class AppLocalizations {
       'chooseFile': 'Choose file',
       'leaveRequests': 'Leave requests',
       'leaveSubtitle': 'Leave registration is unrestricted in development',
-      'requestLeave': 'Request leave',
+      'requestMonthlyLeave': 'Request monthly leave',
+      'requestAnnualLeave': 'Request annual leave',
       'pending': 'Pending',
       'approved': 'Approved',
       'rejected': 'Rejected',
@@ -125,7 +126,10 @@ class AppLocalizations {
       'compDays': 'Comp days',
       'registrationOpen': 'Registration open',
       'shortLeaveMessage':
-          'Short leave is under 5 consecutive days. Longer leave uses the annual request.',
+          'Monthly leave is under 5 consecutive days. Longer leave uses the annual request.',
+      'monthlyLeaveHint': 'Monthly leave is under 5 consecutive days.',
+      'annualLeaveHint': 'Annual leave is 5 or more consecutive days, limited to the next year (Y+1).',
+
       'leaveWindowHint':
           'Development mode: leave dates are not restricted by registration windows.',
       'requests': 'Requests',
@@ -437,7 +441,8 @@ class AppLocalizations {
       'chooseFile': 'Chọn tệp',
       'leaveRequests': 'Đăng ký nghỉ',
       'leaveSubtitle': 'Môi trường dev không giới hạn thời gian đăng ký',
-      'requestLeave': 'Đăng ký nghỉ',
+      'requestMonthlyLeave': 'Đăng ký nghỉ tháng',
+      'requestAnnualLeave': 'Đăng ký nghỉ phép năm',
       'pending': 'Chờ duyệt',
       'approved': 'Đã duyệt',
       'rejected': 'Đã từ chối',
@@ -449,8 +454,12 @@ class AppLocalizations {
       'compDays': 'Ngày nghỉ bù',
       'registrationOpen': 'Đang mở đăng ký',
       'shortLeaveMessage':
-          'Nghỉ ngắn dưới 5 ngày liên tục. Nghỉ dài hơn dùng đăng ký phép năm.',
-      'leaveWindowHint': 'Môi trường dev: không giới hạn ngày đăng ký nghỉ.',
+          'Nghỉ hàng tháng dưới 5 ngày liên tục. Nghỉ dài hơn dùng đăng ký phép năm.',
+      'monthlyLeaveHint': 'Nghỉ hàng tháng dưới 5 ngày liên tục.',
+      'annualLeaveHint': 'Nghỉ phép năm từ 5 ngày liên tục trở lên, chỉ được đăng ký năm sau (Y+1).',
+
+      'leaveWindowHint':
+          'Môi trường dev: không giới hạn ngày đăng ký nghỉ.',
       'requests': 'Yêu cầu',
       'type': 'Loại',
       'dates': 'Thời gian',

@@ -20,6 +20,56 @@ class DsTableColumn {
   final AlignmentGeometry alignment;
 }
 
+/// Reusable fixed-size cell for custom grids (e.g. the month-batch preset grid).
+///
+/// Kept in the design system so feature code does not recreate Container +
+/// BoxDecoration combinations. Borders are configurable per edge so frozen/scroll
+/// bands can share the same visual cell and stay pixel-aligned.
+class DsGridCell extends StatelessWidget {
+  const DsGridCell({
+    super.key,
+    required this.width,
+    required this.height,
+    this.background,
+    this.rightBorder = false,
+    this.bottomBorder = true,
+    this.alignment = Alignment.center,
+    this.padding = EdgeInsets.zero,
+    this.child,
+  });
+
+  final double width;
+  final double height;
+  final Color? background;
+  final bool rightBorder;
+  final bool bottomBorder;
+  final AlignmentGeometry alignment;
+  final EdgeInsetsGeometry padding;
+  final Widget? child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: width,
+      height: height,
+      alignment: alignment,
+      padding: padding,
+      decoration: BoxDecoration(
+        color: background,
+        border: Border(
+          bottom: bottomBorder
+              ? const BorderSide(color: DsColors.border)
+              : BorderSide.none,
+          right: rightBorder
+              ? const BorderSide(color: DsColors.border)
+              : BorderSide.none,
+        ),
+      ),
+      child: child,
+    );
+  }
+}
+
 /// A reusable static-data table that renders a header row + data rows with
 /// consistent padding, light dividers, optional zebra striping, and token-based
 /// colours/text styles. Columns are distributed via [Expanded] flex weights.

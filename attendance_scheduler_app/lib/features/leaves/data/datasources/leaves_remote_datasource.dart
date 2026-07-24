@@ -53,6 +53,7 @@ class LeavesRemoteDataSource {
   Future<LeaveModel> create({
     required DateTime startDate,
     required DateTime endDate,
+    required String leaveType,
     String? note,
   }) async {
     try {
@@ -61,6 +62,7 @@ class LeavesRemoteDataSource {
         data: {
           'start_date': _fmt(startDate),
           'end_date': _fmt(endDate),
+          'leave_type': leaveType,
           if (note != null && note.isNotEmpty) 'note': note,
         },
       );

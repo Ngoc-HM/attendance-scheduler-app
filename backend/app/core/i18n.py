@@ -42,7 +42,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         # --- Leaves (F-05/F-06) ---
         "leave.not_found": "Leave request not found.",
         "leave.window_closed_monthly": "Monthly leave registration is open from day 1 to day 20 of the previous month.",
-        "leave.window_closed_annual": "Annual leave (>= 5 consecutive days) must be registered during the previous calendar year.",
+        "leave.window_closed_annual": "Annual leave can only be registered for the next year (Y+1).",
         "leave.already_decided": "This leave request was already decided.",
         "leave.overlap": "An overlapping leave request already exists.",
         "leave.invalid_range": "End date must not be before start date.",
@@ -99,7 +99,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         # --- Leaves (F-05/F-06) ---
         "leave.not_found": "Không tìm thấy đơn nghỉ.",
         "leave.window_closed_monthly": "Đăng ký nghỉ tháng mở từ ngày 1 đến ngày 20 của tháng trước.",
-        "leave.window_closed_annual": "Nghỉ phép năm (>= 5 ngày liên tục) phải đăng ký trong năm trước.",
+        "leave.window_closed_annual": "Nghỉ phép năm chỉ được đăng ký cho năm sau (Y+1).",
         "leave.already_decided": "Đơn nghỉ này đã được quyết định.",
         "leave.overlap": "Đã tồn tại đơn nghỉ trùng thời gian.",
         "leave.invalid_range": "Ngày kết thúc không được trước ngày bắt đầu.",
