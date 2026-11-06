@@ -5,7 +5,8 @@ Monorepo: FastAPI backend + Flutter desktop client. Spec: `PROJECT_OVERVIEW.md`.
 ## Backend (`backend/app/`)
 ```
 core/        config, database, security (JWT/bcrypt), i18n (en/vi), bootstrap,
-             business_time (business_today() in TIMEZONE)
+             business_time (business_today() in TIMEZONE), script_guard
+             (maintenance scripts: dev + local database only)
 models/      User, RoleCodeCounter, Flight/FlightDay/FlightPreset, LeaveRequest,
              ShiftChangeRequest, SelfArrangeRequest, MonthlySchedule/ShiftAssignment,
              AttendanceRecord, TimeClockEntry, Holiday, AuditLog, enums
@@ -27,9 +28,10 @@ scheduler/   domain (SolverInput/Output), engine (CP-SAT), role_codes (per-role
              _premium_off / _off_pairing, slack_registry, calendar_utils
 alembic/     0001 baseline … 0008 annual_leave_quota (head; see design-decisions
              "Migration strategy")
-scripts/     seed_demo_users.py, reset_all_passwords.py (both refuse outside
-             ENVIRONMENT=dev unless --allow-non-dev)
-tests/       239 tests (pytest on SQLite) — engine rules (bind + slack
+scripts/     seed_demo_users.py, reset_all_passwords.py (both refuse unless
+             ENVIRONMENT=dev and the database is local, app/core/script_guard.py;
+             --allow-non-dev overrides)
+tests/       291 tests (pytest on SQLite) — engine rules (bind + slack
              violation), roles, cross-month rules, services, endpoints, RBAC/audit,
              sick privacy, production guard, compliance, attendance sync, health
 ```
@@ -55,7 +57,8 @@ New in the 2026-11 remediation: `core/business_time.py`,
 ```
 core/         config, network (Dio + JWT interceptor), router (go_router, auth
               guard + admin-only routes), storage (secure JWT, locale),
-              constants (api_endpoints, shift_codes incl. plannedCodesFor(role)),
+              constants (api_endpoints, shift_codes incl. plannedCodesFor(role)
+              for the admin editor and requestableCodesFor(role) for requests),
               utils
 design_system/ reusable Ds*View widgets (Schedule, Flights, Leaves, Attendance,
               Reports, Users) + dialogs, tokens, theme
@@ -67,7 +70,7 @@ i18n/         custom AppLocalizations (en/vi, graceful text(key) fallback)
 ```
 `auth` is the canonical clean-architecture template; the business features
 mirror it, feeding live provider state into the `design_system` views.
-Tests: `test/` — 60 tests including 3 goldens (`test/goldens/`).
+Tests: `test/` — 65 tests including 3 goldens (`test/goldens/`).
 
 ## Entry points
 - Backend: `uvicorn app.main:app` (lifespan: bootstrap + monthly autorun at
