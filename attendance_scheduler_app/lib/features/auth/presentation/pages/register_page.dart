@@ -7,7 +7,6 @@ import '../../../../design_system/design_system.dart';
 import '../../../../i18n/app_localizations.dart';
 import '../../../../i18n/locale_provider.dart';
 import '../../data/repositories/auth_repository_impl.dart';
-import '../../domain/entities/user.dart';
 
 class RegisterPage extends ConsumerStatefulWidget {
   const RegisterPage({super.key});
@@ -22,11 +21,8 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
   final _fullName = TextEditingController();
   final _password = TextEditingController();
 
-  // Self-registration offers the non-admin roles; the admin activates the
-  // account and may still reassign the role afterwards (owner 2026-07-09).
-  static const _selectableRoles = [UserRole.t, UserRole.f, UserRole.a];
-
-  UserRole _role = UserRole.t;
+  // No role picker: self-registration cannot choose a role; the admin assigns
+  // it when approving the pending account (F-03).
   bool _isLoading = false;
   String? _error;
 
@@ -51,7 +47,6 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
             username: _username.text.trim(),
             fullName: _fullName.text.trim(),
             password: _password.text,
-            role: _role,
           );
       if (!mounted) return;
       final l = AppLocalizations.of(context);
@@ -68,22 +63,16 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
     final locale = ref.watch(localeControllerProvider);
-    return DsRegisterView<UserRole>(
+    return DsRegisterView(
       formKey: _formKey,
       usernameController: _username,
       fullNameController: _fullName,
       passwordController: _password,
-      role: _role,
-      roleOptions: [
-        for (final role in _selectableRoles)
-          DsSelectOption(value: role, label: l.roleLabel(role.apiValue)),
-      ],
       title: l.register,
       subtitle: l.text('registerSubtitle'),
       usernameLabel: l.username,
       fullNameLabel: l.fullName,
       passwordLabel: l.password,
-      roleLabel: l.role,
       submitLabel: l.register,
       backLabel: l.backToLogin,
       minThreeMessage: l.minThreeChars,
@@ -95,7 +84,6 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
       onLanguageChanged: ref
           .read(localeControllerProvider.notifier)
           .setLanguage,
-      onRoleChanged: (role) => setState(() => _role = role),
       onSubmit: _submit,
       onBack: () => context.go(AppRoute.login),
     );

@@ -61,19 +61,54 @@ def test_self_register_then_approve_flow(client: TestClient) -> None:
     # Self-registration lands in `pending` and cannot log in yet.
     reg = client.post(
         f"{V}/auth/register",
-        json={"username": "longg", "full_name": "Long", "password": "secret1", "role": "A"},
+        json={"username": "longg", "full_name": "Long", "password": "secret1"},
     )
     assert reg.status_code == 201
     assert reg.json()["status"] == "pending"
+    assert reg.json()["role"] == "T"
     user_id = reg.json()["id"]
     assert _login(client, "longg", "secret1").status_code == 401
 
-    # Admin approves -> user becomes active and can log in.
+    # Admin approves with a role -> user becomes active and can log in.
+    # Keeping the registered role keeps the code (no code is burned).
     admin = _bearer(_token(client, "admin", "admin123"))
-    approved = client.post(f"{V}/auth/users/{user_id}/approve", headers=admin)
+    approved = client.post(
+        f"{V}/auth/users/{user_id}/approve", json={"role": "T"}, headers=admin
+    )
     assert approved.status_code == 200
     assert approved.json()["status"] == "active"
+    assert approved.json()["role"] == "T"
+    assert approved.json()["code"] == reg.json()["code"]
     assert _login(client, "longg", "secret1").status_code == 200
+
+
+def test_register_ignores_role_and_approve_assigns_role(client: TestClient) -> None:
+    # F-03: self-registration cannot pick a role; a smuggled "M" is ignored.
+    reg = client.post(
+        f"{V}/auth/register",
+        json={"username": "x1reg", "full_name": "X", "password": "secret12", "role": "M"},
+    )
+    assert reg.status_code == 201
+    assert reg.json()["role"] == "T"
+    assert reg.json()["status"] == "pending"
+    uid = reg.json()["id"]
+
+    # Approval must name the role the admin assigns.
+    admin = _bearer(_token(client, "admin", "admin123"))
+    missing = client.post(f"{V}/auth/users/{uid}/approve", headers=admin)
+    assert missing.status_code == 422
+    assert _login(client, "x1reg", "secret12").status_code == 401  # still pending
+
+    approved = client.post(
+        f"{V}/auth/users/{uid}/approve", json={"role": "A"}, headers=admin
+    )
+    assert approved.status_code == 200
+    assert approved.json()["status"] == "active"
+    assert approved.json()["role"] == "A"
+    assert approved.json()["code"].startswith("A")
+
+    me = client.get(f"{V}/users/me", headers=_bearer(_token(client, "x1reg", "secret12")))
+    assert me.json()["role"] == "A"
 
 
 def test_non_admin_cannot_list_users(client: TestClient) -> None:

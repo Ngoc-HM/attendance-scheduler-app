@@ -15,9 +15,24 @@ class UserBase(BaseModel):
 
 
 class UserCreate(UserBase):
-    """Admin-created user, or self-registration (F-01)."""
+    """Admin-created user with an assigned role (F-01, F-03)."""
 
     password: str = Field(min_length=6, max_length=128)
+
+
+class RegisterRequest(BaseModel):
+    """Self-registration (F-01). There is no ``role``: the admin assigns it
+    when approving (F-03); a ``role`` sent by the client is ignored."""
+
+    username: str = Field(min_length=3, max_length=64)
+    full_name: str = Field(max_length=128)
+    password: str = Field(min_length=6, max_length=128)
+
+
+class ApproveRequest(BaseModel):
+    """Admin approval of a pending account; the admin picks the role (F-03)."""
+
+    role: Role
 
 
 class UserUpdate(BaseModel):

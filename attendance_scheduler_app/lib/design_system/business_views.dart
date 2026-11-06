@@ -101,21 +101,20 @@ class DsLoginView extends StatelessWidget {
   }
 }
 
-class DsRegisterView<T> extends StatelessWidget {
+/// Self-registration form. No role field: the admin assigns the role when
+/// approving the pending account (F-03).
+class DsRegisterView extends StatelessWidget {
   const DsRegisterView({
     super.key,
     required this.formKey,
     required this.usernameController,
     required this.fullNameController,
     required this.passwordController,
-    required this.role,
-    required this.roleOptions,
     required this.title,
     required this.subtitle,
     required this.usernameLabel,
     required this.fullNameLabel,
     required this.passwordLabel,
-    required this.roleLabel,
     required this.submitLabel,
     required this.backLabel,
     required this.minThreeMessage,
@@ -123,7 +122,6 @@ class DsRegisterView<T> extends StatelessWidget {
     required this.minSixMessage,
     required this.languageCode,
     required this.onLanguageChanged,
-    required this.onRoleChanged,
     required this.onSubmit,
     required this.onBack,
     this.error,
@@ -134,14 +132,11 @@ class DsRegisterView<T> extends StatelessWidget {
   final TextEditingController usernameController;
   final TextEditingController fullNameController;
   final TextEditingController passwordController;
-  final T role;
-  final List<DsSelectOption<T>> roleOptions;
   final String title;
   final String subtitle;
   final String usernameLabel;
   final String fullNameLabel;
   final String passwordLabel;
-  final String roleLabel;
   final String submitLabel;
   final String backLabel;
   final String minThreeMessage;
@@ -149,7 +144,6 @@ class DsRegisterView<T> extends StatelessWidget {
   final String minSixMessage;
   final String languageCode;
   final ValueChanged<String> onLanguageChanged;
-  final ValueChanged<T> onRoleChanged;
   final VoidCallback onSubmit;
   final VoidCallback onBack;
   final String? error;
@@ -192,21 +186,6 @@ class DsRegisterView<T> extends StatelessWidget {
               obscureText: true,
               validator: (value) =>
                   (value == null || value.length < 6) ? minSixMessage : null,
-            ),
-            const SizedBox(height: DsSpacing.x4),
-            DsSelectField<T>(
-              label: roleLabel,
-              value: role,
-              items: [
-                for (final option in roleOptions)
-                  DropdownMenuItem(
-                    value: option.value,
-                    child: Text(option.label),
-                  ),
-              ],
-              onChanged: (value) {
-                if (value != null) onRoleChanged(value);
-              },
             ),
             if (error != null) ...[
               const SizedBox(height: DsSpacing.x4),

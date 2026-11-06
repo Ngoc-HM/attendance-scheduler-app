@@ -52,6 +52,9 @@ class AppLocalizations {
       'status': 'Status',
       'actions': 'Actions',
       'approve': 'Approve',
+      'approveRoleMessage':
+          'Choose the role for this account before activating it. '
+          'The account code follows the chosen role.',
       'disable': 'Disable',
       'enable': 'Enable',
       'changeRole': 'Change role',
@@ -417,6 +420,9 @@ class AppLocalizations {
       'status': 'Trạng thái',
       'actions': 'Thao tác',
       'approve': 'Phê duyệt',
+      'approveRoleMessage':
+          'Chọn vai trò cho tài khoản trước khi kích hoạt. '
+          'Mã tài khoản sẽ theo vai trò được chọn.',
       'disable': 'Vô hiệu hóa',
       'enable': 'Kích hoạt',
       'changeRole': 'Đổi vai trò',

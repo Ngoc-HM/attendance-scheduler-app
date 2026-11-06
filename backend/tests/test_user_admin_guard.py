@@ -147,6 +147,18 @@ def test_solo_admin_cannot_self_disable(client: TestClient) -> None:
     assert res.status_code == 409
 
 
+def test_last_admin_cannot_be_demoted_through_approve(client: TestClient) -> None:
+    """Approval assigns a role (F-03), so it honours the same lockout as PATCH."""
+    admin = _admin(client)
+    me = client.get(f"{V}/users/me", headers=admin).json()
+    res = client.post(
+        f"{V}/auth/users/{me['id']}/approve", headers=admin, json={"role": "T"}
+    )
+    assert res.status_code == 409
+    assert res.json()["detail"] == "You cannot remove or disable the last remaining admin."
+    assert _fetch_user(me["id"]).role is Role.M
+
+
 # --- TC-005: fixed-team soft warning --------------------------------------
 
 
