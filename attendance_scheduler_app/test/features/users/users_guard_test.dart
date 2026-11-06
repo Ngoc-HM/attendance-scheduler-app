@@ -57,7 +57,8 @@ class _StubUserDataSource implements UserManagementDataSource {
   @override
   Future<List<UserModel>> list() async => const [];
   @override
-  Future<UserModel> approve(int id) async => throw UnimplementedError();
+  Future<UserModel> approve(int id, {required String role}) async =>
+      throw UnimplementedError();
   @override
   Future<UserUpdateResult> update(int id, Map<String, dynamic> changes) async =>
       throw UnimplementedError();

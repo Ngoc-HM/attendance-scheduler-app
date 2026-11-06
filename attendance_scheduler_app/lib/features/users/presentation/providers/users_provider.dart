@@ -37,8 +37,9 @@ class UsersController extends StateNotifier<AsyncValue<List<User>>> {
     await load();
   }
 
-  Future<void> approve(int id) async {
-    await _ds.approve(id);
+  /// Activates a pending account with the role the admin picked (F-03).
+  Future<void> approve(int id, UserRole role) async {
+    await _ds.approve(id, role: role.apiValue);
     await load();
   }
 

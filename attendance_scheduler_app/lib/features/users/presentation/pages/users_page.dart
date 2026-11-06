@@ -39,7 +39,11 @@ class UsersPage extends ConsumerWidget {
         context: context,
         builder: (_) => CreateUserDialog(),
       ),
-      onApprove: controller.approve,
+      onApprove: (id) => _confirmApprove(
+        context,
+        controller,
+        users.firstWhere((user) => user.id == id),
+      ),
       onDisable: (id) =>
           _confirmSelfOrAdmin(context, controller, currentUser?.id, id, (ctrl) {
         return ctrl.setStatus(id, 'disabled');
@@ -57,6 +61,60 @@ class UsersPage extends ConsumerWidget {
       ),
       onDelete: (id) => _confirmDelete(context, controller, currentUser?.id, id),
     );
+  }
+
+  /// Approval assigns the role (F-03): self-registration cannot pick one, so
+  /// the admin chooses it here, starting from the account's current role. The
+  /// backend reassigns the code if the role changes. Errors (e.g. last-admin
+  /// lockout) are shown like any other mutation.
+  Future<void> _confirmApprove(
+    BuildContext context,
+    UsersController controller,
+    User user,
+  ) async {
+    final l = AppLocalizations.of(context);
+    var selected = user.role;
+    final role = await showDialog<UserRole>(
+      context: context,
+      builder: (dialogContext) => DsFormDialog(
+        title: '${l.approve}: ${user.username}',
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(l.text('approveRoleMessage')),
+            const SizedBox(height: DsSpacing.x4),
+            DsSelectField<UserRole>(
+              label: l.role,
+              value: selected,
+              items: [
+                for (final option in UserRole.values)
+                  DropdownMenuItem(
+                    value: option,
+                    child: Text(l.roleLabel(option.apiValue)),
+                  ),
+              ],
+              // The field shows the pick itself; only remember it here.
+              onChanged: (picked) {
+                if (picked != null) selected = picked;
+              },
+            ),
+          ],
+        ),
+        actions: [
+          DsTextAction(
+            label: l.cancel,
+            onPressed: () => Navigator.of(dialogContext).pop(),
+          ),
+          DsPrimaryButton(
+            label: l.approve,
+            onPressed: () => Navigator.of(dialogContext).pop(selected),
+          ),
+        ],
+      ),
+    );
+    if (role == null || !context.mounted) return;
+    await _runMutation(context, controller.approve(user.id, role));
   }
 
   /// Confirm before changing a role: the backend reassigns the account code to

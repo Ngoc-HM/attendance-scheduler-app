@@ -35,12 +35,10 @@ class AuthRepositoryImpl implements AuthRepository {
     required String username,
     required String fullName,
     required String password,
-    required UserRole role,
   }) => _remote.register(
     username: username,
     fullName: fullName,
     password: password,
-    role: role.apiValue,
   );
 
   @override

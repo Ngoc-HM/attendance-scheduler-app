@@ -9,7 +9,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 
 from app.api.deps import AdminUser, DbSession
 from app.schemas.token import Token
-from app.schemas.user import UserCreate, UserRead
+from app.schemas.user import ApproveRequest, RegisterRequest, UserRead
 from app.services import audit_service, auth_service, user_service
 
 router = APIRouter()
@@ -23,16 +23,19 @@ def login(db: DbSession, form_data: Annotated[OAuth2PasswordRequestForm, Depends
 
 
 @router.post("/register", response_model=UserRead, status_code=status.HTTP_201_CREATED)
-def register(db: DbSession, payload: UserCreate):
-    """F-01 — self-registration; account stays ``pending`` until admin approval."""
+def register(db: DbSession, payload: RegisterRequest):
+    """F-01 — self-registration; account stays ``pending`` (role ``T``) until
+    an admin approves it and assigns the role (F-03)."""
     return user_service.register(db, payload)
 
 
 @router.post("/users/{user_id}/approve", response_model=UserRead)
-def approve_user(db: DbSession, user_id: int, admin: AdminUser):
-    """F-01 — admin approves a pending account (activates it). Audited (§9.5)."""
-    user = user_service.approve(db, user_id)
+def approve_user(db: DbSession, user_id: int, payload: ApproveRequest, admin: AdminUser):
+    """F-01/F-03 — admin activates a pending account and assigns its role.
+    Audited (§9.5)."""
+    user = user_service.approve(db, user_id, payload.role)
     audit_service.record(
-        db, admin.id, "user.approve", "User", user.id, detail=f"username={user.username}"
+        db, admin.id, "user.approve", "User", user.id,
+        detail=f"username={user.username} role={user.role.value}",
     )
     return user
