@@ -248,9 +248,6 @@ class AppLocalizations {
       'scheduleGenerated': 'Schedule generated.',
       'ruleWarnings': 'rule warning(s).',
       'scheduleInfeasible': 'No valid schedule could be found.',
-      'regenerateTitle': 'Regenerate schedule?',
-      'regenerateWarning':
-          'This schedule is published. Regenerating will rearrange the whole month and overwrite it. Continue?',
       'regenerate': 'Regenerate',
       'scheduleNotPublishedYet':
           'The schedule for this month is not published yet.',
@@ -339,7 +336,8 @@ class AppLocalizations {
       'regenerateConfirmTitle': 'Regenerate schedule?',
       'regenerateConfirmBody':
           'This schedule is published or has manual edits. Regenerating will '
-          'discard the manual edits and return the schedule to draft.',
+          'discard the manual edits and return the schedule to draft. '
+          'Employees lose access to this month until it is published again.',
       // --- Admin cell edit (F-09 UI, owner 2026-07-17) ---
       'editCell': 'Edit cell',
       'cellSaved': 'Cell saved.',
@@ -645,9 +643,6 @@ class AppLocalizations {
       'scheduleGenerated': 'Đã tạo lịch.',
       'ruleWarnings': 'cảnh báo quy tắc.',
       'scheduleInfeasible': 'Không tìm được lời giải hợp lệ cho lịch.',
-      'regenerateTitle': 'Tạo lại lịch?',
-      'regenerateWarning':
-          'Lịch này đã công bố. Tạo lại sẽ sắp xếp lại toàn bộ tháng và ghi đè lịch hiện tại. Tiếp tục?',
       'regenerate': 'Tạo lại',
       'scheduleNotPublishedYet': 'Lịch tháng này chưa được công bố.',
       'schedulePublished': 'Đã công bố lịch.',
@@ -735,7 +730,8 @@ class AppLocalizations {
       'regenerateConfirmTitle': 'Tạo lại lịch?',
       'regenerateConfirmBody':
           'Lịch đã publish hoặc đã chỉnh tay. Tạo lại sẽ xoá chỉnh tay và '
-          'đưa lịch về nháp.',
+          'đưa lịch về nháp. Nhân viên sẽ không xem được lịch tháng này '
+          'cho đến khi lịch được công bố lại.',
       // --- Admin cell edit (F-09 UI, owner 2026-07-17) ---
       'editCell': 'Sửa ô lịch',
       'cellSaved': 'Đã lưu ô lịch.',

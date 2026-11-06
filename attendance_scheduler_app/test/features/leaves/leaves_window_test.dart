@@ -35,7 +35,8 @@ class _SignedIn extends AuthController {
 class _FakeLeaves implements LeavesRemoteDataSource {
   _FakeLeaves(this.window, this.leaves, this.balance);
 
-  final LeaveWindow window;
+  /// Null → GET /leaves/window fails.
+  final LeaveWindow? window;
   final List<LeaveModel> leaves;
 
   /// Null → GET /leaves/balance fails.
@@ -43,7 +44,11 @@ class _FakeLeaves implements LeavesRemoteDataSource {
   int balanceCalls = 0;
 
   @override
-  Future<LeaveWindow> fetchWindow() async => window;
+  Future<LeaveWindow> fetchWindow() async {
+    final value = window;
+    if (value == null) throw const ApiException('boom', statusCode: 500);
+    return value;
+  }
 
   @override
   Future<AnnualLeaveBalance> fetchBalance({int? year}) async {
@@ -118,14 +123,15 @@ List<LeaveModel> _twoPendingOf(int userId) => [
     ),
 ];
 
-LeaveWindow _window({required bool open}) => LeaveWindow(
-  monthlyOpen: open,
-  monthlyTargetYear: 2026,
-  monthlyTargetMonth: 12,
-  annualTargetYear: 2027,
-  closesOnDay: 18,
-  enforced: true,
-);
+LeaveWindow _window({required bool open, int annualTargetYear = 2027}) =>
+    LeaveWindow(
+      monthlyOpen: open,
+      monthlyTargetYear: 2026,
+      monthlyTargetMonth: 12,
+      annualTargetYear: annualTargetYear,
+      closesOnDay: 18,
+      enforced: true,
+    );
 
 const _enSubtitle =
     'Monthly leave: register by day 18 of the previous month. '
@@ -142,7 +148,7 @@ const _balance27 = AnnualLeaveBalance(
 
 Future<_FakeLeaves> _pump(
   WidgetTester tester, {
-  required LeaveWindow window,
+  required LeaveWindow? window,
   User user = _employee,
   List<LeaveModel>? leaves,
   List<UserModel> users = const [],
@@ -194,6 +200,15 @@ String _metric(WidgetTester tester, String label) {
 /// The value shown on the "Comp days" metric card.
 String _compDaysMetric(WidgetTester tester) => _metric(tester, 'Comp days');
 
+/// Open the annual-leave dialog and its start-date picker; return the picker.
+Future<DatePickerDialog> _openAnnualStartPicker(WidgetTester tester) async {
+  await tester.tap(find.text('Request annual leave'));
+  await tester.pumpAndSettle();
+  await tester.tap(find.widgetWithText(TextField, 'Start date'));
+  await tester.pumpAndSettle();
+  return tester.widget<DatePickerDialog>(find.byType(DatePickerDialog));
+}
+
 void main() {
   testWidgets('closed window from the API drives banner and subtitle', (
     tester,
@@ -242,6 +257,29 @@ void main() {
       findsOneWidget,
     );
     expect(find.textContaining('Development mode'), findsNothing);
+  });
+
+  testWidgets('annual leave picker covers the window target year', (
+    tester,
+  ) async {
+    await _pump(tester, window: _window(open: true, annualTargetYear: 2031));
+
+    final picker = await _openAnnualStartPicker(tester);
+
+    expect(picker.firstDate, DateTime(2031));
+    expect(picker.lastDate, DateTime(2031, 12, 31));
+  });
+
+  testWidgets('annual leave picker falls back to next year without a window', (
+    tester,
+  ) async {
+    await _pump(tester, window: null);
+
+    final picker = await _openAnnualStartPicker(tester);
+
+    final next = DateTime.now().year + 1;
+    expect(picker.firstDate, DateTime(next));
+    expect(picker.lastDate, DateTime(next, 12, 31));
   });
 
   testWidgets('employee comp days come from /users/me, once per person', (

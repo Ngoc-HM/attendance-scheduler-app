@@ -1,4 +1,4 @@
-"""Day-20 autorun job (locked decision #9, spec F-05/F-07).
+"""Autorun job (locked decision #9, spec F-05/F-07).
 
 The monthly registration window for M+1 stays open through the whole of day
 ``AUTORUN_DAY`` of month M (``leave_windows.registration_last_day``). Once it
@@ -36,7 +36,7 @@ def maybe_run_autorun(today: date | None = None) -> bool:
 
     Day ``AUTORUN_DAY`` is still inside the registration window, so the run
     waits until ``AUTORUN_DAY + 1``. ``today`` defaults to the business date in
-    ``TIMEZONE`` — the cron fires at 00:05 Berlin, when a UTC host still reads
+    ``TIMEZONE`` — the cron fires at 00:05 in ``TIMEZONE``, when a UTC host still reads
     the previous day. Returns True when a generation was performed (used by
     tests/monitoring).
     """
@@ -86,7 +86,7 @@ def start_scheduler() -> BackgroundScheduler | None:
     if not settings.AUTORUN_ENABLED:
         return None
     scheduler = BackgroundScheduler(timezone=settings.TIMEZONE)
-    scheduler.add_job(maybe_run_autorun, "cron", hour=0, minute=5, id="day20-autorun")
+    scheduler.add_job(maybe_run_autorun, "cron", hour=0, minute=5, id="autorun")
     scheduler.start()
     logger.info(
         "Autorun scheduler started (window closes after day %d; draft at 00:05 on day %d).",

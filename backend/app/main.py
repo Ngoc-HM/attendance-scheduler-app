@@ -39,7 +39,7 @@ async def lifespan(app: FastAPI):  # noqa: ANN201
     # Startup: ensure tables (dev) and the seed admin exist (F-01).
     run_startup_bootstrap()
     # Autorun (#9): the leave window closes at the end of AUTORUN_DAY; at 00:05
-    # Berlin the day after, next month's draft is generated.
+    # (settings.TIMEZONE) the day after, next month's draft is generated.
     from app.services.schedule_autorun import start_scheduler
 
     scheduler = start_scheduler()

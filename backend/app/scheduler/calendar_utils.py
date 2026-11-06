@@ -21,7 +21,7 @@ def build_weeks(days: list[date]) -> list[list[date]]:
     A "week" for the 2-days-off rule (§5.3 #2) is days 1–7, 8–14, 15–21,
     22–28, 29–end of the month — NOT calendar Mon–Sun weeks. Only the final
     block can be partial; its off-day target is pro-rated via
-    ``partial_block_off_target``. Confirm-with-customer flag in plan.md.
+    ``partial_block_off_target``. Owner re-confirmed 2026-11-06 (D2).
     """
     ordered = sorted(days)
     blocks: dict[int, list[date]] = {}

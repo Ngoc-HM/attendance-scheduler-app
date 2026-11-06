@@ -176,15 +176,19 @@ class LeavesPage extends ConsumerWidget {
     final endCtrl = TextEditingController();
 
     // The real registration rule, with the live closing day once known.
-    final closesOnDay = ref.read(leavesControllerProvider).window?.closesOnDay;
+    final window = ref.read(leavesControllerProvider).window;
+    final closesOnDay = window?.closesOnDay;
     final windowHint = closesOnDay == null
         ? l.text('leaveWindowHint')
         : l.leaveSubtitle(closesOnDay);
 
     final now = DateTime.now();
     final firstAllowed = DateTime(2000);
-    final annualFirst = DateTime(now.year + 1, 1, 1);
-    final annualLast = DateTime(now.year + 1, 12, 31);
+    // Annual leave is filed for the server's target year (business date in
+    // TIMEZONE); the device year + 1 is only the fallback before it loads.
+    final annualYear = window?.annualTargetYear ?? now.year + 1;
+    final annualFirst = DateTime(annualYear, 1, 1);
+    final annualLast = DateTime(annualYear, 12, 31);
 
     String fmtDate(DateTime d) =>
         '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';

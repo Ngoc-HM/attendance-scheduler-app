@@ -241,7 +241,7 @@ def test_autorun_fires_day_after_close(client: TestClient, monkeypatch) -> None:
     scheduler = start_scheduler()
     assert scheduler is not None
     try:
-        job = scheduler.get_job("day20-autorun")
+        job = scheduler.get_job("autorun")
         fields = {field.name: str(field) for field in job.trigger.fields}
         assert (fields["hour"], fields["minute"]) == ("0", "5")
     finally:

@@ -119,36 +119,36 @@ def test_close_month_equals_schedule_history(client: TestClient) -> None:
                             "full_name": "Calc Hist A", "role": "A"})
     uid = res.json()["id"]
     client.put("/api/v1/attendance", headers=admin,
-               json={"user_id": uid, "work_date": "2026-11-03", "code": "A/D"})
+               json={"user_id": uid, "work_date": "2048-11-03", "code": "A/D"})
 
     # Month end is still only planned (no actuals yet): X on Saturday 28th,
     # then A on 29-30. An actual-only close would ignore these cells.
     db = SessionLocal()
     try:
         schedule = (
-            db.query(MonthlySchedule).filter_by(year=2026, month=11).one_or_none()
+            db.query(MonthlySchedule).filter_by(year=2048, month=11).one_or_none()
         )
         if schedule is None:
             schedule = MonthlySchedule(
-                year=2026, month=11, status=ScheduleStatus.published
+                year=2048, month=11, status=ScheduleStatus.published
             )
             db.add(schedule)
             db.flush()
         for day, code in ((28, AttendanceCode.X), (29, AttendanceCode.A),
                           (30, AttendanceCode.A)):
             db.add(ShiftAssignment(schedule_id=schedule.id, user_id=uid,
-                                   work_date=date(2026, 11, day), code=code))
+                                   work_date=date(2048, 11, day), code=code))
         db.commit()
     finally:
         db.close()
 
-    closed = client.post("/api/v1/calculations/2026/11/close", headers=admin)
+    closed = client.post("/api/v1/calculations/2048/11/close", headers=admin)
     assert closed.status_code == 200
 
     db = SessionLocal()
     try:
         user = db.get(User, uid)
-        state = build_boundary_states(db, [user], 2026, 12)[uid]
+        state = build_boundary_states(db, [user], 2048, 12)[uid]
         assert user.carry_comp == state.carry_comp == 1
         assert user.carry_streak == state.carry_streak == 2
         assert user.carry_premium_off == state.carry_premium_off == 1
