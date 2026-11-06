@@ -337,7 +337,7 @@ class AppLocalizations {
       'registrationClosed': 'Monthly registration closed',
       'registrationClosedMessage':
           'Monthly-leave registration is open from day 1 to day 20 (for the '
-          'next month). Annual leave (5+ days) is registered during the '
+          'next month). Annual leave (more than 5 days) is registered during the '
           'previous year.',
       // --- Revoke approval (owner 2026-07-17) ---
       'revokeApproval': 'Revoke approval',
@@ -703,7 +703,7 @@ class AppLocalizations {
       'registrationClosed': 'Đã đóng đăng ký nghỉ tháng',
       'registrationClosedMessage':
           'Đăng ký nghỉ tháng mở từ ngày 1 đến ngày 20 (cho tháng kế tiếp). '
-          'Nghỉ phép năm (từ 5 ngày) đăng ký trong năm trước.',
+          'Nghỉ phép năm (trên 5 ngày) đăng ký trong năm trước.',
       // --- Revoke approval (owner 2026-07-17) ---
       'revokeApproval': 'Hủy duyệt',
       'revokeConfirmMessage':

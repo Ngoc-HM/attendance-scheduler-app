@@ -334,8 +334,8 @@ class LeavesPage extends ConsumerWidget {
                 final ctrl = ref.read(leavesControllerProvider.notifier);
                 try {
                   await ctrl.submitRequest(
-                    startDate: startDate!,
-                    endDate: endDate!,
+                    startDate: start,
+                    endDate: end,
                     leaveType: isAnnual ? 'annual' : 'monthly',
                     note: noteCtrl.text.trim().isEmpty
                         ? null

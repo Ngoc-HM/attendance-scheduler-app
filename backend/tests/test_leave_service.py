@@ -1,7 +1,7 @@
 """Unit + integration tests for F-05/F-06 leave service.
 
 Coverage targets:
-- Classification boundary: 4 days → monthly, 5 days → annual.
+- Classification boundary: 5 days → monthly, more than 5 days → annual.
 - Monthly window: open days 1–20, closed day 21.
 - Annual window: prior-year ok, same-year rejected.
 - Approve decrements annual_leave_balance; approved_off_map shows AL.
