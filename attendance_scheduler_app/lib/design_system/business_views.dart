@@ -855,6 +855,7 @@ class DsFlightsView extends StatelessWidget {
     required this.onNextMonth,
     required this.onAdd,
     this.onManagePresets,
+    this.onImportExcel,
   });
 
   final DateTime month;
@@ -865,6 +866,9 @@ class DsFlightsView extends StatelessWidget {
 
   /// If non-null an admin "Manage presets" toolbar action is shown.
   final VoidCallback? onManagePresets;
+
+  /// If non-null an admin "Import Excel" toolbar action is shown (F-04).
+  final VoidCallback? onImportExcel;
 
   @override
   Widget build(BuildContext context) {
@@ -878,6 +882,12 @@ class DsFlightsView extends StatelessWidget {
       title: l.text('flightsTitle'),
       subtitle: l.text('flightsSubtitle'),
       actions: [
+        if (onImportExcel != null)
+          DsSecondaryButton(
+            label: l.text('importExcel'),
+            icon: Icons.upload_file_outlined,
+            onPressed: onImportExcel!,
+          ),
         if (onManagePresets != null)
           DsSecondaryButton(
             label: l.text('managePresets'),
@@ -1169,15 +1179,15 @@ class _LeavesTable extends StatelessWidget {
     final columns = [
       DsTableColumn(header: l.text('employee'), flex: 3),
       DsTableColumn(header: l.role, flex: 2),
-      DsTableColumn(header: l.text('type'), flex: 2),
+      DsTableColumn(header: l.text('type'), flex: 3),
       DsTableColumn(header: l.text('dates'), flex: 3),
       DsTableColumn(header: l.text('days'), flex: 1),
       DsTableColumn(header: l.text('carry'), flex: 1),
       DsTableColumn(header: l.status, flex: 2),
-      if (canDecide) DsTableColumn(header: l.actions, flex: 3),
+      if (canDecide) DsTableColumn(header: l.actions, flex: 4),
     ];
 
-    return DsDataTable(
+    final table = DsDataTable(
       columns: columns,
       rows: [
         for (var index = 0; index < rows.length; index++)
@@ -1226,6 +1236,28 @@ class _LeavesTable extends StatelessWidget {
           ],
       ],
     );
+
+    // Fix cứng khung giao diện: bảng có chiều rộng tối thiểu cố định; nếu màn
+    // hẹp hơn thì cuộn ngang thay vì bị overflow (DsDataTable dùng Expanded
+    // nên cần đặt trong SizedBox cố định chiều rộng khi cuộn).
+    const employeeMinWidth = 760.0;
+    const adminMinWidth = 1000.0;
+    final minWidth = canDecide ? adminMinWidth : employeeMinWidth;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth >= minWidth) {
+          return table;
+        }
+        return SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: SizedBox(
+            width: minWidth,
+            child: table,
+          ),
+        );
+      },
+    );
   }
 }
 
@@ -1238,6 +1270,7 @@ class DsAttendanceView extends StatelessWidget {
     required this.onNextMonth,
     required this.onUpdate,
     required this.onHolidays,
+    this.onCloseMonth,
   });
 
   final DateTime month;
@@ -1246,6 +1279,9 @@ class DsAttendanceView extends StatelessWidget {
   final VoidCallback onNextMonth;
   final VoidCallback onUpdate;
   final VoidCallback onHolidays;
+
+  /// If non-null an admin "Close month" toolbar action is shown (F-14).
+  final VoidCallback? onCloseMonth;
 
   @override
   Widget build(BuildContext context) {
@@ -1260,6 +1296,12 @@ class DsAttendanceView extends StatelessWidget {
       title: l.text('attendanceTitle'),
       subtitle: l.text('attendanceSubtitle'),
       actions: [
+        if (onCloseMonth != null)
+          DsSecondaryButton(
+            label: l.text('closeMonth'),
+            icon: Icons.lock_clock_outlined,
+            onPressed: onCloseMonth!,
+          ),
         DsSecondaryButton(
           label: l.text('publicHolidays'),
           icon: Icons.event_outlined,
@@ -1505,6 +1547,7 @@ class DsUsersView extends StatelessWidget {
     required this.onDisable,
     required this.onEnable,
     required this.onChangeRole,
+    this.onDelete,
     this.error,
   });
 
@@ -1520,6 +1563,10 @@ class DsUsersView extends StatelessWidget {
   /// Change a user's role (e.g. promote to admin `M`); the backend reassigns a
   /// matching code. Called with the user id and the new role letter.
   final void Function(int id, String role) onChangeRole;
+
+  /// Hard-delete (with cascade) — optional so callers without permission can
+  /// omit it and the action button is hidden.
+  final ValueChanged<int>? onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -1594,6 +1641,7 @@ class DsUsersView extends StatelessWidget {
                 onDisable: onDisable,
                 onEnable: onEnable,
                 onChangeRole: onChangeRole,
+                onDelete: onDelete,
               ),
             ),
         ],
@@ -1611,6 +1659,7 @@ class _UsersTable extends StatelessWidget {
     required this.onDisable,
     required this.onEnable,
     required this.onChangeRole,
+    this.onDelete,
   });
 
   final List<DsUserRowData> users;
@@ -1618,6 +1667,7 @@ class _UsersTable extends StatelessWidget {
   final ValueChanged<int> onDisable;
   final ValueChanged<int> onEnable;
   final void Function(int id, String role) onChangeRole;
+  final ValueChanged<int>? onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -1653,10 +1703,23 @@ class _UsersTable extends StatelessWidget {
             ),
             // Actions cell: approve / disable+change-role / enable
             switch (user.status) {
-              'pending' => _ActionButton(
-                label: l.approve,
-                tone: DsTone.success,
-                onPressed: () => onApprove(user.id),
+              'pending' => Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _ActionButton(
+                    label: l.approve,
+                    tone: DsTone.success,
+                    onPressed: () => onApprove(user.id),
+                  ),
+                  if (onDelete != null) ...[
+                    const SizedBox(width: DsSpacing.x2),
+                    _ActionButton(
+                      label: l.text('delete'),
+                      tone: DsTone.danger,
+                      onPressed: () => onDelete!(user.id),
+                    ),
+                  ],
+                ],
               ),
               // Active users can be disabled AND have their role changed
               // (e.g. promoted to admin `M`); both actions wrap if cramped.
@@ -1674,12 +1737,32 @@ class _UsersTable extends StatelessWidget {
                     tone: DsTone.danger,
                     onPressed: () => onDisable(user.id),
                   ),
+                  if (onDelete != null)
+                    _ActionButton(
+                      label: l.text('delete'),
+                      tone: DsTone.danger,
+                      onPressed: () => onDelete!(user.id),
+                    ),
                 ],
               ),
-              _ => _ActionButton(
-                label: l.enable,
-                tone: DsTone.primary,
-                onPressed: () => onEnable(user.id),
+              // Disabled (or any other non-pending, non-active status).
+              _ => Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _ActionButton(
+                    label: l.enable,
+                    tone: DsTone.primary,
+                    onPressed: () => onEnable(user.id),
+                  ),
+                  if (onDelete != null) ...[
+                    const SizedBox(width: DsSpacing.x2),
+                    _ActionButton(
+                      label: l.text('delete'),
+                      tone: DsTone.danger,
+                      onPressed: () => onDelete!(user.id),
+                    ),
+                  ],
+                ],
               ),
             },
           ],

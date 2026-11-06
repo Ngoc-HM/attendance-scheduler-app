@@ -2,13 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/constants/shift_codes.dart';
+import '../../../../core/network/api_exception.dart';
 import '../../../../design_system/design_system.dart';
 import '../../../../i18n/app_localizations.dart';
 import '../../../auth/domain/entities/user.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../domain/entities/attendance_entities.dart';
+import '../../domain/entities/calculations_entities.dart';
 import '../providers/attendance_provider.dart';
 import '../widgets/attendance_upsert_dialog.dart';
+import '../widgets/close_month_dialog.dart';
 import '../widgets/holidays_dialog.dart';
 
 /// isAdmin selector — avoids rebuilding the whole page on unrelated auth changes.
@@ -78,6 +81,60 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
                 tone: DsTone.warning,
               ),
       onHolidays: () => _showHolidaysDialog(context),
+      onCloseMonth: isAdmin ? _closeMonth : null,
+    );
+  }
+
+  // ── Month close (F-14) ────────────────────────────────────────────────────
+
+  /// Confirm → POST close for the month on screen → show the stored carry-over
+  /// balances. Uses the State's own [context]/[mounted] across the awaits.
+  Future<void> _closeMonth() async {
+    final l = AppLocalizations.of(context);
+    final month = _month;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => DsFormDialog(
+        title: l.closeMonthConfirmTitle(month),
+        content: Text(l.text('closeMonthConfirmMessage')),
+        actions: [
+          DsTextAction(
+            label: l.cancel,
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+          ),
+          DsPrimaryButton(
+            label: l.text('closeMonth'),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+          ),
+        ],
+      ),
+    );
+    if (!(confirmed ?? false) || !mounted) return;
+
+    final MonthCloseResult result;
+    try {
+      result = await ref
+          .read(attendanceControllerProvider.notifier)
+          .closeMonth(month.year, month.month);
+    } on ApiException catch (e) {
+      if (mounted) DsFeedback.show(context, e.message, tone: DsTone.danger);
+      return;
+    } catch (_) {
+      if (mounted) {
+        DsFeedback.show(
+          context,
+          l.text('closeMonthFailed'),
+          tone: DsTone.danger,
+        );
+      }
+      return;
+    }
+    if (!mounted) return;
+
+    final users = ref.read(attendanceControllerProvider).users;
+    await showDialog<void>(
+      context: context,
+      builder: (_) => CloseMonthResultDialog(result: result, users: users),
     );
   }
 

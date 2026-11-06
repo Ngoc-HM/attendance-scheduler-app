@@ -9,10 +9,9 @@ Route order matters — FastAPI matches in declaration order:
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, UploadFile, status
+from fastapi import APIRouter, UploadFile, status
 
 from app.api.deps import ActiveUser, AdminUser, DbSession
-from app.schemas.common import Message
 from app.schemas.flight import (
     FlightDayApply,
     FlightDayApplyBatch,
@@ -157,9 +156,13 @@ def list_flight_days(db: DbSession, _user: ActiveUser, year: int, month: int):
 
 
 @router.put("/days", response_model=FlightDayRead)
-def upsert_flight_day(db: DbSession, payload: FlightDayUpsert, _admin: AdminUser):
+def upsert_flight_day(db: DbSession, payload: FlightDayUpsert, admin: AdminUser):
     """Manual entry of flight-pair count for a day (0/1/2). Admin only."""
     fd = flight_service.upsert_day(db, payload)
+    audit_service.record(
+        db, admin.id, "flight.day.upsert", "FlightDay", fd.id,
+        detail=f"day={payload.day} pairs={payload.flight_pairs}",
+    )
     flights_map = flight_service.list_flights_for_days(db, [fd.day])
     return FlightDayRead(
         id=fd.id,
@@ -175,9 +178,14 @@ def upsert_flight_day(db: DbSession, payload: FlightDayUpsert, _admin: AdminUser
 
 
 @router.put("", response_model=FlightRead)
-def upsert_flight(db: DbSession, payload: FlightUpsert, _admin: AdminUser):
+def upsert_flight(db: DbSession, payload: FlightUpsert, admin: AdminUser):
     """Manual entry of a single flight (FLT + STA/STD). Admin only."""
-    return flight_service.upsert_flight(db, payload)
+    flight = flight_service.upsert_flight(db, payload)
+    audit_service.record(
+        db, admin.id, "flight.upsert", "Flight", flight.id,
+        detail=f"day={payload.day} flt={payload.flt_number}",
+    )
+    return flight
 
 
 @router.post("/import", response_model=list[FlightRead])

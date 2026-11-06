@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -17,10 +18,13 @@ class LoginPage extends ConsumerStatefulWidget {
 
 class _LoginPageState extends ConsumerState<LoginPage> {
   final _formKey = GlobalKey<FormState>();
-  // Pre-filled with the seed-admin defaults (config FIRST_ADMIN_*) so login
-  // is one click during development.
-  final _username = TextEditingController(text: 'admin');
-  final _password = TextEditingController(text: 'admin123');
+  // Debug builds only: pre-filled with the seed-admin defaults (config
+  // FIRST_ADMIN_*) so login is one click during development. Release builds
+  // must never ship credentials, so they start empty.
+  final _username = TextEditingController(text: kDebugMode ? 'admin' : null);
+  final _password = TextEditingController(
+    text: kDebugMode ? 'admin123' : null,
+  );
 
   @override
   void dispose() {

@@ -4,7 +4,7 @@ import '../../../auth/domain/entities/user.dart';
 import '../../data/user_management_datasource.dart';
 
 /// Holds the admin user list as an [AsyncValue] and exposes mutating actions
-/// (create / approve / update) that refresh the list (F-01, F-03).
+/// (create / approve / update / delete) that refresh the list (F-01, F-03).
 class UsersController extends StateNotifier<AsyncValue<List<User>>> {
   UsersController(this._ds) : super(const AsyncValue.loading()) {
     load();
@@ -42,13 +42,24 @@ class UsersController extends StateNotifier<AsyncValue<List<User>>> {
     await load();
   }
 
-  Future<void> setStatus(int id, String status) async {
-    await _ds.update(id, {'status': status});
+  /// Returns any soft warnings returned by the backend (e.g. fixed team would
+  /// become empty). Throws on hard errors (including last-admin lockout).
+  Future<List<String>> setStatus(int id, String status) async {
+    final result = await _ds.update(id, {'status': status});
     await load();
+    return result.warnings;
   }
 
-  Future<void> setRole(int id, UserRole role) async {
-    await _ds.update(id, {'role': role.apiValue});
+  /// Returns any soft warnings. Throws on hard errors.
+  Future<List<String>> setRole(int id, UserRole role) async {
+    final result = await _ds.update(id, {'role': role.apiValue});
+    await load();
+    return result.warnings;
+  }
+
+  /// Hard delete with cascade (CSV TC-007). Throws on hard errors.
+  Future<void> delete(int id) async {
+    await _ds.delete(id);
     await load();
   }
 }

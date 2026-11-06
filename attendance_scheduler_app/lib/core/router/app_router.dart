@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -25,15 +26,37 @@ const _adminOnlyPaths = {
   AppRoute.users,
 };
 
+/// Routes reachable without a session.
+const _publicPaths = {AppRoute.login, AppRoute.register};
+
+/// Bridges Riverpod → go_router: pinged whenever the signed-in user changes
+/// (login, logout, session expiry) so `redirect` is re-evaluated for the
+/// current location.
+class _AuthChangeNotifier extends ChangeNotifier {
+  void ping() => notifyListeners();
+}
+
 /// Application routes. The authenticated sections live inside a [HomeShell]
-/// (navigation rail); `/login` sits outside it.
+/// (navigation rail); `/login` and `/register` sit outside it.
 final appRouterProvider = Provider<GoRouter>((ref) {
+  final authChanges = _AuthChangeNotifier();
+  ref.onDispose(authChanges.dispose);
+  ref.listen<AuthState>(authControllerProvider, (previous, next) {
+    if (previous?.user != next.user) authChanges.ping();
+  });
+
   return GoRouter(
     initialLocation: AppRoute.login,
+    refreshListenable: authChanges,
     redirect: (context, state) {
       final user = ref.read(authControllerProvider).user;
-      if (user == null || user.isAdmin) return null;
       final path = state.uri.path;
+      // No session (never logged in, logged out, or the token expired): only
+      // the public pages are reachable.
+      if (user == null) {
+        return _publicPaths.contains(path) ? null : AppRoute.login;
+      }
+      if (user.isAdmin) return null;
       if (_adminOnlyPaths.contains(path)) return AppRoute.schedule;
       if (path == AppRoute.selfArrange && !user.role.canSelfArrange) {
         return AppRoute.schedule;

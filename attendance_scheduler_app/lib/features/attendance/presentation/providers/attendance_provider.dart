@@ -3,7 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../users/data/user_management_datasource.dart';
 import '../../../auth/domain/entities/user.dart';
 import '../../data/datasources/attendance_remote_datasource.dart';
+import '../../data/datasources/calculations_remote_datasource.dart';
 import '../../domain/entities/attendance_entities.dart';
+import '../../domain/entities/calculations_entities.dart';
 
 class AttendanceState {
   const AttendanceState({
@@ -48,11 +50,12 @@ class AttendanceState {
 }
 
 class AttendanceController extends StateNotifier<AttendanceState> {
-  AttendanceController(this._ds, this._userDs)
+  AttendanceController(this._ds, this._userDs, this._calculationsDs)
       : super(const AttendanceState());
 
   final AttendanceRemoteDataSource _ds;
   final UserManagementDataSource _userDs;
+  final CalculationsRemoteDataSource _calculationsDs;
 
   Future<void> load(int year, int month, {bool isAdmin = false}) async {
     state = state.copyWith(isLoading: true, clearError: true);
@@ -158,6 +161,22 @@ class AttendanceController extends StateNotifier<AttendanceState> {
     }
   }
 
+  // ── Month close (F-14) ─────────────────────────────────────────────────────
+
+  /// Admin: close [year]/[month] — the backend computes and stores each
+  /// user's carry-over balances and returns them. Failures are rethrown (as
+  /// `ApiException`) instead of going into [AttendanceState.error]: that field
+  /// swaps the whole page for the error view, which must not happen because a
+  /// one-shot action failed.
+  Future<MonthCloseResult> closeMonth(int year, int month) async {
+    state = state.copyWith(isMutating: true, clearError: true);
+    try {
+      return await _calculationsDs.closeMonth(year, month);
+    } finally {
+      state = state.copyWith(isMutating: false);
+    }
+  }
+
   // ── Holiday mutations ──────────────────────────────────────────────────────
 
   Future<bool> upsertHoliday({
@@ -226,5 +245,6 @@ final attendanceControllerProvider =
   (ref) => AttendanceController(
     ref.watch(attendanceRemoteDataSourceProvider),
     ref.watch(userManagementDataSourceProvider),
+    ref.watch(calculationsRemoteDataSourceProvider),
   ),
 );

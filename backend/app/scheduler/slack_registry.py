@@ -62,7 +62,7 @@ class SlackRegistry:
         """Translate every slack > 0 into an admin-facing Violation (§5.6)."""
         found: list[Violation] = []
         for e in self._entries:
-            value = solver.Value(e.var)
+            value = solver.value(e.var)
             if value > 0:
                 found.append(
                     Violation(

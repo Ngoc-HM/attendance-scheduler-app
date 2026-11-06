@@ -40,7 +40,7 @@ def _works(
     user_id: int,
     d: date,
     person_codes: tuple[AttendanceCode, ...],
-) -> cp_model.LinearExpr:
+) -> cp_model.LinearExpr | int:
     """1 if the person works on ``d`` (any non-rest code from their domain), else 0."""
     return sum(
         x[(user_id, d, c)] for c in person_codes if c not in OFF_CODES
@@ -63,10 +63,10 @@ def add(
         # --- 1. Sliding 6-day windows inside the month --------------------
         for i in range(len(days) - WINDOW + 1):
             window = days[i : i + WINDOW]
-            slack = model.NewIntVar(
+            slack = model.new_int_var(
                 0, 1, f"streak_{p.user_id}_{window[0].isoformat()}"
             )
-            model.Add(
+            model.add(
                 sum(_works(x, p.user_id, d, person_codes) for d in window)
                 <= WINDOW - 1 + slack
             )
@@ -87,8 +87,8 @@ def add(
             # one OFF among the first (6 - carry_streak) days (min 1 day).
             k = max(1, WINDOW - p.carry_streak)
             head = days[:k]
-            slack = model.NewIntVar(0, 1, f"carry_{p.user_id}")
-            model.Add(
+            slack = model.new_int_var(0, 1, f"carry_{p.user_id}")
+            model.add(
                 sum(_works(x, p.user_id, d, person_codes) for d in head)
                 <= len(head) - 1 + slack
             )

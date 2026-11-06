@@ -17,7 +17,6 @@ import io
 from datetime import date, datetime, time
 from typing import Any
 
-
 # ---------------------------------------------------------------------------
 # Cell value parsers
 # ---------------------------------------------------------------------------

@@ -2,13 +2,10 @@
 
 from __future__ import annotations
 
-from datetime import date
-
 from fastapi.testclient import TestClient
 
 from app.models.enums import AttendanceCode, Role
 from app.services import sick_backfill
-
 
 # --- pure sick-backfill logic (§6) -----------------------------------------
 

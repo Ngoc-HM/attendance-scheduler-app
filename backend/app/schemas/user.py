@@ -36,3 +36,14 @@ class UserRead(ORMModel):
     status: UserStatus
     carry_comp: int
     carry_streak: int
+
+
+class UserUpdateResult(BaseModel):
+    """PATCH response — carries soft warnings so the UI can surface them.
+
+    Backend still applies the change; warnings describe side-effects the admin
+    should know about (e.g. last active fixed-team member would be removed).
+    """
+
+    user: UserRead
+    warnings: list[str] = Field(default_factory=list)

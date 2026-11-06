@@ -83,10 +83,12 @@ class FlightsController extends StateNotifier<FlightsState> {
     await load();
   }
 
-  /// Admin: import from an .xlsx [file] then reload.
-  Future<void> importExcel(PlatformFile file) async {
-    await _ds.importExcel(file);
+  /// Admin: import from an .xlsx [file] then reload. Returns how many flights
+  /// the backend created from the sheet (for the success toast).
+  Future<int> importExcel(PlatformFile file) async {
+    final flights = await _ds.importExcel(file);
     await load();
+    return flights.length;
   }
 
   /// Admin: apply a batch of day→presets changes (which may span several

@@ -20,7 +20,7 @@ from datetime import date
 
 from ortools.sat.python import cp_model
 
-from app.models.enums import AttendanceCode, Role
+from app.models.enums import AttendanceCode
 from app.scheduler.domain import SolverInput
 from app.scheduler.slack_registry import SlackRegistry
 
@@ -44,11 +44,11 @@ def add(
             # Exempt windows overlapping a sanctioned annual-leave block.
             if any(d in annual for d in window):
                 continue
-            slack = model.NewIntVar(
+            slack = model.new_int_var(
                 0, 1, f"offchain_{p.user_id}_{window[0].isoformat()}"
             )
             # At most 5 of the 6 days may be OFF (X) → at least one working day.
-            model.Add(
+            model.add(
                 sum(x[(p.user_id, d, AttendanceCode.X)] for d in window)
                 <= WINDOW - 1 + slack
             )

@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/network/api_client.dart';
 import '../../../../i18n/locale_provider.dart';
 import '../../data/repositories/auth_repository_impl.dart';
 import '../../domain/entities/user.dart';
@@ -70,11 +71,33 @@ class AuthController extends StateNotifier<AuthState> {
     _localeController.resetForLogin();
     state = const AuthState();
   }
+
+  /// The backend stopped accepting the bearer token (401 outside login).
+  /// Same teardown as [logout], but the login page gets told why — the router
+  /// lands there on its own once `user` becomes null. A no-op beyond clearing
+  /// the stale token when nobody is signed in (e.g. several requests failing
+  /// at once, only the first one ends the session).
+  Future<void> sessionExpired() async {
+    final wasAuthenticated = state.user != null;
+    await _repository.logout();
+    if (!wasAuthenticated) return;
+    _localeController.resetForLogin();
+    state = const AuthState(error: 'session_expired');
+  }
 }
 
 final authControllerProvider = StateNotifierProvider<AuthController, AuthState>(
-  (ref) => AuthController(
-    ref.watch(authRepositoryProvider),
-    ref.read(localeControllerProvider.notifier),
-  ),
+  (ref) {
+    final controller = AuthController(
+      ref.watch(authRepositoryProvider),
+      ref.read(localeControllerProvider.notifier),
+    );
+    // Dio bumps this counter on 401; reacting here (instead of Dio calling the
+    // controller) keeps the provider graph acyclic: auth → dio → signal.
+    ref.listen<int>(
+      sessionExpiredSignalProvider,
+      (_, _) => controller.sessionExpired(),
+    );
+    return controller;
+  },
 );

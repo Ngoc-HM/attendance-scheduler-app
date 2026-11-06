@@ -1,5 +1,51 @@
 # Project Changelog
 
+## 2026-09-03 — Review remediation (Codex + Claude audit)
+
+Closes every code-fixable finding of the 2026-09-03 review; customer-side
+questions are listed in `design-decisions.md` → "Open questions".
+
+### Security / bootstrap
+- `ENVIRONMENT=staging|prod` refuses to start with the dev `SECRET_KEY` or
+  `FIRST_ADMIN_PASSWORD`; seed-admin password reset is now dev-only
+  (`FIRST_ADMIN_RESET_ON_STARTUP`). Docker image defaults to prod and runs
+  `alembic upgrade head` before serving. CORS credentials disabled for `*`.
+- Flutter login pre-fill only in debug builds; unauthenticated routes redirect
+  to `/login`; a 401 on any call clears the session and returns to login.
+
+### GDPR (§9.1 / §9.3 / §9.5)
+- Sickness `S` rejected in the planned schedule (override, shift-change,
+  self-arrange); legacy S of another user masked as X for non-admin readers;
+  S attendance rows never keep a note.
+- Audit is fail-loud (HTTP 500 on write failure) and now also covers user
+  create/update/delete, account approval, manual flight-day / flight entry,
+  month-close and the autorun (system actor).
+- New `POST /compliance/retention/purge` (config `DATA_RETENTION_MONTHS`,
+  floor 24) and `GET /compliance/users/{id}/export`.
+- Deployment guide documents the out-of-spec time clock / self-arrange
+  features for the DPO / Betriebsrat review, backup/restore and CI.
+
+### Scheduling
+- F-09 recheck now mirrors all engine rules (≥2 A days, comp-day grant/excess,
+  ≤5 consecutive off).
+- `carry_premium_off` derived from effective history (no month-close needed).
+- Leave-conflict ranking applies all three §5.4 #9 criteria.
+- Weekend-pairing override (owner 2026-06-18/07-01) recorded as decision #16.
+
+### UI
+- Excel import button on the Flights page (admin) wired to `POST /flights/import`.
+- Close-month action on the Attendance page (admin) with a per-user carry
+  summary dialog.
+
+### Quality gates
+- ruff 71 → 0, mypy 54 → 0 (OR-Tools calls moved to the snake_case API,
+  `python_version = 3.12`), Flutter analyzer 59 → 0 (users-page fixes +
+  `packages/**` excluded), goldens regenerated, `test/failures/` removed.
+- `/health` checks the database and returns 503 when it is unreachable.
+- `.github/workflows/ci.yml`: backend on SQLite + PostgreSQL, guard smoke,
+  Flutter analyze/test, Windows release build artifact.
+- `scripts/backup_db.sh`, `scripts/restore_db.sh`.
+
 ## 2026-07-25 — Navigation, attendance scroll, flights import, and leave split
 
 ### Fixed

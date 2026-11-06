@@ -29,6 +29,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "auth.forbidden_other_user": "You may only access your own data.",
         "user.not_found": "User not found.",
         "user.username_taken": "That username is already taken.",
+        "user.last_admin_lockout": "You cannot remove or disable the last remaining admin.",
+        "user.fixed_team_empty": "No active fixed-team members will remain after this change.",
         "schedule.infeasible": "No valid schedule could be found.",
         "schedule.not_found": "Schedule not found.",
         "schedule.published_locked": "Schedule is published; regenerate requires force.",
@@ -78,6 +80,15 @@ MESSAGES: dict[str, dict[str, str]] = {
         "selfarrange.not_found": "Self-arrange request not found.",
         "selfarrange.already_decided": "This self-arrange request was already decided.",
         "schedule.month_out_of_range": "Future months beyond next-next month are not visible.",
+        "schedule.sick_not_planned": (
+            "Sick (S) is recorded in actual attendance only, never in the planned "
+            "schedule."
+        ),
+        "audit.write_failed": "Audit log write failed; the action was not confirmed.",
+        "compliance.retention_too_short": (
+            "Retention cutoff must be at least 24 months in the past "
+            "(working-time records, ArbZG §16)."
+        ),
     },
     "vi": {
         "auth.invalid_credentials": "Sai tên đăng nhập hoặc mật khẩu.",
@@ -86,6 +97,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "auth.forbidden_other_user": "Bạn chỉ được truy cập dữ liệu của chính mình.",
         "user.not_found": "Không tìm thấy người dùng.",
         "user.username_taken": "Tên đăng nhập đã tồn tại.",
+        "user.last_admin_lockout": "Không thể hạ quyền hoặc vô hiệu hoá admin cuối cùng.",
+        "user.fixed_team_empty": "Sẽ không còn thành viên fixed team nào đang hoạt động sau thay đổi này.",
         "schedule.infeasible": "Không tìm được lời giải hợp lệ cho lịch.",
         "schedule.not_found": "Không tìm thấy lịch.",
         "schedule.published_locked": "Lịch đã publish; tạo lại cần force.",
@@ -135,6 +148,14 @@ MESSAGES: dict[str, dict[str, str]] = {
         "selfarrange.not_found": "Không tìm thấy yêu cầu tự sắp ca.",
         "selfarrange.already_decided": "Yêu cầu tự sắp ca này đã được quyết định.",
         "schedule.month_out_of_range": "Chỉ xem được tối đa 2 tháng tương lai.",
+        "schedule.sick_not_planned": (
+            "Nghỉ ốm (S) chỉ được ghi ở chấm công thực tế, không đưa vào lịch kế hoạch."
+        ),
+        "audit.write_failed": "Ghi nhật ký kiểm toán thất bại; thao tác chưa được xác nhận.",
+        "compliance.retention_too_short": (
+            "Mốc xóa dữ liệu phải cách hiện tại ít nhất 24 tháng "
+            "(hồ sơ giờ làm, ArbZG §16)."
+        ),
     },
 }
 

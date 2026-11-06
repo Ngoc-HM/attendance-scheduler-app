@@ -36,17 +36,17 @@ def terms(
     for shift in (AttendanceCode.A, AttendanceCode.D):
         totals: list[cp_model.IntVar] = []
         for p in role_a:
-            total = model.NewIntVar(0, n_days, f"total_{shift.name}_{p.user_id}")
-            model.Add(
+            total = model.new_int_var(0, n_days, f"total_{shift.name}_{p.user_id}")
+            model.add(
                 total
                 == sum(x[(p.user_id, d, shift)] for d in inp.days)
             )
             totals.append(total)
 
-        hi = model.NewIntVar(0, n_days, f"max_{shift.name}")
-        lo = model.NewIntVar(0, n_days, f"min_{shift.name}")
-        model.AddMaxEquality(hi, totals)
-        model.AddMinEquality(lo, totals)
+        hi = model.new_int_var(0, n_days, f"max_{shift.name}")
+        lo = model.new_int_var(0, n_days, f"min_{shift.name}")
+        model.add_max_equality(hi, totals)
+        model.add_min_equality(lo, totals)
         penalties.append(weight * (hi - lo))
 
     return penalties
@@ -75,7 +75,7 @@ def individual_terms(
             x[(person.user_id, day, AttendanceCode.D)]
             for day in inp.days
         )
-        gap = model.NewIntVar(0, n_days, f"individual_ad_gap_{person.user_id}")
-        model.AddAbsEquality(gap, total_a - total_d)
+        gap = model.new_int_var(0, n_days, f"individual_ad_gap_{person.user_id}")
+        model.add_abs_equality(gap, total_a - total_d)
         penalties.append(weight * gap)
     return penalties

@@ -7,8 +7,6 @@ flight staffing. See app/scheduler/constraints_comp_days.py.
 
 from __future__ import annotations
 
-from datetime import date
-
 from app.models.enums import AttendanceCode, Role
 from app.scheduler import PersonInput, SchedulerEngine, SolverInput
 from app.scheduler.calendar_utils import build_weeks, month_days

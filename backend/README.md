@@ -42,10 +42,12 @@ tests/                 # pytest
 | F-14 Carry-over / comp days | `api/.../calculations.py` · `services/calculation_service.py` |
 | F-15 Reports/export | `api/.../reports.py` · `services/report_service.py` |
 
-> Endpoints and services are scaffolded with final signatures; handlers return
-> `501 Not Implemented` and services raise `NotImplementedError` with TODOs
-> pointing at the exact spec rule. The calendar helpers and the engine wiring
-> (one-status-per-day, respect-approved-off) are implemented and covered by tests.
+| Compliance (§9.3 / §9.5) | `api/.../compliance.py` · `services/compliance_service.py` — retention purge, data-subject export |
+| Time clock / self-arrange (owner 2026-07-09) | `api/.../time_clock.py`, `self_arrange.py` |
+
+All endpoints are implemented. Startup runs the environment guard
+(`Settings.validate_for_environment`) before bootstrap: a staging/prod process
+refuses to start with the dev `SECRET_KEY` / `FIRST_ADMIN_PASSWORD`.
 
 ## Run locally
 ```bash
@@ -58,11 +60,10 @@ copy .env.example .env                               # then edit secrets
 docker compose up --build
 
 # Or run the API directly (needs a reachable PostgreSQL):
-alembic revision --autogenerate -m "init"   # once models are final
 alembic upgrade head
-uvicorn app.main:app --reload
+uvicorn app.main:app --reload --port 8035
 ```
-Docs: http://localhost:8000/docs · Health: http://localhost:8000/health
+Docs: http://localhost:8035/docs · Health: http://localhost:8035/health (503 when the DB is unreachable)
 
 ### Seed demo users
 ```bash
@@ -81,6 +82,8 @@ mypy app
 
 ## Compliance (spec §9 — GDPR/BDSG)
 - Deploy DB + API in an **EU/Frankfurt** region; sign a DPA with the provider.
-- Sick data (`S`) is special-category — admin-only visibility, no medical detail stored.
-- TLS in transit, encryption at rest, role-based access, audit log (`models/audit.py`).
+- Sick data (`S`) is special-category — written by admins into actual attendance only,
+  never with a note, never in the planned schedule; visible to admins and the person themself.
+- TLS in transit, encryption at rest, role-based access, fail-loud audit log (`models/audit.py`).
+- Retention purge (`DATA_RETENTION_MONTHS`, floor 24) and per-person data export under `/compliance`.
 - Scheduling is **rule-based** (no AI performance evaluation — EU AI Act note §9.6).

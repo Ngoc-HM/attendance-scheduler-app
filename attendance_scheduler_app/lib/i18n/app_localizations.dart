@@ -202,6 +202,7 @@ class AppLocalizations {
           'Cannot reach the server. Check the configured backend URL.',
       'authHttpFailure': 'Login failed because the server returned an error.',
       'authUnknownFailure': 'Login failed because of an unexpected error.',
+      'authSessionExpired': 'Your session has expired. Please log in again.',
       // --- Phase 09 wiring: flights / leaves / reports / schedule / attendance
       'addFlightDay': 'Add flight day',
       'addHoliday': 'Add holiday',
@@ -343,6 +344,42 @@ class AppLocalizations {
           'the request as rejected. If the month was already scheduled, '
           'regenerate it afterwards.',
       'requestRevoked': 'Approval revoked.',
+      // --- User management guards (CSV TC-005/006/007/008) ---
+      'usernameTaken': 'That username is already taken.',
+      'lastAdminWarning':
+          'You are about to act on the last remaining admin. This action cannot proceed.',
+      'lastAdminDialogMessage':
+          'This account is the last active admin. You cannot change its role '
+          'or disable it, otherwise no admin would remain.',
+      'selfActionWarning':
+          'You are about to change your own account. Confirm to continue.',
+      'confirmDeleteUser': 'Delete this user?',
+      'deleteUserWarning':
+          'All attendance, leave and shift history for this user will be '
+          'permanently deleted. This cannot be undone.',
+      'userDeleted': 'User deleted.',
+      'fixedTeamWarning':
+          'No active fixed-team members will remain after this change.',
+      'fixedTeamDialogMessage':
+          'No active fixed-team members will remain after this change. Continue?',
+      // --- F-04 Excel import ---
+      'importExcelSuccess': 'Imported {count} flights from Excel.',
+      'importExcelFailed': 'Could not import the Excel file.',
+      'importExcelHint': 'Choose an .xlsx file of at most 2 MB.',
+      // --- F-14 month close / carry-over ---
+      'close': 'Close',
+      'closeMonth': 'Close month',
+      'closeMonthConfirmTitle': 'Close {month}?',
+      'closeMonthConfirmMessage':
+          'Carry-over balances (comp days, working streak, premium off) are '
+          'computed from this month\'s attendance and stored for the next '
+          'schedule.',
+      'closeMonthResultTitle': 'Month closed — carry-over balances',
+      'closeMonthEmpty': 'The backend returned no carry-over balances.',
+      'closeMonthFailed': 'Could not close the month.',
+      'carryComp': 'Comp days',
+      'carryStreak': 'Working streak',
+      'carryPremiumOff': 'Premium off',
     },
     'vi': {
       'appTitle': 'Xếp lịch & Chấm công',
@@ -529,6 +566,8 @@ class AppLocalizations {
           'Không thể kết nối máy chủ. Hãy kiểm tra URL backend.',
       'authHttpFailure': 'Đăng nhập thất bại do máy chủ trả về lỗi.',
       'authUnknownFailure': 'Đăng nhập thất bại do lỗi không xác định.',
+      'authSessionExpired':
+          'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.',
       // --- Phase 09 wiring: flights / leaves / reports / schedule / attendance
       'addFlightDay': 'Thêm ngày bay',
       'addHoliday': 'Thêm ngày lễ',
@@ -668,6 +707,40 @@ class AppLocalizations {
           'Từ chối. Nếu tháng liên quan đã tạo lịch, hãy tạo lại lịch '
           'sau khi hủy.',
       'requestRevoked': 'Đã hủy duyệt.',
+      // --- User management guards (CSV TC-005/006/007/008) ---
+      'usernameTaken': 'Tên đăng nhập đã tồn tại.',
+      'lastAdminWarning':
+          'Bạn sắp thao tác lên admin cuối cùng. Thao tác này không thể tiếp tục.',
+      'lastAdminDialogMessage':
+          'Tài khoản này là admin đang hoạt động cuối cùng. Bạn không thể đổi '
+          'quyền hoặc vô hiệu hoá, nếu không sẽ không còn admin nào.',
+      'selfActionWarning': 'Bạn sắp thay đổi chính tài khoản của mình. Xác nhận để tiếp tục.',
+      'confirmDeleteUser': 'Xóa người dùng này?',
+      'deleteUserWarning':
+          'Toàn bộ lịch sử chấm công, nghỉ phép và ca làm của người dùng '
+          'sẽ bị xoá vĩnh viễn. Không thể hoàn tác.',
+      'userDeleted': 'Đã xóa người dùng.',
+      'fixedTeamWarning':
+          'Sẽ không còn thành viên fixed team nào đang hoạt động sau thay đổi này.',
+      'fixedTeamDialogMessage':
+          'Sẽ không còn thành viên fixed team nào đang hoạt động sau thay đổi này. Tiếp tục?',
+      // --- F-04 Excel import ---
+      'importExcelSuccess': 'Đã nhập {count} chuyến bay từ Excel.',
+      'importExcelFailed': 'Không thể nhập tệp Excel.',
+      'importExcelHint': 'Chọn tệp .xlsx có dung lượng tối đa 2 MB.',
+      // --- F-14 month close / carry-over ---
+      'close': 'Đóng',
+      'closeMonth': 'Chốt tháng',
+      'closeMonthConfirmTitle': 'Chốt {month}?',
+      'closeMonthConfirmMessage':
+          'Số dư chuyển tiếp (ngày bù, chuỗi ngày làm, nghỉ premium) được tính '
+          'từ chấm công tháng này và lưu lại cho lịch tháng sau.',
+      'closeMonthResultTitle': 'Đã chốt tháng — số dư chuyển tiếp',
+      'closeMonthEmpty': 'Máy chủ không trả về số dư chuyển tiếp nào.',
+      'closeMonthFailed': 'Không thể chốt tháng.',
+      'carryComp': 'Ngày bù',
+      'carryStreak': 'Chuỗi ngày làm',
+      'carryPremiumOff': 'Nghỉ premium',
     },
   };
 
@@ -824,9 +897,18 @@ class AppLocalizations {
     'server_unavailable' => text('authServerUnavailable'),
     'http_failure' => text('authHttpFailure'),
     'unknown_failure' => text('authUnknownFailure'),
+    'session_expired' => text('authSessionExpired'),
     null => '',
     _ => code,
   };
+
+  /// "Imported N flights from Excel." (F-04).
+  String importExcelSuccess(int count) =>
+      text('importExcelSuccess').replaceAll('{count}', '$count');
+
+  /// "Close March 2026?" (F-14).
+  String closeMonthConfirmTitle(DateTime month) =>
+      text('closeMonthConfirmTitle').replaceAll('{month}', monthYear(month));
 
   static String _two(int value) => value.toString().padLeft(2, '0');
 }

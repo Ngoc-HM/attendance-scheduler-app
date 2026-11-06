@@ -26,16 +26,24 @@ def get_schedule(db: DbSession, year: int, month: int, current_user: ActiveUser)
 
     Non-admin visibility window (owner 2026-07-09): any past month, the current
     month, and at most 2 months ahead — published months only, as before.
+
+    §9.1 — a non-admin never sees a colleague's sickness: the planned grid
+    rejects S on write, and any legacy S cell of ANOTHER user is masked as X
+    on read (defense in depth). A person's own cells are returned unchanged.
     """
-    if not current_user.role.is_admin and settings.ENVIRONMENT != "dev":
+    is_admin = current_user.role.is_admin
+    if not is_admin and settings.ENVIRONMENT != "dev":
         today = date.today()
         if year * 12 + month > today.year * 12 + today.month + 2:
             raise HTTPException(
                 status.HTTP_403_FORBIDDEN, detail=t("schedule.month_out_of_range")
             )
-    return schedule_service.get(
-        db, year, month, include_draft=current_user.role.is_admin
+    schedule = MonthlyScheduleRead.model_validate(
+        schedule_service.get(db, year, month, include_draft=is_admin)
     )
+    if not is_admin:
+        schedule = schedule_service.mask_sick_for_viewer(schedule, current_user.id)
+    return schedule
 
 
 @router.post("/generate", response_model=ScheduleResult)

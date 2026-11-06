@@ -12,8 +12,6 @@ This module is intentionally side-effect-free so it is easy to unit-test.
 
 from __future__ import annotations
 
-from collections import Counter
-
 # Arrival → departure mapping for known pair routes (spec §8).
 # Key = arrival FLT number; value = departure FLT number.
 ARRIVAL_TO_DEPARTURE: dict[int, int] = {

@@ -65,7 +65,8 @@ def create_request(
 
     requester = _get_user_or_404(db, current_user_id)
     if payload.requested_code is not None:
-        role_code_validation.validate(requester.role, payload.requested_code)
+        # Requests target the PLANNED grid: sickness (S) is never a valid target.
+        role_code_validation.validate_planned(requester.role, payload.requested_code)
 
     req = ShiftChangeRequest(
         requester_id=current_user_id,

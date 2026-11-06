@@ -18,7 +18,6 @@ the admin resolves manually (F-09); the caller reports that.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date
 
 from app.models.enums import AttendanceCode, Role
 

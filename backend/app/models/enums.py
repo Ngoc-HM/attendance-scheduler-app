@@ -9,7 +9,7 @@ from __future__ import annotations
 import enum
 
 
-class Role(str, enum.Enum):
+class Role(enum.StrEnum):
     """Personnel roles (spec §3)."""
 
     M = "M"  # Admin + flexible
@@ -31,7 +31,7 @@ class Role(str, enum.Enum):
         return self in {Role.M, Role.T, Role.F}
 
 
-class UserStatus(str, enum.Enum):
+class UserStatus(enum.StrEnum):
     """Account lifecycle (F-01: self-register then admin approval)."""
 
     pending = "pending"
@@ -39,7 +39,7 @@ class UserStatus(str, enum.Enum):
     disabled = "disabled"
 
 
-class AttendanceCode(str, enum.Enum):
+class AttendanceCode(enum.StrEnum):
     """Per-day attendance / shift symbols (spec §7).
 
     Exactly one code is assigned to each (person, day) — both in the planned
@@ -78,20 +78,20 @@ class AttendanceCode(str, enum.Enum):
         return 1 if self.is_working else 0
 
 
-class LeaveType(str, enum.Enum):
+class LeaveType(enum.StrEnum):
     """Leave registration buckets (F-05 / F-06)."""
 
     monthly = "monthly"  # < 5 consecutive days — registered each month
     annual = "annual"    # >= 5 consecutive days — registered as annual leave
 
 
-class LeaveStatus(str, enum.Enum):
+class LeaveStatus(enum.StrEnum):
     pending = "pending"
     approved = "approved"
     rejected = "rejected"
 
 
-class SwapKind(str, enum.Enum):
+class SwapKind(enum.StrEnum):
     """Shift-change request kinds (locked decision #8, spec §3).
 
     Flexible roles (M, T) request freely; fixed roles (A) may request but
@@ -103,6 +103,6 @@ class SwapKind(str, enum.Enum):
     swap_with = "swap_with"      # exchange that day's codes with a colleague
 
 
-class ScheduleStatus(str, enum.Enum):
+class ScheduleStatus(enum.StrEnum):
     draft = "draft"          # generated, awaiting admin review / manual edits (F-09)
     published = "published"  # locked & visible to all users

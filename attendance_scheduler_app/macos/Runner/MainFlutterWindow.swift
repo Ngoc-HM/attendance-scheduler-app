@@ -4,10 +4,9 @@ import FlutterMacOS
 class MainFlutterWindow: NSWindow {
   override func awakeFromNib() {
     let flutterViewController = FlutterViewController()
-    let windowFrame = self.frame
     self.contentViewController = flutterViewController
-    self.setFrame(windowFrame, display: true)
 
+    // window_manager controls full-screen and resize lock on macOS.
     RegisterGeneratedPlugins(registry: flutterViewController)
 
     super.awakeFromNib()

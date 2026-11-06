@@ -17,9 +17,10 @@ from sqlalchemy.orm import Session
 
 from app.models.attendance import AttendanceRecord
 from app.models.enums import AttendanceCode, Role
+from app.models.holiday import Holiday
 from app.models.schedule import ShiftAssignment
 from app.models.user import User
-from app.services.carry_over_math import comp_balance
+from app.services.carry_over_math import comp_balance, premium_off_count
 
 
 @dataclass(frozen=True)
@@ -27,6 +28,10 @@ class BoundaryState:
     carry_comp: int
     carry_streak: int
     previous_working: dict[date, bool]
+    # Premium offs (X on Sat/Sun/holiday) received so far — derived from the
+    # effective history like comp/streak, so no month-close step is needed
+    # before the fairness objective (decision #6) can rotate the perk.
+    carry_premium_off: int = 0
 
 
 def previous_month(year: int, month: int) -> tuple[int, int]:
@@ -49,8 +54,8 @@ def _effective_grid(
         )
         .all()
     )
-    for row in planned:
-        grid[(row.user_id, row.work_date)] = row.code
+    for planned_row in planned:
+        grid[(planned_row.user_id, planned_row.work_date)] = planned_row.code
 
     actual = (
         db.query(AttendanceRecord)
@@ -60,8 +65,8 @@ def _effective_grid(
         )
         .all()
     )
-    for row in actual:
-        grid[(row.user_id, row.work_date)] = row.code
+    for actual_row in actual:
+        grid[(actual_row.user_id, actual_row.work_date)] = actual_row.code
     return grid
 
 
@@ -78,6 +83,9 @@ def build_boundary_states(
     cutoff = date(prev_year, prev_month, calendar.monthrange(prev_year, prev_month)[1])
     user_ids = {u.id for u in users}
     grid = _effective_grid(db, user_ids, cutoff)
+    holidays: set[date] = {
+        h.day for h in db.query(Holiday).filter(Holiday.day <= cutoff).all()
+    }
 
     states: dict[int, BoundaryState] = {}
     for user in users:
@@ -93,6 +101,11 @@ def build_boundary_states(
             carry_comp = comp_balance(records) if records else user.carry_comp
         else:
             carry_comp = 0
+
+        # Premium-off fairness input (decision #6), same history-first rule.
+        carry_premium_off = (
+            premium_off_count(records, holidays) if records else user.carry_premium_off
+        )
 
         # Count a genuinely contiguous run ending on the previous month's last
         # calendar day. Missing history falls back to the legacy stored scalar.
@@ -125,5 +138,6 @@ def build_boundary_states(
             carry_comp=carry_comp,
             carry_streak=carry_streak,
             previous_working=previous_working,
+            carry_premium_off=carry_premium_off,
         )
     return states

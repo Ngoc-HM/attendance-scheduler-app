@@ -41,7 +41,10 @@ def _create_user(client, admin_headers, username, role="A"):
     r = client.post(
         f"{V}/users",
         headers=admin_headers,
-        json={"username": username, "full_name": username.title(), "password": "secret1", "role": role},
+        json={
+            "username": username, "full_name": username.title(),
+            "password": "secret1", "role": role,
+        },
     )
     assert r.status_code == 201
     return r.json()
@@ -69,9 +72,9 @@ class TestShiftChangeService:
 
         db = _get_db()
         try:
-            from app.services import shift_change_service
-            from app.schemas.shift_change import ShiftChangeCreate
             from app.models.enums import AttendanceCode
+            from app.schemas.shift_change import ShiftChangeCreate
+            from app.services import shift_change_service
 
             payload = ShiftChangeCreate(
                 work_date=date(2025, 4, 10),
@@ -94,9 +97,10 @@ class TestShiftChangeService:
 
         db = _get_db()
         try:
-            from app.services import shift_change_service
-            from app.schemas.shift_change import ShiftChangeCreate
             from fastapi import HTTPException
+
+            from app.schemas.shift_change import ShiftChangeCreate
+            from app.services import shift_change_service
 
             payload = ShiftChangeCreate(
                 work_date=date(2025, 4, 10),
@@ -117,9 +121,10 @@ class TestShiftChangeService:
 
         db = _get_db()
         try:
-            from app.services import shift_change_service
-            from app.schemas.shift_change import ShiftChangeCreate
             from fastapi import HTTPException
+
+            from app.schemas.shift_change import ShiftChangeCreate
+            from app.services import shift_change_service
 
             payload = ShiftChangeCreate(
                 work_date=date(2025, 4, 10),
@@ -140,9 +145,9 @@ class TestShiftChangeService:
 
         db = _get_db()
         try:
-            from app.services import shift_change_service
-            from app.schemas.shift_change import ShiftChangeCreate
             from app.models.enums import AttendanceCode
+            from app.schemas.shift_change import ShiftChangeCreate
+            from app.services import shift_change_service
 
             payload = ShiftChangeCreate(
                 work_date=date(2025, 4, 15),
@@ -162,9 +167,9 @@ class TestShiftChangeService:
 
         db = _get_db()
         try:
-            from app.services import shift_change_service
-            from app.schemas.shift_change import ShiftChangeCreate
             from app.models.enums import AttendanceCode
+            from app.schemas.shift_change import ShiftChangeCreate
+            from app.services import shift_change_service
 
             payload = ShiftChangeCreate(
                 work_date=date(2025, 4, 15),
@@ -185,9 +190,9 @@ class TestShiftChangeService:
 
         db = _get_db()
         try:
-            from app.services import shift_change_service
-            from app.schemas.shift_change import ShiftChangeCreate
             from app.models.enums import AttendanceCode
+            from app.schemas.shift_change import ShiftChangeCreate
+            from app.services import shift_change_service
 
             payload = ShiftChangeCreate(
                 work_date=date(2025, 4, 20),
@@ -195,7 +200,9 @@ class TestShiftChangeService:
                 requested_code=AttendanceCode.A,
             )
             req, _ = shift_change_service.create_request(db, uid, payload)
-            admin_user = db.query(__import__("app.models.user", fromlist=["User"]).User).filter_by(username="admin").first()
+            from app.models.user import User
+
+            admin_user = db.query(User).filter_by(username="admin").first()
 
             from fastapi import HTTPException
 
@@ -218,10 +225,11 @@ class TestShiftChangeService:
 
         db = _get_db()
         try:
-            from app.services import shift_change_service
-            from app.schemas.shift_change import ShiftChangeCreate
-            from app.models.enums import AttendanceCode
             from fastapi import HTTPException
+
+            from app.models.enums import AttendanceCode
+            from app.schemas.shift_change import ShiftChangeCreate
+            from app.services import shift_change_service
 
             payload = ShiftChangeCreate(
                 work_date=date(2025, 4, 22),
@@ -229,14 +237,18 @@ class TestShiftChangeService:
                 requested_code=AttendanceCode.D,
             )
             req, _ = shift_change_service.create_request(db, uid, payload)
-            admin_user = db.query(__import__("app.models.user", fromlist=["User"]).User).filter_by(username="admin").first()
+            from app.models.user import User
+
+            admin_user = db.query(User).filter_by(username="admin").first()
 
             # First decision succeeds (reject needs no schedule to apply to).
             shift_change_service.decide(db, req.id, LeaveStatus.rejected, admin_id=admin_user.id)
 
             # Second decision on same request → 409.
             with pytest.raises(HTTPException) as exc_info:
-                shift_change_service.decide(db, req.id, LeaveStatus.approved, admin_id=admin_user.id)
+                shift_change_service.decide(
+                    db, req.id, LeaveStatus.approved, admin_id=admin_user.id
+                )
             assert exc_info.value.status_code == 409
         finally:
             db.close()

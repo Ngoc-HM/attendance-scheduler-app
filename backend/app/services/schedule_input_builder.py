@@ -34,7 +34,7 @@ def build(db: Session, year: int, month: int) -> SolverInput:
             role=u.role,
             carry_comp=boundary[u.id].carry_comp,
             carry_streak=boundary[u.id].carry_streak,
-            carry_premium_off=u.carry_premium_off,
+            carry_premium_off=boundary[u.id].carry_premium_off,
         )
         for u in users
     ]

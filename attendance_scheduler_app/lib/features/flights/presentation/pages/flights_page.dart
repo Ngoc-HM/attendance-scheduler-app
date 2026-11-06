@@ -1,3 +1,4 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -14,10 +15,14 @@ import '../widgets/month_batch_dialog.dart';
 /// Flights page (F-04) — live data from GET /flights/days.
 ///
 /// Admin primary action: "Add flight" opens the month-batch preset grid.
-/// Admin secondary action: manage presets.
+/// Admin secondary actions: import an .xlsx flight plan, manage presets.
 /// All users: month navigation + table view.
 class FlightsPage extends ConsumerWidget {
   const FlightsPage({super.key});
+
+  /// POST /flights/import rejects bigger uploads; checked client-side so the
+  /// user gets the hint before a doomed upload.
+  static const _maxImportBytes = 2 * 1024 * 1024;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -61,8 +66,60 @@ class FlightsPage extends ConsumerWidget {
         onManagePresets: isAdmin
             ? () => context.push(AppRoute.flightPresets)
             : null,
+        onImportExcel: isAdmin ? () => _importExcel(context, ref, l) : null,
       ),
     );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Excel import (F-04, POST /flights/import)
+  // ---------------------------------------------------------------------------
+
+  Future<void> _importExcel(
+    BuildContext context,
+    WidgetRef ref,
+    AppLocalizations l,
+  ) async {
+    // `withData`: desktop file_picker hands back bytes, which is what the
+    // multipart upload needs (there may be no readable path in the sandbox).
+    final picked = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: const ['xlsx'],
+      withData: true,
+    );
+    final file = picked?.files.firstOrNull;
+    // Cancelled the picker, or the page went away while it was open.
+    if (file == null || !context.mounted) return;
+
+    if (file.size > _maxImportBytes) {
+      DsFeedback.show(context, l.text('importExcelHint'), tone: DsTone.warning);
+      return;
+    }
+
+    try {
+      final count = await ref
+          .read(flightsControllerProvider.notifier)
+          .importExcel(file);
+      if (context.mounted) {
+        DsFeedback.show(
+          context,
+          l.importExcelSuccess(count),
+          tone: DsTone.success,
+        );
+      }
+    } on ApiException catch (e) {
+      if (context.mounted) {
+        DsFeedback.show(context, e.message, tone: DsTone.danger);
+      }
+    } catch (_) {
+      if (context.mounted) {
+        DsFeedback.show(
+          context,
+          l.text('importExcelFailed'),
+          tone: DsTone.danger,
+        );
+      }
+    }
   }
 
   // ---------------------------------------------------------------------------

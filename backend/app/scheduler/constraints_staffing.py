@@ -53,8 +53,8 @@ def add(
         for shift, total, demand in (("A", sum_a, demand_a), ("D", sum_d, demand_d)):
             label = f"staff_{shift}_{d.isoformat()}"
             # Floor only: total + under >= demand (no over cap).
-            under = model.NewIntVar(0, len(role_a), f"{label}_under")
-            model.Add(total + under >= demand)
+            under = model.new_int_var(0, len(role_a), f"{label}_under")
+            model.add(total + under >= demand)
 
             registry.register(
                 under,

@@ -61,13 +61,13 @@ class SchedulerEngine:
 
         constraints.add_all(model, x, inp, registry)
         soft_terms = objectives.add_all(model, x, inp)
-        model.Minimize(sum(registry.penalty_terms()) + sum(soft_terms))
+        model.minimize(sum(registry.penalty_terms()) + sum(soft_terms))
 
         solver = cp_model.CpSolver()
         solver.parameters.max_time_in_seconds = inp.max_solve_seconds
         # Determinism for tests/reproducibility (§5.6 — same input, same plan).
         solver.parameters.random_seed = 42
-        status = solver.Solve(model)
+        status = solver.solve(model)
 
         if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
             return SolverOutput(
@@ -102,7 +102,7 @@ class SchedulerEngine:
             person_codes = codes_for(p.role)
             for d in inp.days:
                 for c in person_codes:
-                    x[(p.user_id, d, c)] = model.NewBoolVar(
+                    x[(p.user_id, d, c)] = model.new_bool_var(
                         f"x_{p.user_id}_{d.isoformat()}_{c.name}"
                     )
         return x
@@ -114,6 +114,6 @@ class SchedulerEngine:
     ) -> list[AssignmentResult]:
         results: list[AssignmentResult] = []
         for (uid, d, code), var in x.items():
-            if solver.Value(var) == 1:
+            if solver.value(var) == 1:
                 results.append(AssignmentResult(user_id=uid, day=d, code=code))
         return results

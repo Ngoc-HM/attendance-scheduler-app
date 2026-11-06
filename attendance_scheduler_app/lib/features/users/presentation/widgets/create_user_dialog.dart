@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/network/api_exception.dart';
 import '../../../../design_system/design_system.dart';
 import '../../../../i18n/app_localizations.dart';
 import '../../../auth/domain/entities/user.dart';
@@ -28,6 +29,19 @@ class _CreateUserDialogState extends ConsumerState<CreateUserDialog> {
     _fullName.dispose();
     _password.dispose();
     super.dispose();
+    _password.removeListener(_rebuild);
+    _username.removeListener(_rebuild);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _password.addListener(_rebuild);
+    _username.addListener(_rebuild);
+  }
+
+  void _rebuild() {
+    if (mounted) setState(() {});
   }
 
   Future<void> _submit() async {
@@ -46,7 +60,15 @@ class _CreateUserDialogState extends ConsumerState<CreateUserDialog> {
             role: _role,
           );
       if (mounted) Navigator.of(context).pop(true);
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.statusCode == 409
+            ? AppLocalizations.of(context).text('usernameTaken')
+            : AppLocalizations.of(context).createUserFailed;
+      });
     } catch (_) {
+      if (!mounted) return;
       setState(() => _error = AppLocalizations.of(context).createUserFailed);
     } finally {
       if (mounted) setState(() => _isLoading = false);

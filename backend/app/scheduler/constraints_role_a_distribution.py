@@ -31,8 +31,8 @@ def add(
         pure_a_days = sum(
             x[(person.user_id, day, AttendanceCode.A)] for day in inp.days
         )
-        under = model.NewIntVar(0, MIN_A_DAYS, f"min_a_under_{person.user_id}")
-        model.Add(pure_a_days + under >= MIN_A_DAYS)
+        under = model.new_int_var(0, MIN_A_DAYS, f"min_a_under_{person.user_id}")
+        model.add(pure_a_days + under >= MIN_A_DAYS)
         registry.register(
             under,
             rule="role_a_minimum_a_days",

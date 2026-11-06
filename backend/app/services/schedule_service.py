@@ -27,11 +27,30 @@ from app.schemas.schedule import (
 )
 from app.services import (
     flight_service,
+    leave_service,
     role_code_validation,
     schedule_history,
     schedule_input_builder,
 )
 from app.services.schedule_violation_checker import recheck
+
+
+def mask_sick_for_viewer(
+    schedule: MonthlyScheduleRead, viewer_id: int
+) -> MonthlyScheduleRead:
+    """§9.1 — hide other people's sickness from a non-admin viewer.
+
+    Any ``S`` cell that does not belong to ``viewer_id`` is returned as ``X``
+    (an off day, which is what colleagues legitimately need to know). Own
+    cells are untouched. Pure function over the read model.
+    """
+    masked = [
+        a.model_copy(update={"code": AttendanceCode.X})
+        if a.code is AttendanceCode.S and a.user_id != viewer_id
+        else a
+        for a in schedule.assignments
+    ]
+    return schedule.model_copy(update={"assignments": masked})
 
 
 def get(db: Session, year: int, month: int, include_draft: bool) -> MonthlySchedule:
@@ -115,7 +134,8 @@ def manual_override(
     user = db.get(User, payload.user_id)
     if user is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=t("user.not_found"))
-    role_code_validation.validate(user.role, payload.code)
+    # Planned grid: S is never allowed here (§9.1 — sickness lives in actuals).
+    role_code_validation.validate_planned(user.role, payload.code)
     cell = next(
         (
             a
@@ -186,10 +206,14 @@ def apply_shift_change(db: Session, req: ShiftChangeRequest) -> list[str]:
                 status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="A requested code is required for a code change.",
             )
-        role_code_validation.validate(requester.role, req.requested_code)
+        role_code_validation.validate_planned(requester.role, req.requested_code)
         mine.code = req.requested_code
         mine.is_manual_override = True
     else:  # swap_with — exchange the two users' codes for that date
+        if req.counterpart_user_id is None:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_CONTENT, detail=t("swap.counterpart_required")
+            )
         theirs = cells.get((req.counterpart_user_id, req.work_date))
         if theirs is None:
             raise HTTPException(status.HTTP_409_CONFLICT, detail=t("swap.no_schedule"))
@@ -197,8 +221,8 @@ def apply_shift_change(db: Session, req: ShiftChangeRequest) -> list[str]:
         counterpart = db.get(User, req.counterpart_user_id)
         if requester is None or counterpart is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail=t("user.not_found"))
-        role_code_validation.validate(requester.role, theirs.code)
-        role_code_validation.validate(counterpart.role, mine.code)
+        role_code_validation.validate_planned(requester.role, theirs.code)
+        role_code_validation.validate_planned(counterpart.role, mine.code)
         mine.code, theirs.code = theirs.code, mine.code
         mine.is_manual_override = theirs.is_manual_override = True
 
@@ -223,7 +247,12 @@ def _violations(items) -> list[ConstraintViolation]:
 
 
 def _recheck_violations(db: Session, schedule: MonthlySchedule) -> list[ConstraintViolation]:
-    """Re-run the §5.3 checks over the persisted grid (F-09 warnings)."""
+    """Re-run every engine rule over the persisted grid (F-09 warnings).
+
+    Carry values (streak, comp) come from the same effective history the
+    engine used (``schedule_history``), so the recheck and the generator
+    agree on the month boundary.
+    """
     days = month_days(schedule.year, schedule.month)
     users = db.query(User).filter(User.id.in_({a.user_id for a in schedule.assignments})).all()
     grid: dict[tuple[int, date], AttendanceCode] = {
@@ -235,11 +264,13 @@ def _recheck_violations(db: Session, schedule: MonthlySchedule) -> list[Constrai
     warnings = recheck(
         grid=grid,
         roles={u.id: u.role for u in users},
-        carry_streaks={u.id: u.carry_streak for u in users},
+        carry_streaks={uid: state.carry_streak for uid, state in boundary.items()},
         weeks=build_weeks(days),
         flight_pairs=flight_service.flight_pairs_map(db, days),
         previous_working={
             user_id: state.previous_working for user_id, state in boundary.items()
         },
+        carry_comps={uid: state.carry_comp for uid, state in boundary.items()},
+        annual_off=leave_service.annual_off_dates(db, schedule.year, schedule.month),
     )
     return [ConstraintViolation(rule="manual_recheck", message=w) for w in warnings]

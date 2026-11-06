@@ -19,7 +19,7 @@ from app.models.attendance import AttendanceRecord
 from app.models.enums import AttendanceCode, Role
 from app.models.schedule import MonthlySchedule, ShiftAssignment
 from app.models.user import User
-from app.schemas.attendance import AttendanceUpsert, SickCoverResult
+from app.schemas.attendance import AttendanceRead, AttendanceUpsert, SickCoverResult
 from app.services import role_code_validation, sick_backfill
 
 
@@ -56,7 +56,9 @@ def upsert(db: Session, payload: AttendanceUpsert, recorded_by: int) -> Attendan
         cell = AttendanceRecord(user_id=payload.user_id, work_date=payload.work_date)
         db.add(cell)
     cell.code = payload.code
-    cell.note = payload.note
+    # §9.1 — never persist free text alongside a sick day: no medical detail,
+    # whatever the client sent. Other codes keep their optional note.
+    cell.note = None if payload.code is AttendanceCode.S else payload.note
     cell.recorded_by = recorded_by
     db.commit()
     db.refresh(cell)
@@ -110,7 +112,7 @@ def handle_sick(db: Session, payload: AttendanceUpsert, recorded_by: int) -> Sic
     day = payload.work_date
     dropped = _planned_or_actual_code(db, payload.user_id, day)
 
-    sick_record = upsert(db, payload, recorded_by)
+    sick_record = AttendanceRead.model_validate(upsert(db, payload, recorded_by))
 
     if not sick_backfill.needs_cover(dropped):
         return SickCoverResult(sick=sick_record, cover=None, message=None)
@@ -128,13 +130,15 @@ def handle_sick(db: Session, payload: AttendanceUpsert, recorded_by: int) -> Sic
             sick=sick_record, cover=None, message=t("attendance.sick_no_cover")
         )
 
-    cover = upsert(
-        db,
-        AttendanceUpsert(
-            user_id=proposal.user_id, work_date=day, code=proposal.new_code,
-            note=proposal.reason,
-        ),
-        recorded_by,
+    cover = AttendanceRead.model_validate(
+        upsert(
+            db,
+            AttendanceUpsert(
+                user_id=proposal.user_id, work_date=day, code=proposal.new_code,
+                note=proposal.reason,
+            ),
+            recorded_by,
+        )
     )
     return SickCoverResult(
         sick=sick_record, cover=cover, forced=proposal.forced, message=proposal.reason

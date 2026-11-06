@@ -19,23 +19,37 @@ Living status of the full-implementation plan
 | 11 | Testing | — | ✅ done (110 tests green) |
 | 12 | Docs | — | ✅ done |
 
-## Current state — ALL PHASES COMPLETE
-- **Backend: feature-complete, 99/99 tests pass.** Every F-01..F-15 endpoint
-  is implemented; the CP-SAT engine enforces all §5.3 hard rules (soft+slack)
-  and §5.4 objectives, verified on realistic 9-person months.
-- **Frontend: all 7 features wired** (auth, users, flights, leaves, schedule
-  +shift-change, attendance+holidays, reports) to the live API; mockups
-  removed; `flutter analyze` clean; **11/11 Flutter tests pass** (i18n parity,
-  boot, navigation, design-system boundary on all pages, schedule goldens).
-- DB migrated to Alembic `0002`.
+## Current state — 2026-09-03 hardening pass
+- **Backend:** F-01..F-15 implemented; 188 tests, `ruff` and `mypy` clean.
+  Production environment guard, dev-only seed-admin reset, sickness never in
+  the planned schedule (write-reject + read-mask), no note on S rows,
+  fail-loud audit covering user CRUD / approval / manual flight entry /
+  month-close / autorun, F-09 recheck mirroring every engine rule,
+  premium-off carry derived from history, 3-criteria leave-conflict ranking,
+  retention purge + data-subject export, DB-backed `/health`.
+- **Frontend:** every screen wired; Excel import and month-close in the UI;
+  auth guard on all routes; 401 → session expired → login; release builds
+  start with an empty login form. `flutter analyze` clean, 18/18 tests.
+- **CI:** `.github/workflows/ci.yml` — ruff, mypy, pytest on SQLite and on
+  PostgreSQL 16 (with a fresh `alembic upgrade head`), production-guard
+  smoke, `flutter analyze`/`test`, `flutter build windows` artifact.
+- DB at Alembic `0007`.
+
+## Remaining before production
+| Item | Owner | Notes |
+|------|-------|-------|
+| Betriebsrat agreement (§9.2) | customer | now also covers time clock + self-arrange |
+| Staffing floor vs exact count | customer | see design-decisions "Open questions" |
+| Real "WR JUN26" Excel layout | customer | importer expects date / flt / route / STA / STD |
+| Final retention period | customer DPO | shipped 36 months, floor 24 |
+| Windows build smoke-tested on a customer PC | dev | CI produces the bundle; install + login + generate |
+| PostgreSQL restore rehearsal on staging | dev/ops | `scripts/backup_db.sh` + `scripts/restore_db.sh` |
+| Audit row in the same transaction as the change | dev (nice-to-have) | currently fail-loud after commit, see decision #18 |
 
 ## Test coverage note
 Backend has per-constraint bind + slack-violation tests, service/endpoint/RBAC/
-audit tests. Flutter coverage = design-system boundary (all 6 wired pages),
-i18n parity, app boot/navigation, and schedule-page golden renders. Deeper
-per-page Flutter widget tests (flights/leaves/attendance/reports interaction)
-are a sensible future addition but the pages are structurally validated.
-
-## Confirm-with-customer (non-blocking)
-Partial-week rounding (#7) · M/T in A/D balance · real "WR JUN26" Excel layout
-· Betriebsrat (§9.2, deploy gate) · partial CD carry.
+audit tests, privacy (S) tests, production-guard tests, recheck-rule tests and
+compliance tests. Flutter coverage = design-system boundary (all wired pages),
+i18n parity, app boot/navigation, users-page guards, and schedule-page golden
+renders. Deeper per-page Flutter widget tests (flights/leaves/attendance/
+reports interaction) remain a sensible future addition.

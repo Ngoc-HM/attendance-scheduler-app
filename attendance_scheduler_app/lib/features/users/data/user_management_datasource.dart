@@ -9,6 +9,21 @@ final userManagementDataSourceProvider = Provider<UserManagementDataSource>(
   (ref) => UserManagementDataSource(ref.watch(dioProvider)),
 );
 
+/// Backend response shape for `PATCH /users/{id}` — includes soft warnings.
+class UserUpdateResult {
+  const UserUpdateResult({required this.user, required this.warnings});
+
+  final UserModel user;
+  final List<String> warnings;
+
+  factory UserUpdateResult.fromJson(Map<String, dynamic> json) => UserUpdateResult(
+    user: UserModel.fromJson(json['user'] as Map<String, dynamic>),
+    warnings: (json['warnings'] as List<dynamic>? ?? const [])
+        .map((e) => e.toString())
+        .toList(),
+  );
+}
+
 /// Admin user-management calls (F-01, F-03). All routes are admin-guarded
 /// on the backend.
 class UserManagementDataSource {
@@ -50,8 +65,14 @@ class UserManagementDataSource {
   }
 
   /// PATCH /users/{id} — update role / status (and optionally other fields).
-  Future<UserModel> update(int id, Map<String, dynamic> changes) async {
+  /// Returns the wrapped result so the UI can surface soft warnings.
+  Future<UserUpdateResult> update(int id, Map<String, dynamic> changes) async {
     final response = await _dio.patch(ApiEndpoints.userById(id), data: changes);
-    return UserModel.fromJson(response.data as Map<String, dynamic>);
+    return UserUpdateResult.fromJson(response.data as Map<String, dynamic>);
+  }
+
+  /// DELETE /users/{id} — hard-delete with history cascade. Throws on failure.
+  Future<void> delete(int id) async {
+    await _dio.delete(ApiEndpoints.userById(id));
   }
 }

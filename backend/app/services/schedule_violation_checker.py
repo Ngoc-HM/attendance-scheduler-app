@@ -1,9 +1,20 @@
 """Hard-rule re-check after manual edits (F-09) and shift-change applies (#8).
 
 Pure functions over a plain ``{(user_id, date): AttendanceCode}`` grid — no DB,
-no solver — mirroring the engine's soft rules (§5.3 #2/#3/#4). The edit is
-Saved after role/code validation (§5.6 #14); these warnings tell the admin
-which scheduling rules the edit just broke.
+no solver — mirroring EVERY rule the engine models with slack (§5.3 and the
+owner decisions layered on top). The edit is saved after role/code validation
+(§5.6 #14); these warnings tell the admin which scheduling rules the edit
+just broke.
+
+Rules mirrored (engine module in brackets):
+
+* max 5 consecutive working days, carry included   [constraints_consecutive]
+* >= 2 rest days in every rolling 7 days           [constraints_rolling_rest]
+* genuine-X quota per 7-day block                  [constraints_off_days]
+* flight staffing floor for role A                 [constraints_staffing]
+* >= 2 pure A days per role-A person / full month  [constraints_role_a_distribution]
+* owed comp days (CD) granted, none unearned       [constraints_comp_days]
+* no more than 5 consecutive OFF days              [constraints_off_chain]
 """
 
 from __future__ import annotations
@@ -12,12 +23,19 @@ from datetime import date, timedelta
 
 from app.models.enums import AttendanceCode, Role
 from app.scheduler.calendar_utils import partial_block_off_target
+from app.scheduler.constraints_role_a_distribution import (
+    MIN_A_DAYS,
+    MIN_FULL_MONTH_DAYS,
+)
 
 # Demand table per flight_pairs (§5.3 #4) — kept in sync with the engine.
 DEMAND: dict[int, tuple[int, int]] = {0: (0, 0), 1: (1, 1), 2: (1, 2)}
 
-# Codes that count as a day off for the consecutive-run rule (§5.2).
+# Codes that count as a day off for the consecutive-run rules (§5.2).
 OFF_CODES = {AttendanceCode.X, AttendanceCode.CD, AttendanceCode.S, AttendanceCode.AL}
+
+# Longest ordinary off-run allowed; a longer break must be annual leave.
+MAX_CONSECUTIVE_OFF = 5
 
 
 def recheck(
@@ -27,19 +45,28 @@ def recheck(
     weeks: list[list[date]],
     flight_pairs: dict[date, int],
     previous_working: dict[int, dict[date, bool]] | None = None,
+    carry_comps: dict[int, int] | None = None,
+    annual_off: dict[int, set[date]] | None = None,
 ) -> list[str]:
-    """Run every §5.3 check over the grid; return human-readable warnings."""
+    """Run every mirrored rule over the grid; return human-readable warnings."""
     warnings: list[str] = []
     warnings += check_consecutive(grid, roles, carry_streaks, weeks)
     warnings += check_rolling_rest(grid, roles, weeks, previous_working or {})
     warnings += check_off_quota(grid, roles, weeks)
     warnings += check_staffing(grid, roles, weeks, flight_pairs)
+    warnings += check_min_a_days(grid, roles, weeks)
+    warnings += check_comp_days(grid, roles, weeks, carry_comps or {})
+    warnings += check_off_chain(grid, roles, weeks, annual_off or {})
     return warnings
+
+
+def _days(weeks: list[list[date]]) -> list[date]:
+    return sorted({d for block in weeks for d in block})
 
 
 def check_rolling_rest(grid, roles, weeks, previous_working) -> list[str]:
     """Every rolling 7 calendar days must contain at least 2 rest days."""
-    days = sorted({d for block in weeks for d in block})
+    days = _days(weeks)
     if not days:
         return []
 
@@ -71,7 +98,7 @@ def check_rolling_rest(grid, roles, weeks, previous_working) -> list[str]:
 
 def check_consecutive(grid, roles, carry_streaks, weeks) -> list[str]:
     """§5.3 #3 + §5.5 — no run of more than 5 working days (carry included)."""
-    days = sorted({d for block in weeks for d in block})
+    days = _days(weeks)
     warnings: list[str] = []
     for uid in roles:
         # Role F is T-like (owner 2026-07-22): the consecutive rule applies.
@@ -126,7 +153,7 @@ def check_staffing(grid, roles, weeks, flight_pairs) -> list[str]:
     Scoped to ROLE-A people only (owner decision 2026-06-26), kept in sync
     with ``constraints_staffing``.  Only UNDER-coverage warns; extra is fine.
     """
-    days = sorted({d for block in weeks for d in block})
+    days = _days(weeks)
     role_a_ids = [uid for uid, role in roles.items() if role is Role.A]
     warnings: list[str] = []
     for d in days:
@@ -138,5 +165,86 @@ def check_staffing(grid, roles, weeks, flight_pairs) -> list[str]:
             warnings.append(
                 f"{d}: short flight coverage A={a + ad}/{need_a}, "
                 f"D={dd + ad}/{need_d} (need at least the flight minimum)"
+            )
+    return warnings
+
+
+def check_min_a_days(grid, roles, weeks) -> list[str]:
+    """Decision #14 — every role-A person keeps >= 2 pure A days in a full month.
+
+    Mirrors ``constraints_role_a_distribution``: partial-month grids (tests,
+    diagnostics) are exempt exactly like in the engine.
+    """
+    days = _days(weeks)
+    if len(days) < MIN_FULL_MONTH_DAYS:
+        return []
+    warnings: list[str] = []
+    for uid, role in roles.items():
+        if role is not Role.A:
+            continue
+        pure_a = sum(1 for d in days if grid.get((uid, d)) is AttendanceCode.A)
+        if pure_a < MIN_A_DAYS:
+            warnings.append(
+                f"User {uid}: only {pure_a} A-duty day(s) in the month "
+                f"(minimum {MIN_A_DAYS})"
+            )
+    return warnings
+
+
+def check_comp_days(grid, roles, weeks, carry_comps) -> list[str]:
+    """§5.3 #6 / decision #13 — owed comp days are granted, none invented.
+
+    Mirrors ``constraints_comp_days``: for each role-A person the month's CD
+    count must equal the comp debt carried in; fewer is a shortfall, more is
+    an unearned rest day. Other roles never carry CD.
+    """
+    days = _days(weeks)
+    warnings: list[str] = []
+    for uid, role in roles.items():
+        cd = sum(1 for d in days if grid.get((uid, d)) is AttendanceCode.CD)
+        if role is not Role.A:
+            if cd:
+                warnings.append(
+                    f"User {uid}: {cd} comp day(s) scheduled but role "
+                    f"{role.value} never earns compensation"
+                )
+            continue
+        owed = carry_comps.get(uid, 0)
+        if cd < owed:
+            warnings.append(
+                f"User {uid}: {owed} comp day(s) owed but only {cd} scheduled"
+            )
+        elif cd > owed:
+            warnings.append(
+                f"User {uid}: {cd} comp day(s) scheduled but only {owed} owed"
+            )
+    return warnings
+
+
+def check_off_chain(grid, roles, weeks, annual_off) -> list[str]:
+    """Customer rule 2026-06-12 — no more than 5 consecutive OFF days.
+
+    Mirrors ``constraints_off_chain``: any 6-day window that is entirely off
+    warns, unless it touches an approved ANNUAL-leave day (the sanctioned long
+    break). Reported once per off-run, at the window where the run starts.
+    """
+    days = _days(weeks)
+    window = MAX_CONSECUTIVE_OFF + 1
+    warnings: list[str] = []
+    for uid in roles:
+        annual = annual_off.get(uid, set())
+        for i in range(len(days) - window + 1):
+            span = days[i : i + window]
+            if any(d in annual for d in span):
+                continue
+            if not all(grid.get((uid, d)) in OFF_CODES for d in span):
+                continue
+            # Only the first window of an off-run reports (avoid one warning
+            # per day of a long break).
+            if i > 0 and grid.get((uid, days[i - 1])) in OFF_CODES:
+                continue
+            warnings.append(
+                f"User {uid}: more than {MAX_CONSECUTIVE_OFF} consecutive OFF days "
+                f"from {span[0]} — such a break must be registered as annual leave"
             )
     return warnings

@@ -43,10 +43,10 @@ def add(
             target = pinned_in_block + min(base, len(block) - pinned_in_block)
 
             label = f"off_{p.user_id}_{block[0].isoformat()}"
-            under = model.NewIntVar(0, 9, f"{label}_under")
-            over = model.NewIntVar(0, 9, f"{label}_over")
+            under = model.new_int_var(0, 9, f"{label}_under")
+            over = model.new_int_var(0, 9, f"{label}_over")
 
-            model.Add(
+            model.add(
                 sum(x[(p.user_id, d, AttendanceCode.X)] for d in block)
                 + under - over == target
             )

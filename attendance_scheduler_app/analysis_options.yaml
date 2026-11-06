@@ -9,6 +9,21 @@
 # packages, and plugins designed to encourage good coding practices.
 include: package:flutter_lints/flutter.yaml
 
+analyzer:
+  exclude:
+    # `packages/liquid_glass_renderer_compat` is a path dependency (see
+    # dependency_overrides in pubspec.yaml). It is still compiled through pub,
+    # but analysed from this app's context its own imports do not resolve and
+    # it drowns `flutter analyze` in false errors — so it is left out here.
+    - packages/**
+    - build/**
+    - android/**
+    - ios/**
+    - web/**
+    - windows/**
+    - macos/**
+    - linux/**
+
 linter:
   # The lint rules applied to this project can be customized in the
   # section below to disable rules from the `package:flutter_lints/flutter.yaml`

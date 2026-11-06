@@ -12,10 +12,9 @@ Covers:
 from __future__ import annotations
 
 import io
-from datetime import date, time
+from datetime import date
 
 import openpyxl
-import pytest
 from fastapi.testclient import TestClient
 
 from app.services.flight_pair_derivation import derive_pairs_for_day
@@ -26,6 +25,8 @@ V = "/api/v1"
 # Helpers
 # ---------------------------------------------------------------------------
 
+
+XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 def _login(client: TestClient, username: str, password: str) -> str:
     resp = client.post(
@@ -163,7 +164,7 @@ class TestFlightPairsMap:
         from app.services.flight_service import flight_pairs_map
 
         # Use a fresh DB session via the app's dependency.
-        with client as c:  # ensure lifespan ran
+        with client:  # ensure lifespan ran
             db_gen = get_db()
             db = next(db_gen)
             try:
@@ -235,7 +236,7 @@ class TestImportExcel:
         resp = client.post(
             f"{V}/flights/import",
             headers=headers,
-            files={"file": ("flights.xlsx", xlsx_bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+            files={"file": ("flights.xlsx", xlsx_bytes, XLSX_MIME)},
         )
         assert resp.status_code == 200, resp.text
         flights = resp.json()
@@ -259,7 +260,7 @@ class TestImportExcel:
         resp = client.post(
             f"{V}/flights/import",
             headers=headers,
-            files={"file": ("flights.xlsx", xlsx_bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+            files={"file": ("flights.xlsx", xlsx_bytes, XLSX_MIME)},
         )
         assert resp.status_code == 200, resp.text
         list_resp = client.get(
@@ -290,7 +291,7 @@ class TestImportExcel:
         resp = client.post(
             f"{V}/flights/import",
             headers=headers,
-            files={"file": ("flights.xlsx", xlsx_bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+            files={"file": ("flights.xlsx", xlsx_bytes, XLSX_MIME)},
         )
         assert resp.status_code == 422
 
@@ -309,7 +310,7 @@ class TestImportExcel:
         resp = client.post(
             f"{V}/flights/import",
             headers=headers,
-            files={"file": ("flights.xlsx", xlsx_bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+            files={"file": ("flights.xlsx", xlsx_bytes, XLSX_MIME)},
         )
         assert resp.status_code == 200
         assert resp.json() == []

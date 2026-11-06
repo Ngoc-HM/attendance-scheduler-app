@@ -53,16 +53,16 @@ def terms(
             for i in range(len(block) - 1):
                 xa = x[(p.user_id, block[i], AttendanceCode.X)]
                 xb = x[(p.user_id, block[i + 1], AttendanceCode.X)]
-                b = model.NewBoolVar(
+                b = model.new_bool_var(
                     f"pairoff_{p.user_id}_{block[i].isoformat()}"
                 )
                 # b == (xa AND xb)
-                model.Add(b <= xa)
-                model.Add(b <= xb)
-                model.Add(b >= xa + xb - 1)
+                model.add(b <= xa)
+                model.add(b <= xb)
+                model.add(b >= xa + xb - 1)
                 both.append(b)
 
             # Shortfall of adjacent pairs vs the fully-clustered ideal (k - 1).
-            penalties.append(weight * ((target - 1) - sum(both)))
+            penalties.append(weight * ((target - 1) - cp_model.LinearExpr.sum(both)))
 
     return penalties

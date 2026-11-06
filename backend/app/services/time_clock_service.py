@@ -9,7 +9,7 @@ does not land on yesterday's row.
 
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException, status
@@ -47,7 +47,7 @@ def check_in(db: Session, user_id: int) -> TimeClockEntry:
     if entry is None:
         entry = TimeClockEntry(user_id=user_id, work_date=_today())
         db.add(entry)
-    entry.check_in_at = datetime.now(timezone.utc)
+    entry.check_in_at = datetime.now(UTC)
     try:
         db.commit()
     except IntegrityError as exc:  # double-tap race on uq_time_clock_cell
@@ -70,7 +70,7 @@ def check_out(db: Session, user_id: int) -> TimeClockEntry:
         raise HTTPException(
             status.HTTP_409_CONFLICT, detail=t("clock.already_checked_out")
         )
-    entry.check_out_at = datetime.now(timezone.utc)
+    entry.check_out_at = datetime.now(UTC)
     db.commit()
     db.refresh(entry)
     return entry

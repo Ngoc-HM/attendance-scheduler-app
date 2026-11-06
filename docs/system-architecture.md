@@ -58,6 +58,6 @@ the template; flights/leaves/schedule/attendance/reports/users follow it),
 `text(key)` fallback).
 
 ## Compliance posture (§9 → `deployment-guide.md`)
-EU/Frankfurt region; sick `S` is special-category (admin-only read/write, no
+EU/Frankfurt region; sick `S` is special-category (admin-written into actual attendance only, never in the planned schedule, no
 medical detail, audited); RBAC; audit log on admin actions; rule-based engine
 (no AI staff evaluation, §9.6). Final legal sign-off: customer DPO.

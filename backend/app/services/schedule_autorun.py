@@ -49,12 +49,17 @@ def maybe_run_autorun(today: date | None = None) -> bool:
             return False
 
         # Import here to avoid a service-module import cycle.
-        from app.services import schedule_service
+        from app.services import audit_service, schedule_service
 
         result = schedule_service.generate(db, year, month)
         logger.info(
             "Autorun: generated draft %s-%02d (violations: %d). Actor: system.",
             year, month, len(result.violations),
+        )
+        # System actor (actor_id=None) — the trail must show automated runs too.
+        audit_service.record(
+            db, None, "schedule.generate", "MonthlySchedule",
+            detail=f"{year}-{month:02d} autorun violations={len(result.violations)}",
         )
         return True
     except Exception:  # job must never crash the scheduler loop

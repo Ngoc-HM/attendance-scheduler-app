@@ -8,6 +8,7 @@ from app.api.v1.endpoints import (
     attendance,
     auth,
     calculations,
+    compliance,
     flights,
     holidays,
     leaves,
@@ -37,3 +38,4 @@ api_router.include_router(
 api_router.include_router(reports.router, prefix="/reports", tags=["reports"])
 api_router.include_router(shift_changes.router, prefix="/shift-changes", tags=["shift-changes"])
 api_router.include_router(self_arrange.router, prefix="/self-arrange", tags=["self-arrange"])
+api_router.include_router(compliance.router, prefix="/compliance", tags=["compliance"])

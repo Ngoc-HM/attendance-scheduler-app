@@ -10,7 +10,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from app.api.deps import AdminUser, DbSession
 from app.schemas.token import Token
 from app.schemas.user import UserCreate, UserRead
-from app.services import auth_service, user_service
+from app.services import audit_service, auth_service, user_service
 
 router = APIRouter()
 
@@ -29,6 +29,10 @@ def register(db: DbSession, payload: UserCreate):
 
 
 @router.post("/users/{user_id}/approve", response_model=UserRead)
-def approve_user(db: DbSession, user_id: int, _admin: AdminUser):
-    """F-01 — admin approves a pending account (activates it)."""
-    return user_service.approve(db, user_id)
+def approve_user(db: DbSession, user_id: int, admin: AdminUser):
+    """F-01 — admin approves a pending account (activates it). Audited (§9.5)."""
+    user = user_service.approve(db, user_id)
+    audit_service.record(
+        db, admin.id, "user.approve", "User", user.id, detail=f"username={user.username}"
+    )
+    return user

@@ -14,7 +14,7 @@ stored as their own codes in the grid, so counting X only matches decision #4
 
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
@@ -32,7 +32,6 @@ from app.scheduler.calendar_utils import (
 from app.scheduler.role_codes import codes_for
 from app.schemas.self_arrange import SelfArrangeChange, SelfArrangeCreate
 from app.services import schedule_service
-
 
 # ---------------------------------------------------------------------------
 # Validation core (shared by create and approve)
@@ -211,7 +210,7 @@ def decide(
 
     req.status = new_status
     req.decided_by_id = admin_id
-    req.decided_at = datetime.now(timezone.utc)
+    req.decided_at = datetime.now(UTC)
     db.commit()
     db.refresh(req)
     return req, warnings

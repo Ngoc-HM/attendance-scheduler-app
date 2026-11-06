@@ -9,7 +9,6 @@ from fastapi.testclient import TestClient
 from app.models.enums import AttendanceCode
 from app.services import carry_over_math
 
-
 # --- pure carry_over_math --------------------------------------------------
 
 def test_comp_balance_earned_minus_consumed() -> None:

@@ -82,10 +82,9 @@ class FlightsRemoteDataSource {
           .map((e) => FlightModel.fromJson(e as Map<String, dynamic>))
           .toList();
     } on DioException catch (e) {
-      throw ApiException(
-        e.message ?? 'Excel import failed',
-        statusCode: e.response?.statusCode,
-      );
+      // `fromDio` keeps the backend's (localized) `detail` — e.g. "file too
+      // large" or a bad sheet layout — instead of Dio's generic message.
+      throw ApiException.fromDio(e, 'Excel import failed');
     }
   }
 

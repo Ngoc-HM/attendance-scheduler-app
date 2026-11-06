@@ -9,8 +9,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from sqlalchemy import Date, DateTime, ForeignKey, Integer, String, UniqueConstraint
-from sqlalchemy import Boolean
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -32,7 +31,7 @@ class MonthlySchedule(Base, TimestampMixin):
     generated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     note: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
-    assignments: Mapped[list["ShiftAssignment"]] = relationship(
+    assignments: Mapped[list[ShiftAssignment]] = relationship(
         back_populates="schedule", cascade="all, delete-orphan"
     )
 
@@ -57,4 +56,4 @@ class ShiftAssignment(Base, TimestampMixin):
     # True when an admin edited this cell after auto-generation (F-09).
     is_manual_override: Mapped[bool] = mapped_column(Boolean, default=False)
 
-    schedule: Mapped["MonthlySchedule"] = relationship(back_populates="assignments")
+    schedule: Mapped[MonthlySchedule] = relationship(back_populates="assignments")

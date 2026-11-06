@@ -47,17 +47,17 @@ def terms(
 
     totals: list[cp_model.IntVar] = []
     for p in inp.people:
-        total = model.NewIntVar(0, bound, f"premium_{p.user_id}")
+        total = model.new_int_var(0, bound, f"premium_{p.user_id}")
         # History (carry) + this month's premium X days.
-        model.Add(
+        model.add(
             total
             == p.carry_premium_off
             + sum(x[(p.user_id, d, AttendanceCode.X)] for d in prem)
         )
         totals.append(total)
 
-    hi = model.NewIntVar(0, bound, "premium_max")
-    lo = model.NewIntVar(0, bound, "premium_min")
-    model.AddMaxEquality(hi, totals)
-    model.AddMinEquality(lo, totals)
+    hi = model.new_int_var(0, bound, "premium_max")
+    lo = model.new_int_var(0, bound, "premium_min")
+    model.add_max_equality(hi, totals)
+    model.add_min_equality(lo, totals)
     return [weight * (hi - lo)]

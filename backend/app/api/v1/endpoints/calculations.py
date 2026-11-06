@@ -5,19 +5,26 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from app.api.deps import AdminUser, DbSession
-from app.services import calculation_service
+from app.services import audit_service, calculation_service
 
 router = APIRouter()
 
 
 @router.post("/{year}/{month}/close")
-def close_month(db: DbSession, year: int, month: int, _admin: AdminUser):
+def close_month(db: DbSession, year: int, month: int, admin: AdminUser):
     """F-14 — close a month: recompute carry_comp / carry_streak /
     carry_premium_off for the next month (§5.5, §5.3 #6, decision #6).
 
     Idempotent: values are absolute recomputations from the record history.
+    The scheduler derives the same values from history on its own, so this
+    is a persistence/reporting step, not a prerequisite for generation.
     """
-    return calculation_service.close_month(db, year, month)
+    result = calculation_service.close_month(db, year, month)
+    audit_service.record(
+        db, admin.id, "calculations.close_month", "User",
+        detail=f"{year}-{month:02d}: {len(result['users'])} users",
+    )
+    return result
 
 
 @router.get("/summary")

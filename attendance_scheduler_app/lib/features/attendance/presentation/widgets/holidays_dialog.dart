@@ -21,9 +21,20 @@ class _HolidaysDialogState extends ConsumerState<HolidaysDialog> {
   final _nameCtrl = TextEditingController();
 
   @override
+  void initState() {
+    super.initState();
+    _nameCtrl.addListener(_onNameChanged);
+  }
+
+  @override
   void dispose() {
+    _nameCtrl.removeListener(_onNameChanged);
     _nameCtrl.dispose();
     super.dispose();
+  }
+
+  void _onNameChanged() {
+    if (mounted) setState(() {});
   }
 
   @override

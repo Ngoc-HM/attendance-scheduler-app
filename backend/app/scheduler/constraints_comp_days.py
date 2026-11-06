@@ -54,12 +54,12 @@ def add(
 
         if owed <= 0:
             # No comp debt → never auto-assign CD (CD comes only from debt).
-            model.Add(cd_sum == 0)
+            model.add(cd_sum == 0)
             continue
 
-        under = model.NewIntVar(0, owed, f"comp_under_{p.user_id}")
-        over = model.NewIntVar(0, len(days), f"comp_over_{p.user_id}")
-        model.Add(cd_sum + under - over == owed)
+        under = model.new_int_var(0, owed, f"comp_under_{p.user_id}")
+        over = model.new_int_var(0, len(days), f"comp_over_{p.user_id}")
+        model.add(cd_sum + under - over == owed)
 
         registry.register(
             under,

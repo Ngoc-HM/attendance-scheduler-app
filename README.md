@@ -75,24 +75,34 @@ flutter pub get
 flutter run -d macos            # or windows / linux
 ```
 
-## Status
-**Backend: feature-complete & tested — F-01..F-15 all implemented (99/99 tests).**
-The OR-Tools CP-SAT engine enforces every §5.3 hard rule (via an always-feasible
-slack model that reports violations instead of failing — §5.6) and the §5.4
-objectives (A/D balance, weekend pairing, cross-month premium-off fairness).
-Schedule generate / manual-override / publish, day-20 autorun, leave +
-shift-change requests, attendance with sick A/D backfill, holiday CRUD,
-month-close calculations, and CSV/XLSX export are all live. GDPR hardening is in
-place (RBAC, audit log on every admin mutation, sick `S` admin-only). Schema is
-managed by Alembic (`alembic upgrade head`).
+## Status (2026-09-03)
+**Backend: F-01..F-15 implemented; 188 tests, ruff and mypy clean.**
+The OR-Tools CP-SAT engine enforces every §5.3 rule through an always-feasible
+slack model that reports violations instead of failing (§5.6), plus the §5.4
+objectives (A/D balance, adjacent off-pairing, cross-month premium-off
+fairness). Schedule generate / manual-override (re-checked against every
+engine rule) / publish, day-20 autorun, leave + shift-change + self-arrange
+requests, attendance with sick A/D backfill, holiday CRUD, time clock,
+month-close, CSV/XLSX export, retention purge and data-subject export are
+live. Schema is managed by Alembic (`alembic upgrade head`).
 
-**Frontend:** auth + user management wired; the flights / leaves / schedule /
-attendance / reports screens are being wired to the live API (replacing the
-earlier mockups). See `docs/development-roadmap.md` for current phase status.
+**Frontend:** all screens are wired to the live API, including Excel flight
+import, month-close, session-expiry handling and an auth guard on every
+route; `flutter analyze` and `flutter test` are clean.
+
+**Not yet done / needs the customer** (see `docs/design-decisions.md`,
+"Open questions"): Betriebsrat agreement (now also covering the time clock),
+staffing floor vs exact count, real "WR JUN26" Excel layout, final retention
+period, a rehearsed PostgreSQL restore, and a Windows build produced by the
+CI job (`.github/workflows/ci.yml`) and smoke-tested on a customer machine.
+Treat the current state as **release candidate for internal pilot**, not as
+a production release.
 
 > **Spec overrides** (owner-approved — see `docs/design-decisions.md`):
 > holidays are **working days** (not auto-off, diverges from F-13/§7); a "week"
-> for the 2-days-off rule is a **7-day block from day 1** (not Mon–Sun).
+> for the 2-days-off rule is a **7-day block from day 1** (not Mon–Sun); the
+> engine pairs weekly offs **adjacently without a weekend preference** (the
+> T7+CN > T6+T7 > CN+T2 order applies only to leave-conflict ranking).
 
 ## Documentation
 Full docs live in [`docs/`](./docs): architecture, design decisions (incl. spec
@@ -100,10 +110,13 @@ overrides), code standards, deployment/GDPR guide, roadmap, changelog,
 codebase summary.
 
 ## Compliance (spec §9 — GDPR / BDSG)
-Deploy in an EU/Frankfurt region; sick data (`S`) is special-category
-(admin-only, no medical detail); TLS + encryption at rest; role-based access;
-audit log on admin actions; rule-based scheduling (no AI performance
-evaluation, §9.6). Details: [`docs/deployment-guide.md`](./docs/deployment-guide.md).
+Deploy in an EU/Frankfurt region; sick data (`S`) is special-category: written
+by admins only into actual attendance, never with a note, never in the planned
+schedule, visible only to admins and the person themself. TLS + encryption at
+rest; role-based access; fail-loud audit log on every admin action; retention
+purge with a 24-month legal floor; per-person data export; production
+environment guard; rule-based scheduling (no AI performance evaluation, §9.6).
+Details: [`docs/deployment-guide.md`](./docs/deployment-guide.md).
 Final legal sign-off rests with the customer's DPO. **Open question:** does the
 customer have a Betriebsrat (works council)? If so, an agreement is needed
-before rollout.
+before rollout — and the time-clock feature makes that question unavoidable.

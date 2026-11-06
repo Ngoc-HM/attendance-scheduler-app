@@ -4,9 +4,10 @@ Called from the FastAPI lifespan on startup. Two jobs:
 
 1. (dev) create tables so the API runs locally without an Alembic step;
    production should manage schema with migrations instead.
-2. Ensure the seed admin (role M) exists. Per requirement: create it if
-   missing, otherwise RESET its password back to the configured default.
-   Users may change the password at runtime, but a restart restores it.
+2. Ensure the seed admin (role M) exists: create it if missing. In DEV only
+   (``FIRST_ADMIN_RESET_ON_STARTUP``), an existing seed admin has its
+   password reset to the configured default so local login is one click.
+   In staging/prod an existing admin's credentials are never touched.
 """
 
 from __future__ import annotations
@@ -78,8 +79,7 @@ def create_tables_if_enabled() -> None:
 
 
 def ensure_first_admin(db: Session) -> User:
-    """Create the seed admin, or reset its password to the configured default."""
-    hashed = get_password_hash(settings.FIRST_ADMIN_PASSWORD)
+    """Create the seed admin; reset its password only in dev (see module doc)."""
     admin = (
         db.query(User)
         .filter(User.username == settings.FIRST_ADMIN_USERNAME)
@@ -90,24 +90,32 @@ def ensure_first_admin(db: Session) -> User:
         admin = User(
             username=settings.FIRST_ADMIN_USERNAME,
             full_name=settings.FIRST_ADMIN_FULL_NAME,
-            hashed_password=hashed,
+            hashed_password=get_password_hash(settings.FIRST_ADMIN_PASSWORD),
             role=Role.M,
             status=UserStatus.active,
             code=next_user_code(db, Role.M),
         )
         db.add(admin)
         logger.info("Seed admin '%s' created.", settings.FIRST_ADMIN_USERNAME)
-    else:
-        # Reset to the default password and keep the account usable.
-        admin.hashed_password = hashed
+    elif settings.FIRST_ADMIN_RESET_ON_STARTUP and not settings.is_production:
+        # DEV convenience only: restore the default password / role / status.
+        admin.hashed_password = get_password_hash(settings.FIRST_ADMIN_PASSWORD)
         admin.role = Role.M
         admin.status = UserStatus.active
-        # Backfill code if it was never set (e.g. pre-migration existing admin).
         if admin.code is None:
             admin.code = next_user_code(db, Role.M)
         logger.info(
-            "Seed admin '%s' password reset to default.",
+            "Seed admin '%s' password reset to the dev default (ENVIRONMENT=dev).",
             settings.FIRST_ADMIN_USERNAME,
+        )
+    else:
+        # Production-like: never touch an existing admin's credentials, role
+        # or status. Only backfill a missing code (pre-migration databases).
+        if admin.code is None:
+            admin.code = next_user_code(db, Role.M)
+        logger.info(
+            "Seed admin '%s' present; credentials left unchanged (ENVIRONMENT=%s).",
+            settings.FIRST_ADMIN_USERNAME, settings.ENVIRONMENT,
         )
 
     db.commit()

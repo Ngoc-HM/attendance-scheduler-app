@@ -396,4 +396,26 @@ def conflicts_for_date(
     users = db.query(User).filter(User.id.in_(user_ids)).all()
     users_by_id = {u.id: u for u in users}
 
-    return leave_conflict_resolver.rank(requests, users_by_id)
+    # Criterion 2 input: off days these users ALREADY hold (approved) around
+    # the contested date — one month either side covers every 7-day block a
+    # request can touch.
+    window_start = target_date - timedelta(days=31)
+    window_end = target_date + timedelta(days=31)
+    approved = (
+        db.query(LeaveRequest)
+        .filter(
+            LeaveRequest.status == LeaveStatus.approved,
+            LeaveRequest.user_id.in_(user_ids),
+            LeaveRequest.start_date <= window_end,
+            LeaveRequest.end_date >= window_start,
+        )
+        .all()
+    )
+    approved_off_by_user: dict[int, set[date]] = {}
+    for req in approved:
+        day = req.start_date
+        while day <= req.end_date:
+            approved_off_by_user.setdefault(req.user_id, set()).add(day)
+            day += timedelta(days=1)
+
+    return leave_conflict_resolver.rank(requests, users_by_id, approved_off_by_user)

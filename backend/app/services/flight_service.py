@@ -15,7 +15,13 @@ from sqlalchemy.orm import Session
 
 from app.core.i18n import t
 from app.models.flight import Flight, FlightDay, FlightPreset
-from app.schemas.flight import FlightDayApply, FlightDayApplyBatch, FlightDayUpsert, FlightPresetUpsert, FlightUpsert
+from app.schemas.flight import (
+    FlightDayApply,
+    FlightDayApplyBatch,
+    FlightDayUpsert,
+    FlightPresetUpsert,
+    FlightUpsert,
+)
 from app.services.flight_excel_parser import parse_flight_workbook
 from app.services.flight_pair_derivation import derive_pairs_for_day
 

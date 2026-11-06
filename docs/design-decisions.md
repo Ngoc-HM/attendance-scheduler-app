@@ -21,6 +21,14 @@ customer. Recorded 2026-06-11.
 | 13 | **Role-A compensation is derived from effective history**: every A/D earns 1 CD in the next month; actual attendance overrides the planned cell, and AD for non-A roles earns nothing | Makes next-month compensation automatic without a manual month-close step | §5.3 #6, F-14 |
 | 14 | **Per-person role-A distribution**: on a full-month run every role-A person gets at least 2 pure A days; the objective minimizes that person's own `|A total - D total|` subject to flight demand | Prevents one role-A person receiving almost only D duties | §5.4 #7 |
 | 15 | **Automatic role-A scheduling NEVER assigns A/D**: the solver domain is only `{A,D,X,CD}`. A/D is allowed only after the roster exists to cover a real unexpected absence (for example sickness), and then earns next-month CD | A planned double shift must not be imposed merely to make the generated roster fit | §5.3 #6, F-10 |
+| 16 | **Weekend preference for the paired offs is dropped** (owner 2026-06-18 / 2026-07-01): `off_pairing` rewards adjacency only; `premium_off` rotates who gets Sat/Sun/holiday offs. Recorded here 2026-09-03 — previously only in code comments | Weekends are ordinary working days (#5/#6); forcing offs onto Sat+Sun contradicted that | **OVERRIDES** §5.4 #8 ordering for the engine. The T7+CN > T6+T7 > CN+T2 order survives only in leave-conflict ranking (#19) |
+| 17 | **Sickness `S` never enters the planned schedule** (2026-09-03): manual override, shift-change and self-arrange reject S (`role_code_validation.validate_planned`); a legacy S of ANOTHER user is masked as X for non-admin readers of `GET /schedules`; S attendance rows never persist a note | The planned grid is visible to every active user; sickness is Art. 9 data. A person still sees their own S in `/attendance/me` (data-subject access) | §9.1 |
+| 18 | **Audit is fail-loud** (2026-09-03): a failed audit write returns HTTP 500 and logs the full context; user create/update/delete, account approval, manual flight entry, month-close and the day-20 autorun (actor = system) are audited. Known limitation: the business change commits before the audit row, so a failed audit can leave the change persisted with a 500 response | Silent audit loss defeats §9.5 | §9.5 |
+| 19 | **Leave-conflict ranking applies all three §5.4 #9 criteria** (2026-09-03): carry_comp → fewer approved offs already held in the touched 7-day block(s) → weekend pairing (Sat+Sun > Fri+Sat > Sun+Mon) → created_at | Was carry_comp only | §5.4 #9, §5.4 #8 |
+| 20 | **Retention and data-subject export are code** (2026-09-03): `DATA_RETENTION_MONTHS` (default 36, legal floor 24 per ArbZG §16(2)) drives `POST /compliance/retention/purge`; `GET /compliance/users/{id}/export` returns everything held about a person (self or admin). Erasure = existing `DELETE /users/{id}` | §9.3 data minimization and Art. 15/17/20 rights need a mechanism, not a paragraph | §9.3, §9.5 |
+| 21 | **Production guard** (2026-09-03): `ENVIRONMENT=staging|prod` refuses to start while `SECRET_KEY` or `FIRST_ADMIN_PASSWORD` hold the dev defaults (or are too short); the seed-admin password reset is dev-only (`FIRST_ADMIN_RESET_ON_STARTUP`, ignored outside dev). The Docker image defaults to prod | Blocker #1 of the 2026-09-03 review | §9.5 |
+| 22 | **`carry_premium_off` is derived from effective history** like comp/streak (2026-09-03); month-close persists the figures for reporting but is no longer a prerequisite for generation | F-14 end-to-end without a manual step | #6, #13, F-14 |
+| 23 | **F-09 recheck mirrors every engine rule** (2026-09-03): added ≥2 pure A days, comp-day grant/excess, and ≤5 consecutive off days (annual leave exempt) to the four rules already re-checked | An admin edit could previously break these silently | §5.6 #14 |
 
 ## Objective weights (engine)
 `Minimize( slack·10000 + individualADGap·300 + balanceAD·100 + premiumOff·30 + weekendPair·15 )`.
@@ -35,7 +43,18 @@ never ALTERs existing tables; existing dev DBs are stamped at `0001` then
 upgraded.
 
 ## Open questions (confirm with customer)
+- **Staffing floor vs exact count.** §5.3 #4 is implemented as a MINIMUM
+  (`constraints_staffing`). With 4 role-A people and 1 flight pair/day the
+  engine legitimately produces days with 2A+2D or 3A+1D because a role-A
+  person who is not off can only carry A or D. If the customer wants "exactly
+  1A+1D", role A needs a non-flight working code (e.g. O/D) and a rule for how
+  that day counts.
 - Partial-week off-target rounding (decision #7).
 - Whether M/T appear in the A/D balance objective (currently fixed-group only).
 - Real "WR JUN26" Excel layout for the importer.
-- Betriebsrat (§9.2) presence — production-deploy gate.
+- **Betriebsrat (§9.2) presence — production-deploy gate.** Note that the
+  time-clock check-in/out and self-arrange features (owner 2026-07-09) are
+  outside the original spec; check-in/out is behaviour monitoring in the
+  §87(1) No.6 BetrVG sense, so the works-council question now covers them.
+- Partial CD carry (comp days not fully granted in a month).
+- Final `DATA_RETENTION_MONTHS` figure (shipped 36; legal floor 24).

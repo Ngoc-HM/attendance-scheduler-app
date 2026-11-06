@@ -11,11 +11,17 @@ target-version = "py311"
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
 
+[tool.ruff.lint.per-file-ignores]
+# Message catalog: long user-facing strings are clearer unbroken.
+"app/core/i18n.py" = ["E501"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
 
 [tool.mypy]
-python_version = "3.11"
+# The runtime image is python:3.12 (Dockerfile); numpy's stubs (pulled in by
+# OR-Tools) need >= 3.12 to type-check at all.
+python_version = "3.12"
 ignore_missing_imports = true
 plugins = []

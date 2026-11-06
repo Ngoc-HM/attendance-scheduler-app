@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import date
+from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query, status
 
@@ -50,7 +51,7 @@ def pending_leaves(db: DbSession, _admin: AdminUser):
 def conflicts_for_date(
     db: DbSession,
     _admin: AdminUser,
-    target_date: date = Query(..., alias="date", description="YYYY-MM-DD"),
+    target_date: Annotated[date, Query(alias="date", description="YYYY-MM-DD")],
 ):
     """Admin: ranked list of competing requests on a given date (advisory)."""
     ranked = leave_service.conflicts_for_date(db, target_date)

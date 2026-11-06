@@ -25,7 +25,7 @@ def _current_working(
     user_id: int,
     day: date,
     role_codes: tuple[AttendanceCode, ...],
-) -> cp_model.LinearExpr:
+) -> cp_model.LinearExpr | int:
     return sum(x[(user_id, day, code)] for code in role_codes if code not in OFF_CODES)
 
 
@@ -58,10 +58,10 @@ def add(
             # are the previous month's responsibility.
             if window[-1][0] < days[0]:
                 continue
-            slack = model.NewIntVar(
+            slack = model.new_int_var(
                 0, 2, f"rolling7_{person.user_id}_{window[0][0].isoformat()}"
             )
-            model.Add(sum(value for _, value in window) <= MAX_WORKING + slack)
+            model.add(sum(value for _, value in window) <= MAX_WORKING + slack)
             registry.register(
                 slack,
                 rule="rolling_seven_min_two_rest",

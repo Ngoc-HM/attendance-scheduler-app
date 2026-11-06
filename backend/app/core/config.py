@@ -13,6 +13,13 @@ from typing import Annotated, Literal
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
+# Dev-only defaults. ``validate_for_environment`` refuses to start a
+# staging/prod process that still carries them.
+_DEFAULT_SECRET_KEY = "CHANGE_ME_dev_only_secret"
+_DEFAULT_ADMIN_PASSWORD = "admin123"
+_MIN_SECRET_LENGTH = 32
+_MIN_ADMIN_PASSWORD_LENGTH = 12
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -28,18 +35,19 @@ class Settings(BaseSettings):
     ENVIRONMENT: Literal["dev", "staging", "prod"] = "dev"
 
     # --- Security (lightweight JWT, spec §2) -------------------------------
-    SECRET_KEY: str = "CHANGE_ME_dev_only_secret"
+    SECRET_KEY: str = _DEFAULT_SECRET_KEY
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 1 day
 
     # --- First admin (F-01 bootstrap) --------------------------------------
-    # On every backend startup the seed admin (role M) is created if missing,
-    # or has its password reset back to these values if it already exists.
-    # This guarantees there is always a way in; users may change the password
-    # at runtime, but a restart restores the default.
+    # On startup the seed admin (role M) is created if missing. In DEV only,
+    # an existing seed admin has its password reset to FIRST_ADMIN_PASSWORD
+    # when FIRST_ADMIN_RESET_ON_STARTUP is on (one-click local login). In
+    # staging/prod an existing admin's credentials are NEVER touched.
     FIRST_ADMIN_USERNAME: str = "admin"
-    FIRST_ADMIN_PASSWORD: str = "admin123"
+    FIRST_ADMIN_PASSWORD: str = _DEFAULT_ADMIN_PASSWORD
     FIRST_ADMIN_FULL_NAME: str = "System Administrator"
+    FIRST_ADMIN_RESET_ON_STARTUP: bool = True
     # Create DB tables on startup in dev (no Alembic step needed to run locally).
     # In prod, manage schema with Alembic migrations instead.
     AUTO_CREATE_TABLES: bool = True
@@ -78,6 +86,68 @@ class Settings(BaseSettings):
     # stays available regardless.
     AUTORUN_ENABLED: bool = True
     AUTORUN_DAY: int = 20
+
+    # --- Data retention (§9.3 / §26 BDSG data minimization) ----------------
+    # Personnel records older than this are removed by the admin retention
+    # purge (``/compliance/retention/purge``). German working-time records
+    # must be kept at least 24 months (ArbZG §16(2)); the customer's DPO owns
+    # the final figure — 36 months is the shipped default.
+    DATA_RETENTION_MONTHS: int = 36
+    DATA_RETENTION_MIN_MONTHS: int = 24
+
+    # --- Environment guard -------------------------------------------------
+    @property
+    def is_production(self) -> bool:
+        """staging and prod are both production-like: no dev conveniences."""
+        return self.ENVIRONMENT != "dev"
+
+    def production_config_errors(self) -> list[str]:
+        """Unsafe defaults that must never reach a production-like process."""
+        if not self.is_production:
+            return []
+        errors: list[str] = []
+        if self.SECRET_KEY == _DEFAULT_SECRET_KEY or len(self.SECRET_KEY) < _MIN_SECRET_LENGTH:
+            errors.append(
+                f"SECRET_KEY must be a random string of at least {_MIN_SECRET_LENGTH} "
+                "characters (it still holds the dev default or is too short)"
+            )
+        if (
+            self.FIRST_ADMIN_PASSWORD == _DEFAULT_ADMIN_PASSWORD
+            or len(self.FIRST_ADMIN_PASSWORD) < _MIN_ADMIN_PASSWORD_LENGTH
+        ):
+            errors.append(
+                "FIRST_ADMIN_PASSWORD must not be the dev default and needs at least "
+                f"{_MIN_ADMIN_PASSWORD_LENGTH} characters"
+            )
+        return errors
+
+    def production_config_warnings(self) -> list[str]:
+        """Risky-but-allowed settings, logged loudly at startup."""
+        if not self.is_production:
+            return []
+        warnings: list[str] = []
+        if self.AUTO_CREATE_TABLES:
+            warnings.append(
+                "AUTO_CREATE_TABLES=true in a production-like environment; "
+                "prefer 'alembic upgrade head'"
+            )
+        if "*" in self.BACKEND_CORS_ORIGINS:
+            warnings.append("BACKEND_CORS_ORIGINS='*' — restrict to known origins")
+        if self.FIRST_ADMIN_RESET_ON_STARTUP:
+            warnings.append(
+                "FIRST_ADMIN_RESET_ON_STARTUP is ignored outside dev "
+                "(an existing admin is never reset)"
+            )
+        return warnings
+
+    def validate_for_environment(self) -> None:
+        """Raise ``RuntimeError`` when a production-like process is unsafe."""
+        errors = self.production_config_errors()
+        if errors:
+            raise RuntimeError(
+                f"Refusing to start: unsafe settings for ENVIRONMENT={self.ENVIRONMENT}:\n- "
+                + "\n- ".join(errors)
+            )
 
     @field_validator("BACKEND_CORS_ORIGINS", mode="before")
     @classmethod

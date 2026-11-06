@@ -66,7 +66,7 @@ def one_status_per_day(
     for p in inp.people:
         person_codes = codes_for(p.role)
         for d in inp.days:
-            model.AddExactlyOne(x[(p.user_id, d, c)] for c in person_codes)
+            model.add_exactly_one(x[(p.user_id, d, c)] for c in person_codes)
 
 
 def respect_approved_off(
@@ -84,4 +84,4 @@ def respect_approved_off(
     for uid, day_codes in inp.approved_off.items():
         for d in day_codes:
             if (uid, d, AttendanceCode.X) in x:
-                model.Add(x[(uid, d, AttendanceCode.X)] == 1)
+                model.add(x[(uid, d, AttendanceCode.X)] == 1)

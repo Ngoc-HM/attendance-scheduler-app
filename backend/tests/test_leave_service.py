@@ -17,8 +17,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.models.enums import LeaveStatus, LeaveType
-from app.services.leave_windows import classify, is_annual_window_open, is_monthly_window_open
 from app.services.leave_conflict_resolver import rank
+from app.services.leave_windows import classify, is_annual_window_open, is_monthly_window_open
 
 V = "/api/v1"
 
@@ -135,6 +135,36 @@ class TestConflictRank:
         ranked = rank([req_a, req_b], {2: user_b})
         assert ranked[0].user_id == 2  # user_b has carry_comp=1 > 0
 
+    def test_fewer_offs_already_held_in_block_ranks_first(self):
+        """Criterion (b): the person with less of their weekly rest entitlement wins."""
+        req_a = self._make_req(1, user_id=1)
+        req_b = self._make_req(2, user_id=2)
+        users = {1: self._make_user(1, 0), 2: self._make_user(2, 0)}
+        # User 1 already holds 2 approved offs in the same 7-day block (May 1–7).
+        held = {1: {date(2025, 5, 5), date(2025, 5, 6)}, 2: set()}
+        ranked = rank([req_a, req_b], users, held)
+        assert ranked[0].user_id == 2
+
+    def test_weekend_pairing_breaks_ties(self):
+        """Criterion (c): Sat+Sun > Fri+Sat > Sun+Mon > no pair."""
+        from datetime import datetime
+        from types import SimpleNamespace
+
+        def req(id_, user_id, start, end):
+            return SimpleNamespace(
+                id=id_, user_id=user_id, start_date=start, end_date=end,
+                leave_type=LeaveType.monthly, status=LeaveStatus.pending, note=None,
+                created_at=datetime(2025, 1, 1),
+            )
+
+        sat_sun = req(1, 1, date(2025, 5, 3), date(2025, 5, 4))   # Sat–Sun
+        fri_sat = req(2, 2, date(2025, 5, 2), date(2025, 5, 3))   # Fri–Sat
+        sun_mon = req(3, 3, date(2025, 5, 4), date(2025, 5, 5))   # Sun–Mon
+        midweek = req(4, 4, date(2025, 5, 6), date(2025, 5, 7))   # Tue–Wed
+        users = {i: self._make_user(i, 0) for i in range(1, 5)}
+        ranked = rank([midweek, sun_mon, fri_sat, sat_sun], users)
+        assert [r.id for r in ranked] == [1, 2, 3, 4]
+
 
 # ---------------------------------------------------------------------------
 # Integration tests (via HTTP client + SQLite in-memory)
@@ -156,7 +186,10 @@ def _create_user(client, admin_headers, username, role="A"):
     return client.post(
         f"{V}/users",
         headers=admin_headers,
-        json={"username": username, "full_name": username.title(), "password": "secret1", "role": role},
+        json={
+            "username": username, "full_name": username.title(),
+            "password": "secret1", "role": role,
+        },
     )
 
 
@@ -200,9 +233,9 @@ class TestLeaveEndpoints:
         uid = r.json()["id"]
 
         from app.core.database import get_db
-        from app.services import leave_service
-        from app.schemas.leave import LeaveCreate
         from app.models.user import User
+        from app.schemas.leave import LeaveCreate
+        from app.services import leave_service
 
         db_gen = get_db()
         db = next(db_gen)
@@ -238,10 +271,10 @@ class TestLeaveEndpoints:
     def test_approved_off_map_shows_al(self, client: TestClient):
         """approved_off_map includes AL for approved leave days in that month."""
         from app.core.database import get_db
-        from app.services import leave_service
-        from app.schemas.leave import LeaveCreate
         from app.models.enums import AttendanceCode
         from app.models.user import User
+        from app.schemas.leave import LeaveCreate
+        from app.services import leave_service
 
         admin = self._admin_headers(client)
         r = _create_user(client, admin, "map_user_leave")
@@ -274,9 +307,8 @@ class TestLeaveEndpoints:
     def test_overlap_returns_409(self, client: TestClient):
         """Submitting an overlapping leave request returns 409."""
         from app.core.database import get_db
-        from app.main import app
-        from app.services import leave_service
         from app.schemas.leave import LeaveCreate
+        from app.services import leave_service
 
         admin = self._admin_headers(client)
         r = _create_user(client, admin, "overlap_user_leave")
@@ -302,10 +334,11 @@ class TestLeaveEndpoints:
 
     def test_window_closed_day_21(self, client: TestClient):
         """Submitting monthly leave on day 21 raises 400 window_closed."""
-        from app.core.database import get_db
-        from app.services import leave_service
-        from app.schemas.leave import LeaveCreate
         from fastapi import HTTPException
+
+        from app.core.database import get_db
+        from app.schemas.leave import LeaveCreate
+        from app.services import leave_service
 
         admin = self._admin_headers(client)
         r = _create_user(client, admin, "window_user_leave")
