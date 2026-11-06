@@ -15,6 +15,7 @@ from datetime import date, timedelta
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.core.business_time import business_today
 from app.core.config import settings
 from app.core.i18n import t
 from app.models.enums import AttendanceCode, LeaveStatus, LeaveType, UserStatus
@@ -22,7 +23,12 @@ from app.models.leave import LeaveRequest
 from app.models.user import User
 from app.schemas.leave import LeaveCreate
 from app.services import leave_conflict_resolver, schedule_history
-from app.services.leave_windows import classify, is_annual_window_open, is_monthly_window_open
+from app.services.leave_windows import (
+    classify,
+    is_annual_window_open,
+    is_monthly_window_open,
+    registration_last_day,
+)
 
 # ---------------------------------------------------------------------------
 # Internal helpers
@@ -74,10 +80,11 @@ def create_request(
     Parameters
     ----------
     today:
-        Injection point for tests; defaults to date.today().
+        Injection point for tests; defaults to the business date in
+        ``settings.TIMEZONE`` (the same clock the autorun uses).
     """
     if today is None:
-        today = date.today()
+        today = business_today()
     if enforce_window is None:
         # Development must allow rapid end-to-end testing without waiting for a
         # calendar window. Staging/production keep the business cutoff.
@@ -106,7 +113,9 @@ def create_request(
             if not is_monthly_window_open(today, start.month, start.year):
                 raise HTTPException(
                     status.HTTP_400_BAD_REQUEST,
-                    detail=t("leave.window_closed_monthly"),
+                    detail=t("leave.window_closed_monthly").format(
+                        day=registration_last_day()
+                    ),
                 )
         else:
             # Annual: submission must be in the calendar year before the leave's start year.

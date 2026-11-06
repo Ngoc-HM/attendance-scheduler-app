@@ -10,7 +10,7 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Annotated, Literal
 
-from pydantic import field_validator
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 # Dev-only defaults. ``validate_for_environment`` refuses to start a
@@ -81,11 +81,12 @@ class Settings(BaseSettings):
     SOLVER_MAX_TIME_SECONDS: float = 30.0
 
     # --- Day-20 autorun (locked decision #9, F-05/F-07) --------------------
-    # On AUTORUN_DAY the background job closes registration and generates the
-    # next month's DRAFT (skips if a schedule already exists). Manual generate
-    # stays available regardless.
+    # AUTORUN_DAY is the last day of the monthly leave window; at 00:05 on the
+    # day after, the background job generates the next month's DRAFT (skips if
+    # a schedule already exists). Manual generate stays available regardless.
+    # Capped at 27 so AUTORUN_DAY + 1 exists in every month (February: 28).
     AUTORUN_ENABLED: bool = True
-    AUTORUN_DAY: int = 20
+    AUTORUN_DAY: int = Field(default=20, ge=1, le=27)
 
     # --- Data retention (§9.3 / §26 BDSG data minimization) ----------------
     # Personnel records older than this are removed by the admin retention

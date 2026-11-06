@@ -2,7 +2,7 @@
 
 Coverage targets:
 - Classification boundary: 5 days → monthly, more than 5 days → annual.
-- Monthly window: open days 1–20, closed day 21.
+- Monthly window: open days 1–AUTORUN_DAY (20), closed the day after.
 - Annual window: prior-year ok, same-year rejected.
 - Approve decrements annual_leave_balance; approved_off_map shows AL.
 - Overlap guard → 409.
@@ -70,6 +70,21 @@ class TestMonthlyWindow:
 
     def test_closed_january_target_wrong_year(self):
         assert not is_monthly_window_open(date(2026, 1, 5), target_month=1, target_year=2026)
+
+    def test_monthly_window_closes_on_autorun_day(self, monkeypatch):
+        """The window's last day is settings.AUTORUN_DAY, not a literal 20."""
+        from app.core.config import settings
+        from app.services.leave_windows import registration_last_day
+
+        monkeypatch.setattr(settings, "AUTORUN_DAY", 20)
+        assert registration_last_day() == 20
+        assert is_monthly_window_open(date(2025, 2, 20), target_month=3, target_year=2025)
+        assert not is_monthly_window_open(date(2025, 2, 21), target_month=3, target_year=2025)
+
+        monkeypatch.setattr(settings, "AUTORUN_DAY", 15)
+        assert registration_last_day() == 15
+        assert is_monthly_window_open(date(2025, 2, 15), target_month=3, target_year=2025)
+        assert not is_monthly_window_open(date(2025, 2, 16), target_month=3, target_year=2025)
 
 
 class TestAnnualWindow:
@@ -432,3 +447,77 @@ def test_matching_label_accepted(client):
     )
     assert r.status_code == 201
     assert r.json()["leave_type"] == "monthly"
+
+class TestWindowBusinessClock:
+    """The window is judged on the Frankfurt business date, not the host's."""
+
+    def test_window_uses_business_timezone_date(self, client: TestClient, monkeypatch):
+        from datetime import UTC, datetime
+
+        from fastapi import HTTPException
+
+        from app.core import business_time
+        from app.core.config import settings
+        from app.core.database import get_db
+        from app.schemas.leave import LeaveCreate
+        from app.services import leave_service
+
+        monkeypatch.setattr(settings, "AUTORUN_DAY", 20)
+        monkeypatch.setattr(settings, "TIMEZONE", "Europe/Berlin")
+        admin = _bearer(_token(client, "admin", "admin123"))
+        uid = _create_user(client, admin, "window_business_clock").json()["id"]
+
+        db = next(get_db())
+        try:
+            # 22:30 UTC = 23:30 Berlin on 2026-12-20: still the last open day.
+            monkeypatch.setattr(
+                business_time, "_utcnow",
+                lambda: datetime(2026, 12, 20, 22, 30, tzinfo=UTC),
+            )
+            accepted = leave_service.create_request(
+                db, uid,
+                LeaveCreate(start_date=date(2027, 1, 4), end_date=date(2027, 1, 5)),
+                enforce_window=True,
+            )
+            assert accepted.status is LeaveStatus.pending
+
+            # 23:30 UTC = 00:30 Berlin on 2026-12-21: closed (draft is due at 00:05).
+            monkeypatch.setattr(
+                business_time, "_utcnow",
+                lambda: datetime(2026, 12, 20, 23, 30, tzinfo=UTC),
+            )
+            with pytest.raises(HTTPException) as exc_info:
+                leave_service.create_request(
+                    db, uid,
+                    LeaveCreate(start_date=date(2027, 1, 11), end_date=date(2027, 1, 12)),
+                    enforce_window=True,
+                )
+            assert exc_info.value.status_code == 400
+        finally:
+            db.close()
+
+    def test_window_closed_message_names_autorun_day(self, client: TestClient, monkeypatch):
+        from fastapi import HTTPException
+
+        from app.core.config import settings
+        from app.core.database import get_db
+        from app.schemas.leave import LeaveCreate
+        from app.services import leave_service
+
+        monkeypatch.setattr(settings, "AUTORUN_DAY", 15)
+        admin = _bearer(_token(client, "admin", "admin123"))
+        uid = _create_user(client, admin, "window_message_day").json()["id"]
+
+        db = next(get_db())
+        try:
+            with pytest.raises(HTTPException) as exc_info:
+                leave_service.create_request(
+                    db, uid,
+                    LeaveCreate(start_date=date(2025, 3, 3), end_date=date(2025, 3, 4)),
+                    today=date(2025, 2, 16),
+                    enforce_window=True,
+                )
+            assert exc_info.value.status_code == 400
+            assert "day 15" in exc_info.value.detail
+        finally:
+            db.close()

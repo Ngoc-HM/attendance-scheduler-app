@@ -207,7 +207,7 @@ def test_regenerate_with_overrides_requires_force(client: TestClient) -> None:
 
 
 def test_autorun_trigger_logic(client: TestClient) -> None:
-    """Decision #9: fires only on AUTORUN_DAY; never clobbers an existing one."""
+    """Decision #9: fires only the day after AUTORUN_DAY; never clobbers an existing one."""
     from app.services.schedule_autorun import maybe_run_autorun, next_month
 
     assert next_month(date(2026, 12, 20)) == (2027, 1)
@@ -215,6 +215,59 @@ def test_autorun_trigger_logic(client: TestClient) -> None:
     assert maybe_run_autorun(date(2026, 6, 19)) is False
     # Ensure a 2027-03 schedule exists (may have been created by the pipeline
     # test which runs first in the same DB; if not, this call creates it).
-    maybe_run_autorun(date(2027, 2, 20))
+    maybe_run_autorun(date(2027, 2, 21))
     # Right day but schedule already exists → must return False.
-    assert maybe_run_autorun(date(2027, 2, 20)) is False  # 2027-03 now exists
+    assert maybe_run_autorun(date(2027, 2, 21)) is False  # 2027-03 now exists
+
+
+def test_autorun_fires_day_after_close(client: TestClient, monkeypatch) -> None:
+    """The window stays open all of AUTORUN_DAY, so the draft is generated
+    the next day (00:05 on day 21), never while users can still register."""
+    from app.core.config import settings
+    from app.services.schedule_autorun import maybe_run_autorun, start_scheduler
+
+    monkeypatch.setattr(settings, "AUTORUN_ENABLED", True)
+    monkeypatch.setattr(settings, "AUTORUN_DAY", 20)
+    monkeypatch.setattr(settings, "SOLVER_MAX_TIME_SECONDS", 5.0)
+    admin = _admin_headers(client)
+
+    # Day 20: registration for 2030-10 is still open → no draft yet.
+    assert maybe_run_autorun(date(2030, 9, 20)) is False
+    assert client.get("/api/v1/schedules/2030/10", headers=admin).status_code == 404
+    # Day 21: the window has closed → the 2030-10 draft is generated.
+    assert maybe_run_autorun(date(2030, 9, 21)) is True
+    assert client.get("/api/v1/schedules/2030/10", headers=admin).status_code == 200
+
+    scheduler = start_scheduler()
+    assert scheduler is not None
+    try:
+        job = scheduler.get_job("day20-autorun")
+        fields = {field.name: str(field) for field in job.trigger.fields}
+        assert (fields["hour"], fields["minute"]) == ("0", "5")
+    finally:
+        scheduler.shutdown(wait=False)
+
+
+def test_autorun_uses_business_timezone_date(client: TestClient, monkeypatch) -> None:
+    """The process may run in UTC (Docker sets no TZ): at 00:05 Berlin on day 21
+    the UTC date is still day 20, so the run must read the date in TIMEZONE."""
+    from datetime import UTC, datetime
+
+    from app.core import business_time
+    from app.core.config import settings
+    from app.services.schedule_autorun import maybe_run_autorun
+
+    monkeypatch.setattr(settings, "AUTORUN_ENABLED", True)
+    monkeypatch.setattr(settings, "AUTORUN_DAY", 20)
+    monkeypatch.setattr(settings, "TIMEZONE", "Europe/Berlin")
+    monkeypatch.setattr(settings, "SOLVER_MAX_TIME_SECONDS", 5.0)
+    # 23:30 UTC on 2026-12-20 is already 00:30 on 2026-12-21 in Berlin (CET).
+    monkeypatch.setattr(
+        business_time, "_utcnow", lambda: datetime(2026, 12, 20, 23, 30, tzinfo=UTC)
+    )
+    admin = _admin_headers(client)
+
+    assert business_time.business_today() == date(2026, 12, 21)
+    assert client.get("/api/v1/schedules/2027/1", headers=admin).status_code == 404
+    assert maybe_run_autorun() is True  # no injected date → business date
+    assert client.get("/api/v1/schedules/2027/1", headers=admin).status_code == 200

@@ -91,3 +91,14 @@ def test_seed_admin_password_not_reset_outside_dev(
     assert client.post(
         "/api/v1/auth/login", data={"username": "admin", "password": "admin123"}
     ).status_code == 200
+
+
+def test_autorun_day_leaves_room_for_the_next_day() -> None:
+    """The draft runs on AUTORUN_DAY + 1, which must exist in every month."""
+    from pydantic import ValidationError
+
+    assert _settings(AUTORUN_DAY=1).AUTORUN_DAY == 1
+    assert _settings(AUTORUN_DAY=27).AUTORUN_DAY == 27
+    for bad in (0, 28, 31):
+        with pytest.raises(ValidationError):
+            _settings(AUTORUN_DAY=bad)

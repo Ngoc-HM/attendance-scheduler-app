@@ -44,7 +44,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "flight.preset_not_found": "Flight preset not found.",
         # --- Leaves (F-05/F-06) ---
         "leave.not_found": "Leave request not found.",
-        "leave.window_closed_monthly": "Monthly leave registration is open from day 1 to day 20 of the previous month.",
+        "leave.window_closed_monthly": "Monthly leave registration is open from day 1 to day {day} of the previous month.",
         "leave.window_closed_annual": "Annual leave can only be registered for the next year (Y+1).",
         "leave.already_decided": "This leave request was already decided.",
         "leave.overlap": "An overlapping leave request already exists.",
@@ -114,7 +114,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "flight.preset_not_found": "Không tìm thấy preset chuyến bay.",
         # --- Leaves (F-05/F-06) ---
         "leave.not_found": "Không tìm thấy đơn nghỉ.",
-        "leave.window_closed_monthly": "Đăng ký nghỉ tháng mở từ ngày 1 đến ngày 20 của tháng trước.",
+        "leave.window_closed_monthly": "Đăng ký nghỉ tháng mở từ ngày 1 đến ngày {day} của tháng trước.",
         "leave.window_closed_annual": "Nghỉ phép năm chỉ được đăng ký cho năm sau (Y+1).",
         "leave.already_decided": "Đơn nghỉ này đã được quyết định.",
         "leave.overlap": "Đã tồn tại đơn nghỉ trùng thời gian.",
