@@ -92,6 +92,22 @@ def seed_from_schedule(db: Session, year: int, month: int) -> int:
     return seeded
 
 
+def sync_planned_cell(
+    db: Session, user_id: int, work_date: date, code: AttendanceCode
+) -> bool:
+    """Carry an edit of a PUBLISHED roster cell into its seeded actual (B5).
+
+    Only an actual nobody recorded by hand (``recorded_by`` NULL, i.e. left as
+    ``seed_from_schedule`` wrote it) follows the plan; an admin-recorded cell
+    always wins. Does not commit. Returns True when the actual was updated.
+    """
+    cell = _get_cell(db, user_id, work_date)
+    if cell is None or cell.recorded_by is not None:
+        return False
+    cell.code = code
+    return True
+
+
 def actual_records_map(
     db: Session, year: int, month: int
 ) -> dict[tuple[int, date], AttendanceCode]:
