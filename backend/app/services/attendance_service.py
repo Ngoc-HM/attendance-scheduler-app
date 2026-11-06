@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.core.i18n import t
 from app.models.attendance import AttendanceRecord
-from app.models.enums import AttendanceCode, Role
+from app.models.enums import AttendanceCode, Role, ScheduleStatus
 from app.models.schedule import MonthlySchedule, ShiftAssignment
 from app.models.user import User
 from app.schemas.attendance import AttendanceRead, AttendanceUpsert, SickCoverResult
@@ -66,10 +66,12 @@ def upsert(db: Session, payload: AttendanceUpsert, recorded_by: int) -> Attendan
 
 
 def seed_from_schedule(db: Session, year: int, month: int) -> int:
-    """Copy a published schedule's cells into actuals (only missing ones).
+    """Copy a schedule's cells into actuals as the admin's starting point.
 
-    Gives the admin a starting point to adjust; never overwrites an existing
-    actual record. Returns the number of cells seeded.
+    Missing actuals are inserted. On a PUBLISHED schedule, actuals still as
+    seeded (``recorded_by`` NULL) are re-synced to the roster, so publishing a
+    regenerated month refreshes them (B5). An admin-recorded actual is never
+    overwritten. Returns the number of cells inserted.
     """
     schedule = (
         db.query(MonthlySchedule)
@@ -79,15 +81,18 @@ def seed_from_schedule(db: Session, year: int, month: int) -> int:
     if schedule is None:
         return 0
 
-    existing = {(r.user_id, r.work_date) for r in list_month(db, year, month)}
+    existing = {(r.user_id, r.work_date): r for r in list_month(db, year, month)}
+    resync = schedule.status is ScheduleStatus.published
     seeded = 0
     for a in schedule.assignments:
-        if (a.user_id, a.work_date) in existing:
-            continue
-        db.add(
-            AttendanceRecord(user_id=a.user_id, work_date=a.work_date, code=a.code)
-        )
-        seeded += 1
+        cell = existing.get((a.user_id, a.work_date))
+        if cell is None:
+            db.add(
+                AttendanceRecord(user_id=a.user_id, work_date=a.work_date, code=a.code)
+            )
+            seeded += 1
+        elif resync:
+            _follow_plan(cell, a.code)
     db.commit()
     return seeded
 
@@ -102,7 +107,12 @@ def sync_planned_cell(
     always wins. Does not commit. Returns True when the actual was updated.
     """
     cell = _get_cell(db, user_id, work_date)
-    if cell is None or cell.recorded_by is not None:
+    return cell is not None and _follow_plan(cell, code)
+
+
+def _follow_plan(cell: AttendanceRecord, code: AttendanceCode) -> bool:
+    """Set a still-seeded actual (``recorded_by`` NULL) to the planned code."""
+    if cell.recorded_by is not None:
         return False
     cell.code = code
     return True

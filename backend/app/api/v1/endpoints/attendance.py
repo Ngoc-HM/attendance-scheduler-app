@@ -39,7 +39,8 @@ def list_my_attendance(db: DbSession, year: int, month: int, current_user: Activ
 
 @router.post("/seed", response_model=dict)
 def seed_from_schedule(db: DbSession, year: int, month: int, admin: AdminUser):
-    """Seed actuals from the published schedule (missing cells only)."""
+    """Seed missing actuals from the schedule; on a published month, also
+    re-sync still-seeded cells (admin-recorded cells are never overwritten)."""
     seeded = attendance_service.seed_from_schedule(db, year, month)
     audit_service.record(db, admin.id, "attendance.seed", "AttendanceRecord",
                          detail=f"{year}-{month:02d}: {seeded} cells")

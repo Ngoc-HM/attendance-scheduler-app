@@ -168,8 +168,9 @@ def publish(db: Session, schedule_id: int) -> MonthlySchedule:
     schedule = _get_by_id(db, schedule_id)
     schedule.status = ScheduleStatus.published
     db.commit()
-    # Published assignments become the initial actual-attendance baseline.
-    # Existing actual edits are never overwritten by the seeding service.
+    # Published assignments become the actual-attendance baseline: missing
+    # actuals are seeded and still-seeded ones re-synced (re-publish after a
+    # regenerate); admin-recorded actuals are never overwritten.
     attendance_service.seed_from_schedule(db, schedule.year, schedule.month)
     db.refresh(schedule)
     return schedule

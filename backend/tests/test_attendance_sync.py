@@ -59,18 +59,18 @@ def test_override_on_published_month_updates_seeded_actual(client: TestClient) -
     admin = _admin_headers(client)
     users = [_make_user(client, admin, f"sync_ov_a{i}", "A") for i in (1, 2, 3, 4)]
     u = users[0]["id"]
-    schedule = _generate_and_publish(client, admin, 2026, 12)
+    schedule = _generate_and_publish(client, admin, 2028, 8)
 
-    seeded = _actual(client, admin, u, "2026-12-15")
+    seeded = _actual(client, admin, u, "2028-08-15")
     assert seeded["recorded_by"] is None and seeded["code"] != "T"
 
     res = client.post(
         f"{V}/schedules/{schedule['id']}/override", headers=admin,
-        json={"user_id": u, "work_date": "2026-12-15", "code": "T"},
+        json={"user_id": u, "work_date": "2028-08-15", "code": "T"},
     )
     assert res.status_code == 200, res.text
 
-    actual = _actual(client, admin, u, "2026-12-15")
+    actual = _actual(client, admin, u, "2028-08-15")
     assert actual["code"] == "T"
     # Still a seeded cell — later roster edits keep flowing into it.
     assert actual["recorded_by"] is None
@@ -162,3 +162,41 @@ def test_approved_self_arrange_updates_seeded_actuals(client: TestClient) -> Non
 
     assert _actual(client, admin, t_user, off_day.isoformat())["code"] == "AD"
     assert _actual(client, admin, t_user, work_day.isoformat())["code"] == "X"
+
+
+def test_republish_resyncs_untouched_seeded_actuals(client: TestClient) -> None:
+    """Regenerate a published month and publish it again: untouched seeded
+    actuals follow the new roster, admin-recorded ones keep their code."""
+    admin = _admin_headers(client)
+    users = [_make_user(client, admin, f"sync_rp_a{i}", "A") for i in (1, 2, 3, 4)]
+    u = users[0]["id"]
+    _generate_and_publish(client, admin, 2028, 10)
+    put = client.put(
+        f"{V}/attendance", headers=admin,
+        json={"user_id": u, "work_date": "2028-10-16", "code": "B"},
+    )
+    assert put.status_code == 200, put.text
+    seeded_before = _actual(client, admin, u, "2028-10-15")["code"]
+    assert seeded_before != "T"
+
+    # Back to a draft (force: regenerating a published month may require it).
+    gen = client.post(
+        f"{V}/schedules/generate", headers=admin,
+        json={"year": 2028, "month": 10, "force": True},
+    )
+    assert gen.status_code == 200 and gen.json()["feasible"] is True, gen.text
+    sid = gen.json()["schedule"]["id"]
+    for day in ("2028-10-15", "2028-10-16"):
+        res = client.post(
+            f"{V}/schedules/{sid}/override", headers=admin,
+            json={"user_id": u, "work_date": day, "code": "T"},
+        )
+        assert res.status_code == 200, res.text
+    # Draft edits stay out of the actuals until the month is published again.
+    assert _actual(client, admin, u, "2028-10-15")["code"] == seeded_before
+
+    pub = client.post(f"{V}/schedules/{sid}/publish", headers=admin)
+    assert pub.status_code == 200, pub.text
+
+    assert _actual(client, admin, u, "2028-10-15")["code"] == "T"
+    assert _actual(client, admin, u, "2028-10-16")["code"] == "B"
