@@ -8,7 +8,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Response, status
 
 from app.api.deps import ActiveUser, AdminUser, DbSession
-from app.schemas.user import UserCreate, UserRead, UserUpdate, UserUpdateResult
+from app.schemas.user import UserCreate, UserDirectoryEntry, UserRead, UserUpdate, UserUpdateResult
 from app.services import audit_service, user_service
 
 router = APIRouter()
@@ -18,6 +18,13 @@ router = APIRouter()
 def read_me(current_user: ActiveUser):
     """Current user's own profile (employees see only their own data, §9.5)."""
     return current_user
+
+
+# Declared before the /{user_id} routes so "directory" is never read as an id.
+@router.get("/directory", response_model=list[UserDirectoryEntry])
+def user_directory(db: DbSession, _user: ActiveUser):
+    """Active users' codes and roles (no names) for any signed-in user."""
+    return user_service.list_directory(db)
 
 
 @router.get("", response_model=list[UserRead])

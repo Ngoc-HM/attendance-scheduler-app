@@ -1,19 +1,17 @@
-"""Auto comp-day off — force each role-A person to use up last month's comp debt.
+"""Auto comp-day off — force every person to use up last month's comp debt.
 
 Customer decision 2026-06-12 (hướng B): a person who worked an A/D double
-shift earns a comp day (CD, §5.3 #6). The following month the system itself
-schedules those owed CD rest days — the person does NOT register them.
-
-CD is in the role-A domain only (owner decision 2026-06-26); roles T, F and M
-never accumulate comp debt through the auto-scheduler. Any legacy non-zero
-carry for those roles is normalized to zero before solving.
+shift earns a comp day (CD, §5.3 #6). Owner decision D1 (2026-11-06): anyone,
+of any role, who works on a public holiday also earns one CD. The following
+month the system itself schedules those owed CD rest days — the person does
+NOT register them.
 
 Modeled as a SOFT rule so it never makes the model infeasible and, crucially,
 **yields to flight staffing**: the comp slack carries a lower weight than the
 staffing slack, so when granting a CD would leave a flight short the solver
 drops the CD and reports a ``comp_day_shortfall`` Violation instead (§5.6).
 
-Per role-A person with ``carry_comp = c``:
+Per person (every role) with ``carry_comp = c``:
 
     sum(CD over the month) + under - over == c        (c > 0, soft)
     sum(CD over the month) == 0                        (c == 0, hard)
@@ -28,7 +26,7 @@ from datetime import date
 
 from ortools.sat.python import cp_model
 
-from app.models.enums import AttendanceCode, Role
+from app.models.enums import AttendanceCode
 from app.scheduler.domain import SolverInput
 from app.scheduler.slack_registry import SlackRegistry
 
@@ -44,11 +42,8 @@ def add(
     registry: SlackRegistry,
 ) -> None:
     days = sorted(inp.days)
-    # CD only exists for role-A; skip all other roles silently.
+    # CD is in every role's domain (role_codes), so the rule covers everyone.
     for p in inp.people:
-        if p.role is not Role.A:
-            continue
-
         cd_sum = sum(x[(p.user_id, d, AttendanceCode.CD)] for d in days)
         owed = p.carry_comp
 

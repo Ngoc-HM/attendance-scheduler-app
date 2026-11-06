@@ -10,21 +10,22 @@ hold — each broken rule comes back as a ``Violation`` (§5.6 #12–14) for the
 admin to resolve without automatically forcing a double shift.
 
 Role-aware model (owner decision 2026-06-26):
-    Role.A (fixed group): {A, D, X, CD} — full flight rules + comp days.
-    Role.T (flexible):    {AD, X}            — full-day duty, no shift split.
-    Role.M (admin):       {O/D, X}           — office duty.
-    Role.F (split of T):  {AD, X}            — T-like: weekly-2-off AND the
-                                               max-5-consecutive-working rule
-                                               apply (owner 2026-07-22).
+    Role.A (fixed group): {A, D, X, CD}  — full flight rules + comp days.
+    Role.T (flexible):    {AD, X, CD}     — full-day duty, no shift split.
+    Role.M (admin):       {O/D, X, CD}    — office duty.
+    Role.F (split of T):  {AD, X, CD}     — T-like: weekly-2-off AND the
+                                            max-5-consecutive-working rule
+                                            apply (owner 2026-07-22).
 
 Variable domains are built PER PERSON from ``role_codes.codes_for(role)``.
 The legacy ``ASSIGNABLE_CODES`` constant is kept for backward-compat import;
 it is no longer used as the per-person var domain inside the engine.
 
-Flight-staffing demand, A-versus-D balance, and comp-day constraints are scoped to
-role-A people only. Emergency A/D is outside the automatic solver domain.
-Off-day (2 X/block), rolling-seven-day rest, consecutive-working, and off-chain
-rules apply to ALL roles, using each role's own working-code set.
+Flight-staffing demand and A-versus-D balance are scoped to role-A people
+only. Emergency A/D is outside the automatic solver domain. Comp days (CD
+granted against carried debt — holiday work earns it for every role, owner D1
+2026-11-06), off-day (2 X/block), rolling-seven-day rest, consecutive-working,
+and off-chain rules apply to ALL roles, using each role's own working-code set.
 """
 
 from __future__ import annotations

@@ -291,3 +291,13 @@ def delete(db: Session, user_id: int) -> None:
 
 def list_users(db: Session) -> list[User]:
     return db.query(User).order_by(User.id).all()
+
+
+def list_directory(db: Session) -> list[User]:
+    """Active users ordered by code, for the employee-visible code directory."""
+    return (
+        db.query(User)
+        .filter(User.status == UserStatus.active)
+        .order_by(User.code)
+        .all()
+    )

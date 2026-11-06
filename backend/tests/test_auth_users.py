@@ -156,3 +156,56 @@ def test_non_admin_cannot_list_users(client: TestClient) -> None:
     )
     thomas = _bearer(_token(client, "thomas", "secret1"))
     assert client.get(f"{V}/users", headers=thomas).status_code == 403
+
+
+def test_directory_lists_active_codes_only(client: TestClient) -> None:
+    """Any active user sees the code directory; pending/disabled are hidden."""
+    admin = _bearer(_token(client, "admin", "admin123"))
+
+    def _create(username: str, role: str) -> dict:
+        r = client.post(
+            f"{V}/users",
+            headers=admin,
+            json={"username": username, "full_name": "Secret Name",
+                  "password": "secret1", "role": role},
+        )
+        assert r.status_code == 201
+        return r.json()
+
+    # Created T first, then A: id order differs from code order (A… < T…).
+    active = _create("dir_active", "T")
+    active_a = _create("dir_active_a", "A")
+    disabled = _create("dir_disabled", "A")
+    assert client.patch(
+        f"{V}/users/{disabled['id']}", headers=admin, json={"status": "disabled"}
+    ).status_code == 200
+    pending = client.post(
+        f"{V}/auth/register",
+        json={"username": "dir_pending", "full_name": "Secret Name",
+              "password": "secret1", "role": "A"},
+    ).json()
+    assert pending["status"] == "pending"
+
+    # A plain employee (not admin) can read it.
+    employee = _bearer(_token(client, "dir_active", "secret1"))
+    r = client.get(f"{V}/users/directory", headers=employee)
+    assert r.status_code == 200
+    entries = r.json()
+
+    ids = {e["id"] for e in entries}
+    assert active["id"] in ids
+    assert disabled["id"] not in ids
+    assert pending["id"] not in ids
+    # Codes only: never the real name.
+    assert all(set(e) == {"id", "code", "role"} for e in entries)
+    assert "Secret Name" not in r.text
+    assert {"id": active["id"], "code": active["code"], "role": "T"} in entries
+    # Ordered by code, not by creation: the later A user comes first.
+    order = [e["id"] for e in entries]
+    assert order.index(active_a["id"]) < order.index(active["id"])
+    codes = [e["code"] for e in entries]
+    assert codes == sorted(codes)
+
+
+def test_directory_requires_login(client: TestClient) -> None:
+    assert client.get(f"{V}/users/directory").status_code == 401

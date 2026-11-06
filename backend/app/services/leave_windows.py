@@ -39,6 +39,18 @@ def registration_last_day() -> int:
     return settings.AUTORUN_DAY
 
 
+def monthly_target(today: date) -> tuple[int, int]:
+    """(year, month) that monthly leave registered today is for: month M+1."""
+    if today.month == 12:
+        return today.year + 1, 1
+    return today.year, today.month + 1
+
+
+def annual_target_year(today: date) -> int:
+    """Leave year that annual leave registered today is for: Y+1."""
+    return today.year + 1
+
+
 def is_monthly_window_open(today: date, target_month: int, target_year: int) -> bool:
     """Return True iff today falls within the monthly-registration window.
 
@@ -46,21 +58,12 @@ def is_monthly_window_open(today: date, target_month: int, target_year: int) -> 
     *before* the target month.
     E.g. target = 2025-03 → window is 2025-02-01 to 2025-02-20.
     """
-    # Derive the expected submission month (month before target).
-    if target_month == 1:
-        expected_year = target_year - 1
-        expected_month = 12
-    else:
-        expected_year = target_year
-        expected_month = target_month - 1
-
     return (
-        today.year == expected_year
-        and today.month == expected_month
-        and 1 <= today.day <= registration_last_day()
+        monthly_target(today) == (target_year, target_month)
+        and today.day <= registration_last_day()
     )
 
 
 def is_annual_window_open(today: date, leave_start_year: int) -> bool:
     """Return True iff the leave year is exactly Y+1 (the year after today)."""
-    return leave_start_year == today.year + 1
+    return leave_start_year == annual_target_year(today)
