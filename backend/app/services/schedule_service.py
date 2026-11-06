@@ -258,16 +258,24 @@ def apply_shift_change(db: Session, req: ShiftChangeRequest) -> list[str]:
 
 
 def apply_leave_span(
-    db: Session, user_id: int, start: date, end: date, code: AttendanceCode
+    db: Session,
+    user_id: int,
+    start: date,
+    end: date,
+    code: AttendanceCode,
+    *,
+    only_if: AttendanceCode | None = None,
 ) -> list[str]:
     """B4 — write a leave decision (AL approve / X revoke) into generated months.
 
-    Regenerating would wipe manual edits, so every month of the span that
-    already has a schedule gets the code directly (published months also move
-    their still-seeded actuals). A month without a schedule needs nothing: it
-    reads approved leave when generated. Returns [] when no month of the span
-    has a schedule; otherwise the ``leave.schedule_applied`` notice, a note per
-    month not generated yet, then each updated month's re-check warnings.
+    Regenerating would wipe manual edits, so the user's cells in every month
+    of the span that already has a schedule get the code directly (published
+    months also move their still-seeded actuals). ``only_if`` limits the write
+    to cells currently holding that code: revoke passes AL, so a cell the
+    admin re-coded after approval (or a CD) stays. A month without a schedule
+    needs nothing: it reads approved leave when generated. Returns [] when no
+    cell changed; otherwise the ``leave.schedule_applied`` notice, a note per
+    month not generated yet, then each changed month's re-check warnings.
     Does not commit.
     """
     span = [start + timedelta(days=i) for i in range((end - start).days + 1)]
@@ -284,12 +292,20 @@ def apply_leave_span(
         if schedule is None:
             not_generated.append(f"{year}-{month:02d}: {t('leave.schedule_not_generated')}")
             continue
-        for cell in schedule.assignments:
-            if cell.user_id == user_id and cell.work_date in days:
-                cell.code = code
-                if schedule.status is ScheduleStatus.published:
-                    attendance_service.sync_planned_cell(db, user_id, cell.work_date, code)
-        updated.append(schedule)
+        changed = [
+            cell
+            for cell in schedule.assignments
+            if cell.user_id == user_id
+            and cell.work_date in days
+            and cell.code is not code
+            and (only_if is None or cell.code is only_if)
+        ]
+        for cell in changed:
+            cell.code = code
+            if schedule.status is ScheduleStatus.published:
+                attendance_service.sync_planned_cell(db, user_id, cell.work_date, code)
+        if changed:
+            updated.append(schedule)
     if not updated:
         return []
     db.flush()  # a later month's re-check reads the edited earlier month

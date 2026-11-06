@@ -237,7 +237,8 @@ def revoke(
     """Admin revokes a previously APPROVED leave (owner decision 2026-07-17).
 
     Flips the request back to rejected and — like approval — writes the
-    decision into any already-generated month: the span's cells become X.
+    decision into any already-generated month: span cells still on AL become
+    X; cells the admin re-coded after approval (or CD) are left as they are.
     """
     req = _get_or_404(db, leave_id)
     if req.status != LeaveStatus.approved:
@@ -246,7 +247,9 @@ def revoke(
         )
 
     req.status = LeaveStatus.rejected
-    warnings = _write_into_schedule(db, req, AttendanceCode.X)
+    warnings = _write_into_schedule(
+        db, req, AttendanceCode.X, only_if=AttendanceCode.AL
+    )
     db.commit()
     db.refresh(req)
     return req, warnings
@@ -315,13 +318,16 @@ def _staffing_warnings(db: Session, req: LeaveRequest) -> list[str]:
 
 
 def _write_into_schedule(
-    db: Session, req: LeaveRequest, code: AttendanceCode
+    db: Session,
+    req: LeaveRequest,
+    code: AttendanceCode,
+    only_if: AttendanceCode | None = None,
 ) -> list[str]:
     """Put the decision into already-generated months of the span (B4)."""
     from app.services import schedule_service  # local: it imports this module
 
     return schedule_service.apply_leave_span(
-        db, req.user_id, req.start_date, req.end_date, code
+        db, req.user_id, req.start_date, req.end_date, code, only_if=only_if
     )
 
 

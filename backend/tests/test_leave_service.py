@@ -544,7 +544,7 @@ class TestWindowBusinessClock:
 
 # ---------------------------------------------------------------------------
 # B4 — approving / revoking leave writes into an already-generated schedule
-# (2035 months: nothing else in the suite touches them)
+# (2039 months: nothing else in the suite touches them)
 # ---------------------------------------------------------------------------
 
 def _role_a_users(client, admin, prefix) -> list[int]:
@@ -557,15 +557,16 @@ def _role_a_users(client, admin, prefix) -> list[int]:
     return ids
 
 
-def _generate(client, admin, year, month, *, publish=False) -> None:
+def _generate(client, admin, year, month, *, publish=False) -> int:
     res = client.post(
         f"{V}/schedules/generate", headers=admin, json={"year": year, "month": month}
     )
     assert res.status_code == 200 and res.json()["feasible"] is True, res.text
+    schedule_id = res.json()["schedule"]["id"]
     if publish:
-        schedule_id = res.json()["schedule"]["id"]
         res = client.post(f"{V}/schedules/{schedule_id}/publish", headers=admin)
         assert res.status_code == 200, res.text
+    return schedule_id
 
 
 def _file_leave(client, username, start, end) -> int:
@@ -616,23 +617,29 @@ def _approve(client, admin, leave_id) -> list[str]:
 def test_approve_after_generate_writes_al_into_grid(client):
     admin = _bearer(_token(client, "admin", "admin123"))
     users = _role_a_users(client, admin, "b4_approve_a")
-    _generate(client, admin, 2035, 3)
-    leave_id = _file_leave(client, "b4_approve_a1", date(2035, 3, 20), date(2035, 3, 22))
+    _generate(client, admin, 2039, 3)
+    leave_id = _file_leave(client, "b4_approve_a1", date(2039, 3, 20), date(2039, 3, 22))
 
     warnings = _approve(client, admin, leave_id)
 
-    days = [date(2035, 3, d) for d in (20, 21, 22)]
+    days = [date(2039, 3, d) for d in (20, 21, 22)]
     assert _planned(client, admin, users[0], days) == {d.isoformat(): "AL" for d in days}
     assert any("updated" in w for w in warnings)
+
+    # Someone added after generation has no cells in March: nothing changes,
+    # so there is no "schedule updated" notice.
+    assert _create_user(client, admin, "b4_approve_late").status_code == 201
+    late_id = _file_leave(client, "b4_approve_late", date(2039, 3, 20), date(2039, 3, 22))
+    assert _approve(client, admin, late_id) == []
 
 
 def test_revoke_restores_x(client):
     """Published month: the grid AND the still-seeded actuals follow both decisions."""
     admin = _bearer(_token(client, "admin", "admin123"))
     users = _role_a_users(client, admin, "b4_revoke_a")
-    _generate(client, admin, 2035, 5, publish=True)
-    leave_id = _file_leave(client, "b4_revoke_a1", date(2035, 5, 14), date(2035, 5, 16))
-    days = [date(2035, 5, d) for d in (14, 15, 16)]
+    _generate(client, admin, 2039, 5, publish=True)
+    leave_id = _file_leave(client, "b4_revoke_a1", date(2039, 5, 14), date(2039, 5, 16))
+    days = [date(2039, 5, d) for d in (14, 15, 16)]
 
     _approve(client, admin, leave_id)
     assert _planned(client, admin, users[0], days) == {d.isoformat(): "AL" for d in days}
@@ -646,24 +653,47 @@ def test_revoke_restores_x(client):
     assert any("updated" in w for w in res.json()["warnings"])
 
 
+def test_revoke_reverts_only_cells_still_on_leave(client):
+    """Cells the admin re-coded after approval (D, CD) survive a revoke."""
+    admin = _bearer(_token(client, "admin", "admin123"))
+    users = _role_a_users(client, admin, "b4_keep_a")
+    schedule_id = _generate(client, admin, 2039, 10)
+    leave_id = _file_leave(client, "b4_keep_a1", date(2039, 10, 8), date(2039, 10, 11))
+    _approve(client, admin, leave_id)
+    for day, code in (("2039-10-08", "D"), ("2039-10-09", "CD")):
+        res = client.post(
+            f"{V}/schedules/{schedule_id}/override", headers=admin,
+            json={"user_id": users[0], "work_date": day, "code": code},
+        )
+        assert res.status_code == 200, res.text
+
+    res = client.post(f"{V}/leaves/{leave_id}/revoke", headers=admin)
+    assert res.status_code == 200, res.text
+
+    days = [date(2039, 10, d) for d in (8, 9, 10, 11)]
+    assert _planned(client, admin, users[0], days) == {
+        "2039-10-08": "D", "2039-10-09": "CD", "2039-10-10": "X", "2039-10-11": "X",
+    }
+
+
 def test_leave_spanning_two_months_updates_only_existing_schedule(client):
     """Review Focus 1: only July has a schedule; August is named, not created."""
     admin = _bearer(_token(client, "admin", "admin123"))
     users = _role_a_users(client, admin, "b4_span_a")
-    _generate(client, admin, 2035, 7)
-    leave_id = _file_leave(client, "b4_span_a1", date(2035, 7, 30), date(2035, 8, 1))
+    _generate(client, admin, 2039, 7)
+    leave_id = _file_leave(client, "b4_span_a1", date(2039, 7, 30), date(2039, 8, 1))
 
     warnings = _approve(client, admin, leave_id)
 
-    july = [date(2035, 7, 30), date(2035, 7, 31)]
+    july = [date(2039, 7, 30), date(2039, 7, 31)]
     assert _planned(client, admin, users[0], july) == {d.isoformat(): "AL" for d in july}
     assert any("updated" in w for w in warnings)
-    assert any(w.startswith("2035-08:") for w in warnings)
-    assert client.get(f"{V}/schedules/2035/8", headers=admin).status_code == 404
+    assert any(w.startswith("2039-08:") for w in warnings)
+    assert client.get(f"{V}/schedules/2039/8", headers=admin).status_code == 404
 
     # August picks the approved day up when it is generated later.
-    _generate(client, admin, 2035, 8)
-    assert _planned(client, admin, users[0], [date(2035, 8, 1)]) == {"2035-08-01": "AL"}
+    _generate(client, admin, 2039, 8)
+    assert _planned(client, admin, users[0], [date(2039, 8, 1)]) == {"2039-08-01": "AL"}
 
 
 def test_leave_window_status(client: TestClient, monkeypatch) -> None:
