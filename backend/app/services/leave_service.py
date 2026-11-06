@@ -3,7 +3,8 @@
 Implements:
 - create_request: window validation, classification, overlap guard, persist.
 - list_for_user / list_all / list_pending: query helpers.
-- decide / revoke: approve, reject or revoke (no quota; advisory warnings only).
+- decide / revoke: approve, reject or revoke (no quota); the decision is
+  written into any already-generated month, with advisory warnings.
 - approved_off_map: scheduler input — approved requests → {user_id: {date: AL}}.
 - conflicts_for_date: returns ranked competing requests for a given date.
 """
@@ -179,25 +180,26 @@ def decide(
     the previous year). Approving simply flips the status. Idempotent
     re-decision → 409.
 
-    Returns (request, warnings): warnings surface an already-generated month
-    (stale schedule) and any flight-coverage impact — advisory only, the admin
-    always decides.
+    An approval is written as AL into any already-generated month of the span.
+    Returns (request, warnings): warnings report that schedule update with its
+    re-check and any flight-coverage impact — advisory only, the admin always
+    decides.
     """
     req = _get_or_404(db, leave_id)
 
     if req.status != LeaveStatus.pending:
         raise HTTPException(status.HTTP_409_CONFLICT, detail=t("leave.already_decided"))
 
+    # Status first: the schedule re-check must already see this leave approved.
+    req.status = new_status
     warnings: list[str] = []
     if new_status == LeaveStatus.approved:
-        if _overlaps_generated_schedule(db, req):
-            warnings.append(t("leave.schedule_stale"))
+        warnings += _write_into_schedule(db, req, AttendanceCode.AL)
         # Approving must never silently break flight coverage — check every
         # day of the span against the 1A+1D / 1A+2D demand and warn (admin
         # still decides; never a hard block).
         warnings.extend(_staffing_warnings(db, req))
 
-    req.status = new_status
     db.commit()
     db.refresh(req)
     return req, warnings
@@ -208,9 +210,8 @@ def revoke(
 ) -> tuple[LeaveRequest, list[str]]:
     """Admin revokes a previously APPROVED leave (owner decision 2026-07-17).
 
-    Flips the request back to rejected and — like approval — warns when the
-    span overlaps an already-generated month (that schedule still shows the
-    leave until the admin regenerates it).
+    Flips the request back to rejected and — like approval — writes the
+    decision into any already-generated month: the span's cells become X.
     """
     req = _get_or_404(db, leave_id)
     if req.status != LeaveStatus.approved:
@@ -218,11 +219,8 @@ def revoke(
             status.HTTP_409_CONFLICT, detail=t("leave.revoke_only_approved")
         )
 
-    warnings: list[str] = []
-    if _overlaps_generated_schedule(db, req):
-        warnings.append(t("leave.schedule_stale"))
-
     req.status = LeaveStatus.rejected
+    warnings = _write_into_schedule(db, req, AttendanceCode.X)
     db.commit()
     db.refresh(req)
     return req, warnings
@@ -290,29 +288,15 @@ def _staffing_warnings(db: Session, req: LeaveRequest) -> list[str]:
     return warnings
 
 
-def _overlaps_generated_schedule(db: Session, req: LeaveRequest) -> bool:
-    """True when any month of the leave span already has a schedule row.
+def _write_into_schedule(
+    db: Session, req: LeaveRequest, code: AttendanceCode
+) -> list[str]:
+    """Put the decision into already-generated months of the span (B4)."""
+    from app.services import schedule_service  # local: it imports this module
 
-    The schedule only consumes approved leave at GENERATE time, so approving
-    afterwards leaves the existing (draft or published) grid stale — the
-    admin must regenerate that month for the leave to appear.
-    """
-    from app.models.schedule import MonthlySchedule  # local: avoid cycle
-
-    months: set[tuple[int, int]] = set()
-    day = req.start_date
-    while day <= req.end_date:
-        months.add((day.year, day.month))
-        day += timedelta(days=1)
-    for year, month in months:
-        exists = (
-            db.query(MonthlySchedule.id)
-            .filter(MonthlySchedule.year == year, MonthlySchedule.month == month)
-            .first()
-        )
-        if exists is not None:
-            return True
-    return False
+    return schedule_service.apply_leave_span(
+        db, req.user_id, req.start_date, req.end_date, code
+    )
 
 
 def approved_off_map(

@@ -521,3 +521,127 @@ class TestWindowBusinessClock:
             assert "day 15" in exc_info.value.detail
         finally:
             db.close()
+
+
+# ---------------------------------------------------------------------------
+# B4 — approving / revoking leave writes into an already-generated schedule
+# (2035 months: nothing else in the suite touches them)
+# ---------------------------------------------------------------------------
+
+def _role_a_users(client, admin, prefix) -> list[int]:
+    """Four role-A people — enough for the engine to cover a month."""
+    ids = []
+    for i in range(1, 5):
+        r = _create_user(client, admin, f"{prefix}{i}")
+        assert r.status_code == 201, r.text
+        ids.append(r.json()["id"])
+    return ids
+
+
+def _generate(client, admin, year, month, *, publish=False) -> None:
+    res = client.post(
+        f"{V}/schedules/generate", headers=admin, json={"year": year, "month": month}
+    )
+    assert res.status_code == 200 and res.json()["feasible"] is True, res.text
+    if publish:
+        schedule_id = res.json()["schedule"]["id"]
+        res = client.post(f"{V}/schedules/{schedule_id}/publish", headers=admin)
+        assert res.status_code == 200, res.text
+
+
+def _file_leave(client, username, start, end) -> int:
+    user = _bearer(_token(client, username, "secret1"))
+    r = client.post(
+        f"{V}/leaves",
+        headers=user,
+        json={"start_date": start.isoformat(), "end_date": end.isoformat()},
+    )
+    assert r.status_code == 201, r.text
+    return r.json()["id"]
+
+
+def _planned(client, admin, user_id, days) -> dict[str, str]:
+    """{iso day: planned code} of one user's cells on ``days`` (one month)."""
+    wanted = {d.isoformat() for d in days}
+    res = client.get(f"{V}/schedules/{days[0].year}/{days[0].month}", headers=admin)
+    return {
+        a["work_date"]: a["code"]
+        for a in res.json()["assignments"]
+        if a["user_id"] == user_id and a["work_date"] in wanted
+    }
+
+
+def _actual(client, admin, user_id, days) -> dict[str, str]:
+    """{iso day: actual code} of one user's attendance on ``days`` (one month)."""
+    wanted = {d.isoformat() for d in days}
+    rows = client.get(
+        f"{V}/attendance",
+        params={"year": days[0].year, "month": days[0].month},
+        headers=admin,
+    ).json()
+    return {
+        r["work_date"]: r["code"]
+        for r in rows
+        if r["user_id"] == user_id and r["work_date"] in wanted
+    }
+
+
+def _approve(client, admin, leave_id) -> list[str]:
+    res = client.post(
+        f"{V}/leaves/{leave_id}/decide", headers=admin, json={"status": "approved"}
+    )
+    assert res.status_code == 200, res.text
+    return res.json()["warnings"]
+
+
+def test_approve_after_generate_writes_al_into_grid(client):
+    admin = _bearer(_token(client, "admin", "admin123"))
+    users = _role_a_users(client, admin, "b4_approve_a")
+    _generate(client, admin, 2035, 3)
+    leave_id = _file_leave(client, "b4_approve_a1", date(2035, 3, 20), date(2035, 3, 22))
+
+    warnings = _approve(client, admin, leave_id)
+
+    days = [date(2035, 3, d) for d in (20, 21, 22)]
+    assert _planned(client, admin, users[0], days) == {d.isoformat(): "AL" for d in days}
+    assert any("updated" in w for w in warnings)
+
+
+def test_revoke_restores_x(client):
+    """Published month: the grid AND the still-seeded actuals follow both decisions."""
+    admin = _bearer(_token(client, "admin", "admin123"))
+    users = _role_a_users(client, admin, "b4_revoke_a")
+    _generate(client, admin, 2035, 5, publish=True)
+    leave_id = _file_leave(client, "b4_revoke_a1", date(2035, 5, 14), date(2035, 5, 16))
+    days = [date(2035, 5, d) for d in (14, 15, 16)]
+
+    _approve(client, admin, leave_id)
+    assert _planned(client, admin, users[0], days) == {d.isoformat(): "AL" for d in days}
+    assert _actual(client, admin, users[0], days) == {d.isoformat(): "AL" for d in days}
+
+    res = client.post(f"{V}/leaves/{leave_id}/revoke", headers=admin)
+    assert res.status_code == 200, res.text
+
+    assert _planned(client, admin, users[0], days) == {d.isoformat(): "X" for d in days}
+    assert _actual(client, admin, users[0], days) == {d.isoformat(): "X" for d in days}
+    assert any("updated" in w for w in res.json()["warnings"])
+
+
+def test_leave_spanning_two_months_updates_only_existing_schedule(client):
+    """Review Focus 1: only July has a schedule; August is named, not created."""
+    admin = _bearer(_token(client, "admin", "admin123"))
+    users = _role_a_users(client, admin, "b4_span_a")
+    _generate(client, admin, 2035, 7)
+    leave_id = _file_leave(client, "b4_span_a1", date(2035, 7, 30), date(2035, 8, 1))
+
+    warnings = _approve(client, admin, leave_id)
+
+    july = [date(2035, 7, 30), date(2035, 7, 31)]
+    assert _planned(client, admin, users[0], july) == {d.isoformat(): "AL" for d in july}
+    assert any("updated" in w for w in warnings)
+    assert any(w.startswith("2035-08:") for w in warnings)
+    assert client.get(f"{V}/schedules/2035/8", headers=admin).status_code == 404
+
+    # August picks the approved day up when it is generated later.
+    _generate(client, admin, 2035, 8)
+    assert _planned(client, admin, users[0], [date(2035, 8, 1)]) == {"2035-08-01": "AL"}

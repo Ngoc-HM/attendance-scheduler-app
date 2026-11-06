@@ -97,8 +97,8 @@ def decide_leave(
 def revoke_leave(db: DbSession, leave_id: int, admin: AdminUser):
     """Admin revokes a previously APPROVED leave (owner 2026-07-17).
 
-    Restores the balance and rejects the request; warns when an
-    already-generated month still shows the leave until regenerated.
+    Rejects the request and writes X back into any already-generated month
+    of the span.
     """
     revoked, warnings = leave_service.revoke(db, leave_id, admin.id)
     audit_service.record(db, admin.id, "leave.revoked", "LeaveRequest",

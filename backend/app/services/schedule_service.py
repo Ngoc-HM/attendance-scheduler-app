@@ -7,7 +7,7 @@ shift-changes are saved and re-checked (warnings do not discard the edit).
 
 from __future__ import annotations
 
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session, selectinload
@@ -255,6 +255,51 @@ def apply_shift_change(db: Session, req: ShiftChangeRequest) -> list[str]:
             attendance_service.sync_planned_cell(db, cell.user_id, cell.work_date, cell.code)
     db.commit()
     return [f"{v.rule}: {v.message}" for v in _recheck_violations(db, schedule)]
+
+
+def apply_leave_span(
+    db: Session, user_id: int, start: date, end: date, code: AttendanceCode
+) -> list[str]:
+    """B4 — write a leave decision (AL approve / X revoke) into generated months.
+
+    Regenerating would wipe manual edits, so every month of the span that
+    already has a schedule gets the code directly (published months also move
+    their still-seeded actuals). A month without a schedule needs nothing: it
+    reads approved leave when generated. Returns [] when no month of the span
+    has a schedule; otherwise the ``leave.schedule_applied`` notice, a note per
+    month not generated yet, then each updated month's re-check warnings.
+    Does not commit.
+    """
+    span = [start + timedelta(days=i) for i in range((end - start).days + 1)]
+    days = set(span)
+    updated: list[MonthlySchedule] = []
+    not_generated: list[str] = []
+    for year, month in sorted({(d.year, d.month) for d in span}):
+        schedule = (
+            db.query(MonthlySchedule)
+            .options(selectinload(MonthlySchedule.assignments))
+            .filter(MonthlySchedule.year == year, MonthlySchedule.month == month)
+            .one_or_none()
+        )
+        if schedule is None:
+            not_generated.append(f"{year}-{month:02d}: {t('leave.schedule_not_generated')}")
+            continue
+        for cell in schedule.assignments:
+            if cell.user_id == user_id and cell.work_date in days:
+                cell.code = code
+                if schedule.status is ScheduleStatus.published:
+                    attendance_service.sync_planned_cell(db, user_id, cell.work_date, code)
+        updated.append(schedule)
+    if not updated:
+        return []
+    db.flush()  # a later month's re-check reads the edited earlier month
+    warnings = [t("leave.schedule_applied"), *not_generated]
+    for schedule in updated:
+        warnings += [
+            f"{schedule.year}-{schedule.month:02d}: {v.message}"
+            for v in _recheck_violations(db, schedule)
+        ]
+    return warnings
 
 
 # --- internals -------------------------------------------------------------
