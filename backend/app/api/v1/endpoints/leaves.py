@@ -9,7 +9,7 @@ from fastapi import APIRouter, HTTPException, Query, status
 
 from app.api.deps import ActiveUser, AdminUser, DbSession
 from app.models.enums import LeaveStatus
-from app.schemas.leave import ConflictEntry, LeaveCreate, LeaveDecision, LeaveRead
+from app.schemas.leave import ConflictEntry, LeaveCreate, LeaveDecision, LeaveRead, LeaveWindowRead
 from app.services import audit_service, leave_service
 
 router = APIRouter()
@@ -45,6 +45,13 @@ def request_leave(
 def pending_leaves(db: DbSession, _admin: AdminUser):
     """Admin queue: pending requests ordered by submission time."""
     return leave_service.list_pending(db)
+
+
+# Declared before the /{leave_id}/... routes.
+@router.get("/window", response_model=LeaveWindowRead)
+def leave_window(_user: ActiveUser):
+    """Whether monthly registration is open today, and for which month."""
+    return leave_service.window_status()
 
 
 @router.get("/conflicts", response_model=list[ConflictEntry])

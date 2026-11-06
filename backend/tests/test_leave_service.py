@@ -18,7 +18,13 @@ from fastapi.testclient import TestClient
 
 from app.models.enums import LeaveStatus, LeaveType
 from app.services.leave_conflict_resolver import rank
-from app.services.leave_windows import classify, is_annual_window_open, is_monthly_window_open
+from app.services.leave_windows import (
+    annual_target_year,
+    classify,
+    is_annual_window_open,
+    is_monthly_window_open,
+    monthly_target,
+)
 
 V = "/api/v1"
 
@@ -86,6 +92,14 @@ class TestMonthlyWindow:
         assert is_monthly_window_open(date(2025, 2, 15), target_month=3, target_year=2025)
         assert not is_monthly_window_open(date(2025, 2, 16), target_month=3, target_year=2025)
 
+    def test_monthly_target_is_next_month(self):
+        assert monthly_target(date(2026, 11, 5)) == (2026, 12)
+        # The target stays next month after the window has closed.
+        assert monthly_target(date(2026, 11, 25)) == (2026, 12)
+
+    def test_monthly_target_december_rolls_into_january(self):
+        assert monthly_target(date(2026, 12, 5)) == (2027, 1)
+
 
 class TestAnnualWindow:
     def test_year_plus_one_ok(self):
@@ -99,6 +113,11 @@ class TestAnnualWindow:
     def test_two_years_ahead_rejected(self):
         # Leave starts 2027; today is 2025 → not exactly Y+1.
         assert not is_annual_window_open(date(2025, 6, 1), leave_start_year=2027)
+
+    def test_annual_target_year_is_next_year(self):
+        today = date(2026, 11, 5)
+        assert annual_target_year(today) == 2027
+        assert is_annual_window_open(today, leave_start_year=annual_target_year(today))
 
 
 class TestConflictRank:
@@ -521,3 +540,71 @@ class TestWindowBusinessClock:
             assert "day 15" in exc_info.value.detail
         finally:
             db.close()
+
+
+def test_leave_window_status(client: TestClient, monkeypatch) -> None:
+    """Window is open days 1–AUTORUN_DAY for next month; dev never closes it."""
+    from app.core.config import settings
+    from app.services import leave_service
+    from app.services.leave_windows import registration_last_day
+
+    monkeypatch.setattr(settings, "ENVIRONMENT", "staging")
+    monkeypatch.setattr(settings, "AUTORUN_DAY", 20)
+
+    day5 = leave_service.window_status(today=date(2026, 11, 5))
+    assert day5.monthly_open is True
+    assert (day5.monthly_target_year, day5.monthly_target_month) == (2026, 12)
+    assert day5.annual_target_year == 2027
+    assert day5.closes_on_day == registration_last_day() == 20
+    assert day5.enforced is True
+
+    # Boundary: the last registration day is open, the next day is closed.
+    assert leave_service.window_status(today=date(2026, 11, 20)).monthly_open is True
+    assert leave_service.window_status(today=date(2026, 11, 21)).monthly_open is False
+    assert leave_service.window_status(today=date(2026, 11, 25)).monthly_open is False
+
+    # Dev does not enforce the window, so registration is always open.
+    monkeypatch.setattr(settings, "ENVIRONMENT", "dev")
+    dev = leave_service.window_status(today=date(2026, 11, 25))
+    assert dev.enforced is False
+    assert dev.monthly_open is True
+
+    # Wiring: any signed-in active user (not only admin) can read it.
+    admin = _bearer(_token(client, "admin", "admin123"))
+    _create_user(client, admin, "window_status_user")
+    employee = _bearer(_token(client, "window_status_user", "secret1"))
+    r = client.get(f"{V}/leaves/window", headers=employee)
+    assert r.status_code == 200
+    assert set(r.json()) == {
+        "monthly_open", "monthly_target_year", "monthly_target_month",
+        "annual_target_year", "closes_on_day", "enforced",
+    }
+    assert r.json()["enforced"] is False
+    assert r.json()["monthly_open"] is True
+
+
+def test_leave_window_status_uses_business_date(monkeypatch) -> None:
+    """Without an explicit date, the window is judged on the Frankfurt date."""
+    from datetime import UTC, datetime
+
+    from app.core import business_time
+    from app.core.config import settings
+    from app.services import leave_service
+
+    monkeypatch.setattr(settings, "ENVIRONMENT", "staging")
+    monkeypatch.setattr(settings, "AUTORUN_DAY", 20)
+    monkeypatch.setattr(settings, "TIMEZONE", "Europe/Berlin")
+
+    # 22:30 UTC = 23:30 Berlin on 2026-12-20: last open day for January.
+    monkeypatch.setattr(
+        business_time, "_utcnow", lambda: datetime(2026, 12, 20, 22, 30, tzinfo=UTC)
+    )
+    still_open = leave_service.window_status()
+    assert (still_open.monthly_target_year, still_open.monthly_target_month) == (2027, 1)
+    assert still_open.monthly_open is True
+
+    # 23:30 UTC = 00:30 Berlin on 2026-12-21: closed.
+    monkeypatch.setattr(
+        business_time, "_utcnow", lambda: datetime(2026, 12, 20, 23, 30, tzinfo=UTC)
+    )
+    assert leave_service.window_status().monthly_open is False

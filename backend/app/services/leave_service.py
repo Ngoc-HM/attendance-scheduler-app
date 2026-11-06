@@ -3,6 +3,7 @@
 Implements:
 - create_request: window validation, classification, overlap guard, persist.
 - list_for_user / list_all / list_pending: query helpers.
+- window_status: registration-window state for the client.
 - decide / revoke: approve, reject or revoke (no quota; advisory warnings only).
 - approved_off_map: scheduler input — approved requests → {user_id: {date: AL}}.
 - conflicts_for_date: returns ranked competing requests for a given date.
@@ -21,12 +22,14 @@ from app.core.i18n import t
 from app.models.enums import AttendanceCode, LeaveStatus, LeaveType, UserStatus
 from app.models.leave import LeaveRequest
 from app.models.user import User
-from app.schemas.leave import LeaveCreate
+from app.schemas.leave import LeaveCreate, LeaveWindowRead
 from app.services import leave_conflict_resolver, schedule_history
 from app.services.leave_windows import (
+    annual_target_year,
     classify,
     is_annual_window_open,
     is_monthly_window_open,
+    monthly_target,
     registration_last_day,
 )
 
@@ -166,6 +169,29 @@ def list_pending(db: Session) -> list[LeaveRequest]:
         .filter(LeaveRequest.status == LeaveStatus.pending)
         .order_by(LeaveRequest.created_at)
         .all()
+    )
+
+
+def window_status(today: date | None = None) -> LeaveWindowRead:
+    """Registration-window state the client shows on the leave page.
+
+    The rules live in ``leave_windows``; this only assembles them. Mirrors
+    ``create_request``: judged on the business date, and dev never closes
+    the window.
+    """
+    if today is None:
+        today = business_today()
+    target_year, target_month = monthly_target(today)
+    enforced = settings.ENVIRONMENT != "dev"
+    return LeaveWindowRead(
+        monthly_open=(
+            not enforced or is_monthly_window_open(today, target_month, target_year)
+        ),
+        monthly_target_year=target_year,
+        monthly_target_month=target_month,
+        annual_target_year=annual_target_year(today),
+        closes_on_day=registration_last_day(),
+        enforced=enforced,
     )
 
 
