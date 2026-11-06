@@ -110,13 +110,16 @@ def create(db: Session, payload: UserCreate) -> User:
 
 
 def approve(db: Session, user_id: int, role: Role) -> User:
-    """F-01/F-03 — activate an account with the role the admin assigns.
+    """F-01/F-03 — activate a pending account with the role the admin assigns.
 
-    A role change reallocates the code for the new role (the old one is never
-    reused). Approval can change a role, so it honours the last-admin lockout.
+    Only ``pending`` accounts qualify (409 otherwise), so approval is never a
+    second role-change path: active/disabled users change role via
+    :func:`update`, which carries the admin and fixed-team guards. A role
+    change reallocates the code for the new role (the old one is never reused).
     """
     user = _get_or_404(db, user_id)
-    _ensure_last_admin_preserved(db, user, role, UserStatus.active)
+    if user.status is not UserStatus.pending:
+        raise HTTPException(status.HTTP_409_CONFLICT, detail=t("user.not_pending"))
     if role != user.role:
         user.role = role
         user.code = next_user_code(db, role)

@@ -111,6 +111,42 @@ def test_register_ignores_role_and_approve_assigns_role(client: TestClient) -> N
     assert me.json()["role"] == "A"
 
 
+def test_approve_rejects_accounts_that_are_not_pending(client: TestClient) -> None:
+    # Approve only activates pending accounts; it is not a second
+    # role-change path (role changes go through PATCH /users/{id}).
+    admin = _bearer(_token(client, "admin", "admin123"))
+    active = client.post(
+        f"{V}/users",
+        headers=admin,
+        json={"username": "apprv_active", "full_name": "A", "password": "secret1", "role": "A"},
+    ).json()
+    disabled = client.post(
+        f"{V}/users",
+        headers=admin,
+        json={"username": "apprv_disabled", "full_name": "D", "password": "secret1", "role": "T"},
+    ).json()
+    assert client.patch(
+        f"{V}/users/{disabled['id']}", headers=admin, json={"status": "disabled"}
+    ).status_code == 200
+
+    for target in (active, disabled):
+        res = client.post(
+            f"{V}/auth/users/{target['id']}/approve", json={"role": "M"}, headers=admin
+        )
+        assert res.status_code == 409
+        assert res.json()["detail"] == "Only a pending account can be approved."
+
+    users = {u["id"]: u for u in client.get(f"{V}/users", headers=admin).json()}
+    after_active = users[active["id"]]
+    after_disabled = users[disabled["id"]]
+    assert (after_active["role"], after_active["status"], after_active["code"]) == (
+        "A", "active", active["code"]
+    )
+    assert (after_disabled["role"], after_disabled["status"], after_disabled["code"]) == (
+        "T", "disabled", disabled["code"]
+    )
+
+
 def test_non_admin_cannot_list_users(client: TestClient) -> None:
     admin = _bearer(_token(client, "admin", "admin123"))
     client.post(
