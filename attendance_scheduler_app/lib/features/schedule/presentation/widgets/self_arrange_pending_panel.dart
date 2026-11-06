@@ -52,7 +52,7 @@ class SelfArrangePendingPanel extends ConsumerWidget {
             return ListTile(
               leading: const Icon(Icons.edit_calendar_outlined),
               title: Text(
-                'User ${req.requesterId} · ${req.year}-'
+                '${l.userFallback(req.requesterId)} · ${req.year}-'
                 '${req.month.toString().padLeft(2, '0')} · '
                 '${req.changes.length} ${l.text('selfArrangeChanges')}',
               ),

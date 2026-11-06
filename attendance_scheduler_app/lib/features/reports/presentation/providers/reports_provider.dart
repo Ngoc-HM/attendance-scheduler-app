@@ -17,8 +17,14 @@ class ExportSuccess extends ExportResult {
 }
 
 class ExportFailure extends ExportResult {
-  const ExportFailure(this.message);
+  /// A server/IO failure, already in the user's language (or raw).
+  const ExportFailure(this.message) : messageKey = null;
+
+  /// A client-side check failed; the page localizes [messageKey].
+  const ExportFailure.localized(String this.messageKey) : message = '';
+
   final String message;
+  final String? messageKey;
 }
 
 /// State for the reports page.
@@ -71,7 +77,7 @@ class ReportsController extends StateNotifier<ReportsState> {
     final year = state.selectedYear;
     final month = state.selectedMonth;
     if (year == null || month == null) {
-      return const ExportFailure('Select year and month first');
+      return const ExportFailure.localized('selectYearMonthFirst');
     }
     return _export(
       () => _ds.monthly(year, month, state.selectedFormat),
@@ -81,7 +87,9 @@ class ReportsController extends StateNotifier<ReportsState> {
   /// Download yearly report, save to downloads directory, surface path.
   Future<ExportResult> exportYearly() async {
     final year = state.selectedYear;
-    if (year == null) return const ExportFailure('Select year first');
+    if (year == null) {
+      return const ExportFailure.localized('selectYearFirst');
+    }
     return _export(() => _ds.yearly(year, state.selectedFormat));
   }
 

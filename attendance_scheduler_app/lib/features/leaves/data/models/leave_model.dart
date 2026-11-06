@@ -62,3 +62,34 @@ class LeaveModel {
     _ => status,
   };
 }
+
+/// Registration-window state from `GET /leaves/window` (backend
+/// `LeaveWindowRead`): whether monthly leave for the target month can be
+/// filed today, and the last day of month M on which leave for M+1 may be
+/// registered. [enforced] is false in dev, where the window never closes.
+class LeaveWindow {
+  const LeaveWindow({
+    required this.monthlyOpen,
+    required this.monthlyTargetYear,
+    required this.monthlyTargetMonth,
+    required this.annualTargetYear,
+    required this.closesOnDay,
+    required this.enforced,
+  });
+
+  final bool monthlyOpen;
+  final int monthlyTargetYear;
+  final int monthlyTargetMonth;
+  final int annualTargetYear;
+  final int closesOnDay;
+  final bool enforced;
+
+  factory LeaveWindow.fromJson(Map<String, dynamic> json) => LeaveWindow(
+    monthlyOpen: json['monthly_open'] as bool,
+    monthlyTargetYear: json['monthly_target_year'] as int,
+    monthlyTargetMonth: json['monthly_target_month'] as int,
+    annualTargetYear: json['annual_target_year'] as int,
+    closesOnDay: json['closes_on_day'] as int,
+    enforced: json['enforced'] as bool,
+  );
+}

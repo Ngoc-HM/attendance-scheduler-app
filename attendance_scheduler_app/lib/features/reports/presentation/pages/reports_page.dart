@@ -54,8 +54,12 @@ class ReportsPage extends ConsumerWidget {
           '${l.text('reportSavedTo')} $path',
           tone: DsTone.success,
         );
-      case ExportFailure(:final message):
-        DsFeedback.show(context, message, tone: DsTone.danger);
+      case ExportFailure(:final message, :final messageKey):
+        DsFeedback.show(
+          context,
+          messageKey != null ? l.text(messageKey) : message,
+          tone: DsTone.danger,
+        );
     }
   }
 
@@ -183,7 +187,7 @@ class ReportsPage extends ConsumerWidget {
                 )
               : '${state.selectedYear ?? now.year}',
           updated: l.dateTime(now),
-          status: 'Ready',
+          status: DsReportRowData.statusReady,
         ),
       ];
     }

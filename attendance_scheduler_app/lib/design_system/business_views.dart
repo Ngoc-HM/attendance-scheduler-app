@@ -964,7 +964,9 @@ class _FlightsTable extends StatelessWidget {
             Text(row.departure, style: DsType.tableCell),
             DsBadge(
               label: l.statusLabel(row.status),
-              tone: row.status == 'Complete' ? DsTone.success : DsTone.warning,
+              tone: row.status == DsFlightRowData.statusComplete
+                  ? DsTone.success
+                  : DsTone.warning,
             ),
           ],
       ],
@@ -1035,6 +1037,7 @@ class DsLeavesView extends StatelessWidget {
     this.onReject,
     this.onRevoke,
     this.registrationOpen = true,
+    this.closesOnDay,
   });
 
   final List<DsLeaveRowData> rows;
@@ -1048,19 +1051,30 @@ class DsLeavesView extends StatelessWidget {
   /// Admin: revoke a previously APPROVED leave (owner 2026-07-17).
   final ValueChanged<int>? onRevoke;
 
-  /// Whether the monthly registration window (day 1–20) is currently open —
-  /// drives the banner so it never claims "open" on day 21+.
+  /// Whether the monthly registration window (day 1–[closesOnDay]) is
+  /// currently open — drives the banner so it never claims "open" after it
+  /// closed.
   final bool registrationOpen;
+
+  /// Last day of month M on which leave for M+1 may be registered (backend
+  /// `closes_on_day`). Null while unknown → no subtitle rather than a guess.
+  final int? closesOnDay;
 
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
     final pending = rows.where((row) => row.status == 'Pending').length;
     final approved = rows.where((row) => row.status == 'Approved').length;
-    final carry = rows.fold<int>(0, (sum, row) => sum + row.carryComp);
+    // carryComp is per person, repeated on each of their requests: count
+    // every employee once.
+    final carryByEmployee = {
+      for (final row in rows) row.employee: row.carryComp,
+    };
+    final carry = carryByEmployee.values.fold<int>(0, (sum, c) => sum + c);
+    final day = closesOnDay;
     return DsPage(
       title: l.text('leaveRequests'),
-      subtitle: l.text('leaveSubtitle'),
+      subtitle: day == null ? null : l.leaveSubtitle(day),
       actions: [
         DsSecondaryButton(
           label: l.text('requestAnnualLeave'),
@@ -1247,8 +1261,8 @@ class DsAttendanceView extends StatelessWidget {
     required this.rows,
     required this.onPreviousMonth,
     required this.onNextMonth,
-    required this.onUpdate,
-    required this.onHolidays,
+    this.onUpdate,
+    this.onHolidays,
     this.onCloseMonth,
   });
 
@@ -1256,10 +1270,12 @@ class DsAttendanceView extends StatelessWidget {
   final List<DsAttendanceRowData> rows;
   final VoidCallback onPreviousMonth;
   final VoidCallback onNextMonth;
-  final VoidCallback onUpdate;
-  final VoidCallback onHolidays;
 
-  /// If non-null an admin "Close month" toolbar action is shown (F-14).
+  /// Admin toolbar actions — each button is shown only when its callback is
+  /// non-null, so an employee viewing their own month sees none of them:
+  /// record attendance / sick cover, public holidays, close month (F-14).
+  final VoidCallback? onUpdate;
+  final VoidCallback? onHolidays;
   final VoidCallback? onCloseMonth;
 
   @override
@@ -1281,16 +1297,18 @@ class DsAttendanceView extends StatelessWidget {
             icon: Icons.lock_clock_outlined,
             onPressed: onCloseMonth!,
           ),
-        DsSecondaryButton(
-          label: l.text('publicHolidays'),
-          icon: Icons.event_outlined,
-          onPressed: onHolidays,
-        ),
-        DsPrimaryButton(
-          label: l.text('updateAttendance'),
-          icon: Icons.edit_outlined,
-          onPressed: onUpdate,
-        ),
+        if (onHolidays != null)
+          DsSecondaryButton(
+            label: l.text('publicHolidays'),
+            icon: Icons.event_outlined,
+            onPressed: onHolidays,
+          ),
+        if (onUpdate != null)
+          DsPrimaryButton(
+            label: l.text('updateAttendance'),
+            icon: Icons.edit_outlined,
+            onPressed: onUpdate,
+          ),
       ],
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1360,7 +1378,13 @@ class DsAttendanceView extends StatelessWidget {
                           ),
                           const SizedBox(height: DsSpacing.x2),
                           Text(
-                            l.text('attendanceEmptyMessage'),
+                            // The admin hint points at "Update attendance",
+                            // which a read-only (employee) view does not have.
+                            l.text(
+                              onUpdate != null
+                                  ? 'attendanceEmptyMessage'
+                                  : 'myAttendanceEmptyMessage',
+                            ),
                             textAlign: TextAlign.center,
                             style: const TextStyle(color: DsColors.textMuted),
                           ),

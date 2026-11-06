@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/network/api_client.dart';
+import '../../../../core/storage/token_storage.dart';
 import '../../../../i18n/locale_provider.dart';
 import '../../data/repositories/auth_repository_impl.dart';
 import '../../domain/entities/user.dart';
@@ -32,11 +33,36 @@ class AuthState {
 }
 
 class AuthController extends StateNotifier<AuthState> {
-  AuthController(this._repository, this._localeController)
-    : super(const AuthState());
+  AuthController(
+    this._repository,
+    this._localeController, {
+    this._tokenStorage,
+  }) : super(const AuthState());
 
   final AuthRepository _repository;
   final LocaleController _localeController;
+
+  /// Where a previous session's token lives. Null → [restoreSession] has
+  /// nothing to look at and is a no-op.
+  final TokenStorage? _tokenStorage;
+
+  /// App start: sign back in with the stored token instead of forcing a new
+  /// login every launch. No token → stay signed out. A token the backend no
+  /// longer accepts (expired, user disabled, server unreachable) is dropped
+  /// so the login page shows, without a "session expired" banner — nobody
+  /// was signed in yet.
+  Future<void> restoreSession() async {
+    final token = await _tokenStorage?.read();
+    if (token == null || token.isEmpty) return;
+    try {
+      final user = await _repository.currentUser();
+      await _localeController.activateUser(user.id);
+      state = AuthState(user: user);
+    } catch (_) {
+      await _repository.logout();
+      state = const AuthState();
+    }
+  }
 
   Future<bool> login(String username, String password) async {
     state = state.copyWith(isLoading: true, clearError: true);
@@ -91,6 +117,7 @@ final authControllerProvider = StateNotifierProvider<AuthController, AuthState>(
     final controller = AuthController(
       ref.watch(authRepositoryProvider),
       ref.read(localeControllerProvider.notifier),
+      tokenStorage: ref.watch(tokenStorageProvider),
     );
     // Dio bumps this counter on 401; reacting here (instead of Dio calling the
     // controller) keeps the provider graph acyclic: auth → dio → signal.
@@ -100,4 +127,11 @@ final authControllerProvider = StateNotifierProvider<AuthController, AuthState>(
     );
     return controller;
   },
+);
+
+/// Runs [AuthController.restoreSession] once per app start. The app shows a
+/// splash until it completes, so a returning user never flashes the login
+/// page before the router sends them on.
+final sessionRestoreProvider = FutureProvider<void>(
+  (ref) => ref.read(authControllerProvider.notifier).restoreSession(),
 );

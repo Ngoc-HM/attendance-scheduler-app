@@ -16,8 +16,8 @@ class HomeShell extends ConsumerWidget {
   final Widget child;
 
   /// Role-gated navigation (owner 2026-07-09): admin keeps the full shell;
-  /// other roles get View schedule / Register leave / Check-in-out, and the
-  /// self-arrange tab only for T & F.
+  /// other roles get View schedule / Register leave / My attendance /
+  /// Check-in-out, and the self-arrange tab only for T & F.
   static List<DsNavigationDestination> _destinationsFor(
     User? user,
     AppLocalizations l,
@@ -74,6 +74,11 @@ class HomeShell extends ConsumerWidget {
         path: AppRoute.leaves,
         label: l.navLeaves,
         icon: Icons.event_available_outlined,
+      ),
+      DsNavigationDestination(
+        path: AppRoute.attendance,
+        label: l.text('navMyAttendance'),
+        icon: Icons.fact_check_outlined,
       ),
       DsNavigationDestination(
         path: AppRoute.clock,

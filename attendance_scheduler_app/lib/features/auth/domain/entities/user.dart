@@ -34,6 +34,7 @@ class User extends Equatable {
     required this.role,
     required this.status,
     required this.code,
+    this.carryComp = 0,
   });
 
   final int id;
@@ -45,8 +46,13 @@ class User extends Equatable {
   /// Confidential per-person identifier auto-assigned by the server (e.g. "A3", "T1").
   final String code;
 
+  /// Comp days (CD) carried into the current month, as stored by the last
+  /// month close (`carry_comp` on `/users/me` and `/users`).
+  final int carryComp;
+
   bool get isAdmin => role.isAdmin;
 
   @override
-  List<Object?> get props => [id, username, fullName, role, status, code];
+  List<Object?> get props =>
+      [id, username, fullName, role, status, code, carryComp];
 }
