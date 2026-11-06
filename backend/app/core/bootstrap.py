@@ -94,7 +94,6 @@ def ensure_first_admin(db: Session) -> User:
             role=Role.M,
             status=UserStatus.active,
             code=next_user_code(db, Role.M),
-            annual_leave_quota=settings.ANNUAL_LEAVE_DEFAULT_DAYS,
         )
         db.add(admin)
         logger.info("Seed admin '%s' created.", settings.FIRST_ADMIN_USERNAME)

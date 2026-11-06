@@ -233,3 +233,64 @@ def test_admin_can_set_quota(client: TestClient) -> None:
         assert client.patch(
             f"{V}/users/{uid}", headers=admin, json={"annual_leave_quota": invalid}
         ).status_code == 422
+
+
+def test_admin_create_sets_quota_self_register_cannot(client: TestClient) -> None:
+    """POST /users takes the quota in the same request; self-registration
+    has no quota field, so a quota sent there is ignored (default applies)."""
+    admin = _bearer(_token(client, "admin", "admin123"))
+    body = {"full_name": "Q", "password": "secret1", "role": "T"}
+
+    created = client.post(
+        f"{V}/users", headers=admin,
+        json={**body, "username": "quota_on_create", "annual_leave_quota": 25},
+    )
+    assert created.status_code == 201
+    assert created.json()["annual_leave_quota"] == 25
+    assert client.post(
+        f"{V}/users", headers=admin,
+        json={**body, "username": "quota_too_big", "annual_leave_quota": 366},
+    ).status_code == 422
+
+    registered = client.post(
+        f"{V}/auth/register",
+        json={"username": "quota_self_reg", "full_name": "Q", "password": "secret1",
+              "annual_leave_quota": 365},
+    )
+    assert registered.status_code == 201
+    assert registered.json()["annual_leave_quota"] == 30
+
+
+def test_bare_user_gets_configured_default_quota(client: TestClient, monkeypatch) -> None:
+    """The model default reads ANNUAL_LEAVE_DEFAULT_DAYS at insert time, so no
+    creation path has to remember to set it."""
+    from app.core.config import settings
+    from app.core.database import get_db
+    from app.models.enums import Role
+    from app.models.user import User
+    from app.services.user_service import next_user_code
+
+    db = next(get_db())
+    try:
+        plain = User(
+            username="bare_quota_user", full_name="B", hashed_password="x",
+            role=Role.T, code=next_user_code(db, Role.T),
+        )
+        db.add(plain)
+        db.commit()
+        assert plain.annual_leave_quota == 30
+
+        monkeypatch.setattr(settings, "ANNUAL_LEAVE_DEFAULT_DAYS", 12)
+        other = User(
+            username="bare_quota_user_12", full_name="B", hashed_password="x",
+            role=Role.T, code=next_user_code(db, Role.T),
+        )
+        db.add(other)
+        db.commit()
+        assert other.annual_leave_quota == 12
+
+        db.delete(plain)
+        db.delete(other)
+        db.commit()
+    finally:
+        db.close()

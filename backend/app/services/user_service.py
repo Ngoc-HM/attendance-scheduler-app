@@ -14,7 +14,6 @@ from __future__ import annotations
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.core.config import settings
 from app.core.i18n import t
 from app.core.security import get_password_hash
 from app.models.attendance import AttendanceRecord
@@ -90,8 +89,10 @@ def _persist_new(db: Session, payload: UserCreate, status_: UserStatus) -> User:
         hashed_password=get_password_hash(payload.password),
         status=status_,
         code=next_user_code(db, payload.role),
-        annual_leave_quota=settings.ANNUAL_LEAVE_DEFAULT_DAYS,
     )
+    # Unset → the model default (ANNUAL_LEAVE_DEFAULT_DAYS) applies on insert.
+    if payload.annual_leave_quota is not None:
+        user.annual_leave_quota = payload.annual_leave_quota
     db.add(user)
     db.commit()
     db.refresh(user)

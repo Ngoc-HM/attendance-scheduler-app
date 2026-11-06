@@ -19,9 +19,11 @@ class RegisterRequest(BaseModel):
 
 class UserCreate(RegisterRequest):
     """Admin-created user: the registration fields plus an assigned role
-    (F-01, F-03)."""
+    (F-01, F-03) and, optionally, the annual leave quota (D4; omitted →
+    ``ANNUAL_LEAVE_DEFAULT_DAYS``)."""
 
     role: Role
+    annual_leave_quota: int | None = Field(default=None, ge=0, le=365)
 
 
 class ApproveRequest(BaseModel):

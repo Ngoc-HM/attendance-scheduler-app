@@ -6,6 +6,7 @@ from sqlalchemy import Enum as SAEnum
 from sqlalchemy import Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
+from app.core.config import settings
 from app.core.database import Base
 from app.models.base import TimestampMixin
 from app.models.enums import Role, UserStatus
@@ -26,8 +27,11 @@ class User(Base, TimestampMixin):
     )
 
     # Admin-set days of leave per calendar year (owner decision D4). The
-    # remaining balance is derived from approved leave, never stored.
-    annual_leave_quota: Mapped[int] = mapped_column(Integer, default=0)
+    # remaining balance is derived from approved leave, never stored. The
+    # default is read at insert time, so every creation path gets it.
+    annual_leave_quota: Mapped[int] = mapped_column(
+        Integer, default=lambda: settings.ANNUAL_LEAVE_DEFAULT_DAYS
+    )
 
     # --- Auto-calculated carry-over fields (scheduler input §5.1, F-14) ----
     # Outstanding compensation days (CD) carried from the previous month —
