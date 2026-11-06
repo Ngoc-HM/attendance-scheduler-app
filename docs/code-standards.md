@@ -21,7 +21,13 @@
   no PII beyond `user_id`; rule-based only (no ML — §9.6).
 - Schema changes go through **Alembic**, never ad-hoc `create_all`.
 - RBAC via `deps.AdminUser` / `ensure_self_or_admin`; audit every admin
-  mutation via `audit_service.record(...)` (best-effort, never aborts).
+  mutation via `audit_service.record(...)`, which is **fail-loud**: a failed
+  write is logged with its full context and raised as HTTP 500 (decision #18).
+- Business dates (leave window, autorun, leave-balance year) come from
+  `core.business_time.business_today()` — the date in `TIMEZONE` — never from
+  `date.today()`, because the container may run in UTC. Known leftovers: the
+  non-admin schedule-month limit and the retention purge still read the host
+  date.
 
 ## Frontend (Flutter, feature-first clean architecture)
 - Per feature: `data/{datasources,models,repositories}`,
@@ -39,6 +45,10 @@
   every hard engine rule has a *bind* test and a *slack-reports-violation*
   test. Assert invariants (counts, no-6-run), not exact assignments
   (solver determinism via fixed seed).
+- Flutter: `flutter analyze` must report no issues and `flutter test` must
+  pass, goldens included. After an intended visual change, refresh them with
+  `flutter test --update-goldens test/visual_golden_test.dart`, look at the
+  new PNGs, and never commit `test/failures/` (ignored).
 - Do not skip/ xfail to hide real failures. Run the full suite before merge.
 
 ## Commits

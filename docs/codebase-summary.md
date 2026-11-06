@@ -4,52 +4,73 @@ Monorepo: FastAPI backend + Flutter desktop client. Spec: `PROJECT_OVERVIEW.md`.
 
 ## Backend (`backend/app/`)
 ```
-core/        config, database, security (JWT/bcrypt), i18n (en/vi), bootstrap, RBAC deps
-models/      User, Flight/FlightDay, LeaveRequest, ShiftChangeRequest,
-             MonthlySchedule/ShiftAssignment, AttendanceRecord, Holiday, AuditLog, enums
+core/        config, database, security (JWT/bcrypt), i18n (en/vi), bootstrap,
+             business_time (business_today() in TIMEZONE)
+models/      User, RoleCodeCounter, Flight/FlightDay/FlightPreset, LeaveRequest,
+             ShiftChangeRequest, SelfArrangeRequest, MonthlySchedule/ShiftAssignment,
+             AttendanceRecord, TimeClockEntry, Holiday, AuditLog, enums
 schemas/     Pydantic DTOs per domain (the API contract)
-api/v1/       endpoints/ (auth, users, flights, leaves, shift_changes, schedules,
-             attendance, holidays, calculations, reports) + router + deps
+api/v1/      endpoints/ (auth, users, flights, leaves, shift_changes, self_arrange,
+             schedules, attendance, time_clock, holidays, calculations, reports,
+             compliance) + router + deps
 services/    auth, user, flight (+flight_pair_derivation, flight_excel_parser),
-             leave (+leave_windows, leave_conflict_resolver), shift_change,
-             schedule (+schedule_input_builder, schedule_violation_checker,
-             schedule_autorun), attendance (+sick_backfill), holiday,
-             calculation (+carry_over_math), report (+report_table,
-             report_serializers), audit
-scheduler/   domain (SolverInput/Output), engine (CP-SAT), constraints +
-             constraints_off_days/_consecutive/_staffing, objectives +
-             objective_balance/_weekend/_premium_off, slack_registry, calendar_utils
-alembic/     0001 baseline, 0002 carry_premium_off + shift_change_requests
-tests/       99 tests — engine (off_days/consecutive/staffing/objectives/slack),
-             services, endpoints, rbac_audit, calendar_utils, health
+             leave (+leave_windows, leave_balance, leave_conflict_resolver),
+             shift_change, self_arrange, schedule (+schedule_input_builder,
+             schedule_history, schedule_violation_checker, schedule_autorun),
+             role_code_validation, attendance (+sick_backfill), time_clock,
+             holiday, calculation (+carry_over_math), report (+report_table,
+             report_serializers), compliance, audit, demo_user_seed
+scheduler/   domain (SolverInput/Output), engine (CP-SAT), role_codes (per-role
+             domains), constraints + constraints_off_days / _rolling_rest /
+             _consecutive / _off_chain / _staffing / _comp_days /
+             _role_a_distribution, objectives + objective_balance /
+             _premium_off / _off_pairing, slack_registry, calendar_utils
+alembic/     0001 baseline … 0008 annual_leave_quota (head; see design-decisions
+             "Migration strategy")
+scripts/     seed_demo_users.py, reset_all_passwords.py (both refuse outside
+             ENVIRONMENT=dev unless --allow-non-dev)
+tests/       239 tests (pytest on SQLite) — engine rules (bind + slack
+             violation), roles, cross-month rules, services, endpoints, RBAC/audit,
+             sick privacy, production guard, compliance, attendance sync, health
 ```
+
+New in the 2026-11 remediation: `core/business_time.py`,
+`services/leave_balance.py` (quota / used / pending / remaining),
+`schedule_service.apply_leave_span` (leave decisions into generated months),
+`attendance_service.sync_planned_cell` (published edits → seeded actuals).
 
 ### Feature → code map (spec §4)
 | Module | Features | Backend |
 |--------|----------|---------|
 | Accounts & auth | F-01..F-03 | `auth.py`, `users.py`, `auth_service`, `user_service` |
 | Flight input | F-04 | `flights.py`, `flight_service` |
-| Leave + swaps | F-05/06, #8 | `leaves.py`, `shift_changes.py`, `leave_service`, `shift_change_service` |
-| **Auto-schedule** | F-07..F-09 | `scheduler/`, `schedules.py`, `schedule_service` |
-| Attendance | F-10..F-13 | `attendance.py`, `holidays.py`, `attendance_service`, `holiday_service` |
+| Leave + swaps | F-05/06, #8 | `leaves.py`, `shift_changes.py`, `self_arrange.py`, `leave_service`, `leave_balance`, `shift_change_service`, `self_arrange_service` |
+| **Auto-schedule** | F-07..F-09 | `scheduler/`, `schedules.py`, `schedule_service`, `schedule_history` |
+| Attendance | F-10..F-13 | `attendance.py`, `time_clock.py`, `holidays.py`, `attendance_service`, `holiday_service` |
 | Calculations | F-14 | `calculations.py`, `calculation_service` |
 | Reports | F-15 | `reports.py`, `report_service` |
+| Compliance | §9 | `compliance.py`, `compliance_service`, `audit_service` |
 
 ## Frontend (`attendance_scheduler_app/lib/`)
 ```
-core/         config, network (Dio + JWT interceptor), router (go_router),
-              storage (secure JWT), constants (api_endpoints, shift_codes)
+core/         config, network (Dio + JWT interceptor), router (go_router, auth
+              guard + admin-only routes), storage (secure JWT, locale),
+              constants (api_endpoints, shift_codes incl. plannedCodesFor(role)),
+              utils
 design_system/ reusable Ds*View widgets (Schedule, Flights, Leaves, Attendance,
-              Reports, Users) + dialogs
+              Reports, Users) + dialogs, tokens, theme
 features/<x>/ data/{datasources,models,repositories} · domain/{entities,
-              repositories,usecases} · presentation/{providers,pages}
-              x ∈ auth, users, flights, leaves, schedule, attendance, reports
+              repositories,usecases} (auth, schedule, attendance) ·
+              presentation/{providers,pages,widgets}
+              x ∈ auth, users, flights, leaves, schedule, attendance, reports, home
 i18n/         custom AppLocalizations (en/vi, graceful text(key) fallback)
 ```
 `auth` is the canonical clean-architecture template; the business features
 mirror it, feeding live provider state into the `design_system` views.
+Tests: `test/` — 60 tests including 3 goldens (`test/goldens/`).
 
 ## Entry points
-- Backend: `uvicorn app.main:app` (lifespan: bootstrap + day-20 autorun).
+- Backend: `uvicorn app.main:app` (lifespan: bootstrap + monthly autorun at
+  00:05 on day `AUTORUN_DAY + 1`).
 - Frontend: `flutter run -d macos|windows|linux` (`API_BASE_URL` from `.env`).
 - `make dev` runs both.

@@ -75,34 +75,48 @@ flutter pub get
 flutter run -d macos            # or windows / linux
 ```
 
-## Status (2026-09-03)
-**Backend: F-01..F-15 implemented; 188 tests, ruff and mypy clean.**
+## Status (2026-11-07)
+**Backend: F-01..F-15 implemented; 239 pytest tests pass, ruff and mypy
+clean; Alembic head `0008`.**
 The OR-Tools CP-SAT engine enforces every §5.3 rule through an always-feasible
 slack model that reports violations instead of failing (§5.6), plus the §5.4
 objectives (A/D balance, adjacent off-pairing, cross-month premium-off
-fairness). Schedule generate / manual-override (re-checked against every
-engine rule) / publish, day-20 autorun, leave + shift-change + self-arrange
-requests, attendance with sick A/D backfill, holiday CRUD, time clock,
-month-close, CSV/XLSX export, retention purge and data-subject export are
-live. Schema is managed by Alembic (`alembic upgrade head`).
+fairness). Schedule generate (409 guard on published or hand-edited months) /
+manual override (re-checked against every engine rule) / publish, the monthly
+autorun (00:05 on the day after the leave window closes, day 21 by default),
+leave + shift-change + self-arrange requests, leave decisions written straight
+into an already-generated schedule, annual-leave quota and remaining balance,
+holiday work earning a comp day for every role, attendance with sick A/D
+backfill and seeded actuals that follow published edits, holiday CRUD, time
+clock, month-close, CSV/XLSX export, retention purge and data-subject export
+are live. Schema is managed by Alembic (`alembic upgrade head`).
 
 **Frontend:** all screens are wired to the live API, including Excel flight
-import, month-close, session-expiry handling and an auth guard on every
-route; `flutter analyze` and `flutter test` are clean.
+import, month-close, session restore on start-up, session-expiry handling and
+an auth guard on every route. Employees get their own attendance view,
+shift-change requests from their own roster cells, colleagues shown by code,
+the live leave window and their annual leave left; admin-only actions are
+hidden for everyone else. `flutter analyze` reports no issues; `flutter test`
+passes 60 tests, including the 3 golden images.
 
-**Not yet done / needs the customer** (see `docs/design-decisions.md`,
-"Open questions"): Betriebsrat agreement (now also covering the time clock),
-staffing floor vs exact count, real "WR JUN26" Excel layout, final retention
-period, a rehearsed PostgreSQL restore, and a Windows build produced by the
-CI job (`.github/workflows/ci.yml`) and smoke-tested on a customer machine.
+**Not yet done / needs the customer** (details in `docs/design-decisions.md`,
+"Open questions"): weekend preference for paired offs (D6, undecided), staffing
+exact vs minimum and what the extra role-A person does (D7), the real
+annual-leave quota (30 days is a placeholder), Betriebsrat agreement (now also
+covering the time clock), the customer notes from the 2026-11 remediation,
+real "WR JUN26" Excel layout, final retention period, a rehearsed PostgreSQL
+restore, and a Windows build produced by the CI job
+(`.github/workflows/ci.yml`) and smoke-tested on a customer machine.
 Treat the current state as **release candidate for internal pilot**, not as
 a production release.
 
 > **Spec overrides** (owner-approved — see `docs/design-decisions.md`):
-> holidays are **working days** (not auto-off, diverges from F-13/§7); a "week"
+> holidays are **working days** (not auto-off, diverges from F-13/§7) and
+> working one earns **+1 comp day (CD)** next month for every role; a "week"
 > for the 2-days-off rule is a **7-day block from day 1** (not Mon–Sun); the
 > engine pairs weekly offs **adjacently without a weekend preference** (the
-> T7+CN > T6+T7 > CN+T2 order applies only to leave-conflict ranking).
+> T7+CN > T6+T7 > CN+T2 order applies only to leave-conflict ranking; D6 is
+> still open).
 
 ## Documentation
 Full docs live in [`docs/`](./docs): architecture, design decisions (incl. spec
