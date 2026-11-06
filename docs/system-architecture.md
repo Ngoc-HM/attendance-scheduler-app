@@ -68,7 +68,8 @@ Months without a schedule pick approved leave up when they are generated.
   only against owed comp days.
 - **Hard** (`constraints.py`): exactly one status per person and day; approved
   leave pinned off (X in the decision layer, the real AL/CD written back on
-  save). Holidays are not pinned (#5).
+  save). Holidays are not pinned (#5). Also hard: `sum(CD) == 0` for anyone,
+  of any role, who owes no comp days (`constraints_comp_days.py`).
 - **Soft + slack** (always-feasible, decision #2), slack weight 10 000 unless noted:
   - `constraints_off_days.py` — 2 X per 7-day block (target += pinned leave, #4).
   - `constraints_rolling_rest.py` — ≥2 rest days in every rolling 7 days, across month ends (#7).
@@ -76,7 +77,7 @@ Months without a schedule pick approved leave up when they are generated.
   - `constraints_off_chain.py` — ≤5 consecutive OFF days, counting X and CD; annual leave exempt (#11, #34).
   - `constraints_staffing.py` — role-A floor per flight pairs: 1 pair → ≥1A+1D, 2 pairs → ≥1A+2D (§5.3 #4).
   - `constraints_role_a_distribution.py` — ≥2 pure A days per role-A person on a full month (#14).
-  - `constraints_comp_days.py` — grant exactly the owed CDs; shortfall/excess slack weight 2 000, so a CD yields to flight cover (#13).
+  - `constraints_comp_days.py` — for anyone owing CDs, grant exactly the owed number; shortfall/excess slack weight 2 000, so a CD yields to flight cover (#13). With nothing owed the rule is the hard `sum(CD) == 0` above, not slack.
 - **Objectives** (`objectives.WEIGHTS` + `objective_*`): per-person A≈D gap
   (300) > A/D balance across role A (100) > premium-off fairness (30) >
   adjacent off-pairing without weekend bias (15). Role A only for the balance terms.

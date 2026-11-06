@@ -64,8 +64,8 @@ D6 and D7 stay open. Decisions #24–#38 and the customer notes are in
   `test/failures/` removed from git and ignored.
 
 ### Docs
-- `design-decisions.md` (#3/#5/#9/#10/#13 amended, #24–#38 added, open questions
-  rewritten), README status, codebase summary, system architecture, code
+- `design-decisions.md` (#2/#3/#5/#7/#9/#10/#13 amended — D2 and D3 recorded as
+  settled, #24–#38 added, open questions rewritten), README status, codebase summary, system architecture, code
   standards (fail-loud audit, business dates), `DESIGN/README.md` (which design
   docs apply to this app).
 

@@ -10,13 +10,13 @@ Living status of the full-implementation plan
 | 02 | Flights CRUD + Excel import | F-04 | ✅ done |
 | 03 | Leaves + shift-change requests | F-05/06, #8 | ✅ done |
 | 04 | **Scheduler engine** (CP-SAT, §5) | F-07/08 core | ✅ done |
-| 05 | Schedule service + day-20 autorun | F-07/08/09, #9 | ✅ done |
+| 05 | Schedule service + autorun (00:05 the day after `AUTORUN_DAY`) | F-07/08/09, #9 | ✅ done |
 | 06 | Attendance, sick backfill, holidays | F-10/11/12/13 | ✅ done |
 | 07 | Calculations (carry comp/streak/premium) | F-14 | ✅ done |
 | 08 | Reports (monthly/yearly export) | F-15 | ✅ done |
 | 09 | Flutter wiring (5 pages → real API) | all UI | ✅ done |
 | 10 | GDPR hardening (RBAC, audit, sick) | §9 | ✅ done |
-| 11 | Testing | — | ✅ done (110 tests green) |
+| 11 | Testing | — | ✅ done (2026-11-07: 239 backend + 60 Flutter tests green) |
 | 12 | Docs | — | ✅ done |
 
 ## Current state — 2026-11-07 review remediation

@@ -60,7 +60,8 @@ responsibility rests with the customer.
   generate/override/publish, leave / shift-change / self-arrange decisions,
   attendance and S writes, holiday CRUD, manual flight entry, preset CRUD,
   Excel import, report export, month-close, retention purge, data export.
-  The day-20 autorun records `actor_id = NULL` (system).
+  The autorun (00:05 the day after `AUTORUN_DAY`) records `actor_id = NULL`
+  (system).
 - **Fail-loud:** if the audit row cannot be written the request returns
   HTTP 500 and the failure is logged with full context. Known limitation:
   services commit the business change before the endpoint writes the audit
@@ -127,7 +128,8 @@ The time-clock feature above makes this question unavoidable.
 ## Run
 - Backend: `uvicorn app.main:app` behind an HTTPS proxy; `docker compose up`
   for the full stack (compose reads `backend/.env`, which is dev by default).
-- Day-20 autorun runs inside the API process (APScheduler). For multi-replica
+- The autorun (00:05 the day after `AUTORUN_DAY`) runs inside the API process
+  (APScheduler). For multi-replica
   deployments, run it on a single instance (set `AUTORUN_ENABLED=false` on the
   others) to avoid duplicate generation.
 - Flutter desktop client: `API_BASE_URL` in its `.env` points at the API.
