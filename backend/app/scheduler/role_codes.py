@@ -3,9 +3,9 @@
 Each person's assignable code set depends on their role:
 
     Role.A (fixed group)  → {A, D, X, CD}        full flight rules
-    Role.T (flexible)     → {AD, X}               full day, no shift split
-    Role.M (admin)        → {O/D, X}              office duty
-    Role.F (split from T) → {AD, X}               T-like: weekly-2-off AND the
+    Role.T (flexible)     → {AD, X, CD}           full day, no shift split
+    Role.M (admin)        → {O/D, X, CD}          office duty
+    Role.F (split from T) → {AD, X, CD}           T-like: weekly-2-off AND the
                                               max-5-consecutive rule apply to F
                                               (owner 2026-07-22)
 
@@ -13,8 +13,11 @@ OFF_CODES are the non-working rest codes; a day is "working" if its assigned
 code is not in OFF_CODES (and not a pinned AL/S leave, which is also X).
 
 The automatic solver NEVER creates A/D: that code is reserved for emergency
-cover after the roster exists, such as a sudden sickness. CD appears only in
-role A; AD appears in T/F and O/D appears in role M.
+cover after the roster exists, such as a sudden sickness. CD is in every
+role's domain because working a public holiday earns a comp day for every
+role (owner decision D1, 2026-11-06); A/D additionally earns one for role A.
+The solver only grants CD against carried comp debt (constraints_comp_days).
+AD appears in T/F and O/D appears in role M.
 """
 
 from __future__ import annotations
@@ -33,14 +36,17 @@ ROLE_CODES: dict[Role, tuple[AttendanceCode, ...]] = {
     Role.T: (
         AttendanceCode.AD,
         AttendanceCode.X,
+        AttendanceCode.CD,
     ),
     Role.M: (
         AttendanceCode.O_D,
         AttendanceCode.X,
+        AttendanceCode.CD,
     ),
     Role.F: (
         AttendanceCode.AD,
         AttendanceCode.X,
+        AttendanceCode.CD,
     ),
 }
 

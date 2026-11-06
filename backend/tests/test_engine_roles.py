@@ -79,7 +79,7 @@ def test_role_a_codes_only(solved) -> None:
 
 
 def test_role_t_codes_only(solved) -> None:
-    """Every role-T assignment uses a code in {AD, X}."""
+    """Every role-T assignment uses a code in {AD, X, CD}."""
     for a in solved.assignments:
         if a.user_id in _T_IDS:
             assert a.code in ROLE_T_CODES, (
@@ -88,12 +88,28 @@ def test_role_t_codes_only(solved) -> None:
 
 
 def test_role_m_codes_only(solved) -> None:
-    """Every role-M assignment uses a code in {O/D, X}."""
+    """Every role-M assignment uses a code in {O/D, X, CD}."""
     for a in solved.assignments:
         if a.user_id in _M_IDS:
             assert a.code in ROLE_M_CODES, (
                 f"role-M user {a.user_id} on {a.day}: unexpected code {a.code}"
             )
+
+
+def test_every_role_domain_includes_cd() -> None:
+    """Owner D1 (2026-11-06): holiday work earns CD for every role, so CD is in
+    every role's solver domain; A/D stays out of all of them."""
+    assert ROLE_CODES[Role.A] == (
+        AttendanceCode.A, AttendanceCode.D, AttendanceCode.X, AttendanceCode.CD,
+    )
+    assert ROLE_CODES[Role.T] == (AttendanceCode.AD, AttendanceCode.X, AttendanceCode.CD)
+    assert ROLE_CODES[Role.M] == (AttendanceCode.O_D, AttendanceCode.X, AttendanceCode.CD)
+    assert ROLE_CODES[Role.F] == (AttendanceCode.AD, AttendanceCode.X, AttendanceCode.CD)
+
+
+def test_no_cd_without_comp_debt_any_role(solved) -> None:
+    """Nobody in the fixture carries comp debt → no CD for any role."""
+    assert all(a.code is not AttendanceCode.CD for a in solved.assignments)
 
 
 # (Per-person A≈D was intentionally dropped — incompatible with the HARD

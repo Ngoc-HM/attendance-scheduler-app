@@ -4,7 +4,7 @@ import pytest
 from fastapi import HTTPException
 
 from app.models.enums import AttendanceCode, Role
-from app.services.role_code_validation import validate
+from app.services.role_code_validation import validate, validate_planned
 
 
 def test_role_a_accepts_a_slash_d_but_rejects_ad() -> None:
@@ -20,3 +20,10 @@ def test_t_like_roles_accept_ad_but_reject_a_slash_d(role: Role) -> None:
     with pytest.raises(HTTPException) as exc:
         validate(role, AttendanceCode.A_D)
     assert exc.value.status_code == 422
+
+
+@pytest.mark.parametrize("role", [Role.A, Role.T, Role.M, Role.F])
+def test_cd_is_valid_on_the_planned_schedule_for_every_role(role: Role) -> None:
+    """Owner D1 (2026-11-06): holiday work earns CD for every role, so an admin
+    may plan the owed CD for any role."""
+    validate_planned(role, AttendanceCode.CD)

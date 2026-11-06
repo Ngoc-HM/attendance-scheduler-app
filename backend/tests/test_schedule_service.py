@@ -146,3 +146,55 @@ def test_autorun_trigger_logic(client: TestClient) -> None:
     maybe_run_autorun(date(2027, 2, 20))
     # Right day but schedule already exists → must return False.
     assert maybe_run_autorun(date(2027, 2, 20)) is False  # 2027-03 now exists
+
+
+def test_self_arrange_cannot_touch_al_or_cd_cell(client: TestClient) -> None:
+    """Self-arrange may only move the employee's own AD/X cells: a pinned AL or
+    an owed CD stays locked, and CD is never a code the employee may pick."""
+    from app.core.i18n import t
+
+    yr, mo = 2035, 3  # a month no other test touches
+    admin = _admin_headers(client)
+    me = _make_user(client, admin, "selfarr_t1", "T")
+
+    gen = client.post(
+        "/api/v1/schedules/generate", headers=admin, json={"year": yr, "month": mo}
+    )
+    assert gen.status_code == 200, gen.text
+    schedule = gen.json()["schedule"]
+    mine = sorted(
+        (a for a in schedule["assignments"] if a["user_id"] == me["id"]),
+        key=lambda a: a["work_date"],
+    )
+    al_day, cd_day, free_day = (a["work_date"] for a in mine[:3])
+    # AL pinned, CD owed, and a plain AD cell for the CD-request check below.
+    for day, code in ((al_day, "AL"), (cd_day, "CD"), (free_day, "AD")):
+        res = client.post(
+            f"/api/v1/schedules/{schedule['id']}/override",
+            headers=admin,
+            json={"user_id": me["id"], "work_date": day, "code": code},
+        )
+        assert res.status_code == 200, res.text
+    res = client.post(f"/api/v1/schedules/{schedule['id']}/publish", headers=admin)
+    assert res.status_code == 200, res.text
+
+    user = _login(client, "selfarr_t1")
+    for locked_day in (al_day, cd_day):
+        res = client.post(
+            "/api/v1/self-arrange",
+            headers=user,
+            json={"year": yr, "month": mo,
+                  "changes": [{"work_date": locked_day, "code": "X"}]},
+        )
+        assert res.status_code == 422, res.text
+        assert res.json()["detail"] == t("selfarrange.cell_locked")
+
+    # CD comes only from comp debt — the employee can never pick it.
+    res = client.post(
+        "/api/v1/self-arrange",
+        headers=user,
+        json={"year": yr, "month": mo,
+              "changes": [{"work_date": free_day, "code": "CD"}]},
+    )
+    assert res.status_code == 422, res.text
+    assert res.json()["detail"] == t("selfarrange.invalid_code")

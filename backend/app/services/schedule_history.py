@@ -3,8 +3,8 @@
 Actual attendance wins over the planned schedule for the same user/day.  When
 an actual row is still missing (normal while next month's draft is generated),
 the planned assignment is the best available fact.  This lets the next month
-honour A/D compensation and month-boundary rest rules without requiring a
-manual "close month" step first.
+honour compensation (A/D, and holiday work for every role) and month-boundary
+rest rules without requiring a manual "close month" step first.
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ from datetime import date, timedelta
 from sqlalchemy.orm import Session
 
 from app.models.attendance import AttendanceRecord
-from app.models.enums import AttendanceCode, Role
+from app.models.enums import AttendanceCode
 from app.models.holiday import Holiday
 from app.models.schedule import ShiftAssignment
 from app.models.user import User
@@ -95,12 +95,10 @@ def build_boundary_states(
             if uid == user.id
         )
 
-        # Only role A earns/consumes automatic compensation.  Stored carry is a
-        # fallback for legacy databases where old schedule/actual rows are absent.
-        if user.role is Role.A:
-            carry_comp = comp_balance(records) if records else user.carry_comp
-        else:
-            carry_comp = 0
+        # Every role earns compensation (A/D, or working a public holiday) and
+        # consumes it with CD.  Stored carry is a fallback for legacy databases
+        # where old schedule/actual rows are absent.
+        carry_comp = comp_balance(records, holidays) if records else user.carry_comp
 
         # Premium-off fairness input (decision #6), same history-first rule.
         carry_premium_off = (
