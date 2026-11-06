@@ -4,6 +4,7 @@
 // employee can request a change on their own cell and see their requests.
 
 import 'package:attendance_scheduler_app/core/constants/shift_codes.dart';
+import 'package:attendance_scheduler_app/core/network/api_exception.dart';
 import 'package:attendance_scheduler_app/core/storage/locale_storage.dart';
 import 'package:attendance_scheduler_app/design_system/design_system.dart';
 import 'package:attendance_scheduler_app/features/auth/data/models/user_model.dart';
@@ -60,7 +61,14 @@ class _SignedInAuthController extends AuthController {
 
 /// Published month where T1 (id 7) works AD and A1 (id 8) works A every day.
 class _FakeScheduleDataSource extends ScheduleRemoteDataSource {
-  _FakeScheduleDataSource() : super(Dio());
+  _FakeScheduleDataSource({this.scheduleError, this.shiftChangesError})
+    : super(Dio());
+
+  /// Thrown by [fetchSchedule] (e.g. the 404 an employee gets for a draft).
+  final Object? scheduleError;
+
+  /// Thrown by [fetchShiftChanges].
+  final Object? shiftChangesError;
 
   final created = <Map<String, Object?>>[];
   final fetchAllFlags = <bool>[];
@@ -68,6 +76,7 @@ class _FakeScheduleDataSource extends ScheduleRemoteDataSource {
 
   @override
   Future<MonthlySchedule> fetchSchedule(int year, int month) async {
+    if (scheduleError != null) throw scheduleError!;
     final days = DateTime(year, month + 1, 0).day;
     return MonthlySchedule(
       id: 1,
@@ -98,6 +107,7 @@ class _FakeScheduleDataSource extends ScheduleRemoteDataSource {
   @override
   Future<List<ShiftChangeRequest>> fetchShiftChanges({bool all = false}) async {
     fetchAllFlags.add(all);
+    if (shiftChangesError != null) throw shiftChangesError!;
     return List.of(_requests);
   }
 
@@ -132,6 +142,11 @@ class _FakeScheduleDataSource extends ScheduleRemoteDataSource {
 }
 
 class _FakeUserDataSource implements UserManagementDataSource {
+  _FakeUserDataSource({this.directoryError});
+
+  /// Thrown by [directory] (5xx, network, or a backend without the route).
+  final Object? directoryError;
+
   var listCalls = 0;
   var directoryCalls = 0;
 
@@ -161,6 +176,7 @@ class _FakeUserDataSource implements UserManagementDataSource {
   @override
   Future<List<UserDirectoryEntry>> directory() async {
     directoryCalls++;
+    if (directoryError != null) throw directoryError!;
     return const [
       UserDirectoryEntry(id: _colleagueId, code: 'A1', role: UserRole.a),
       UserDirectoryEntry(id: 1, code: 'M1', role: UserRole.m),
@@ -233,6 +249,16 @@ Finder _cell(int day, int column) => find
 
 const _a1Column = 0;
 const _t1Column = 1;
+
+const _notPublished = 'The schedule for this month is not published yet.';
+
+/// The InkWell wrapping a roster cell (the nearest one above its badge).
+InkWell _cellInkWell(WidgetTester tester, int day, int column) =>
+    tester.widget<InkWell>(
+      find
+          .ancestor(of: _cell(day, column), matching: find.byType(InkWell))
+          .first,
+    );
 
 Future<void> _tapCell(WidgetTester tester, int day, int column) async {
   await tester.ensureVisible(_cell(day, column));
@@ -352,9 +378,7 @@ void main() {
     expect(find.textContaining('User '), findsNothing);
   });
 
-  testWidgets('employee tapping a colleague cell opens nothing', (
-    tester,
-  ) async {
+  testWidgets('employee can only tap their own cells', (tester) async {
     await _pumpSchedule(
       tester,
       user: _employee,
@@ -362,8 +386,65 @@ void main() {
       userDs: _FakeUserDataSource(),
     );
 
+    // Colleague cells carry no tap handler, so they do not look tappable.
+    expect(_cellInkWell(tester, 3, _a1Column).onTap, isNull);
+    expect(_cellInkWell(tester, 3, _t1Column).onTap, isNotNull);
+
     await _tapCell(tester, 3, _a1Column);
     expect(find.byType(AlertDialog), findsNothing);
+  });
+
+  testWidgets('employee still sees the published roster when the directory '
+      'fails', (tester) async {
+    await _pumpSchedule(
+      tester,
+      user: _employee,
+      scheduleDs: _FakeScheduleDataSource(),
+      userDs: _FakeUserDataSource(
+        directoryError: const ApiException('boom', statusCode: 500),
+      ),
+    );
+
+    expect(find.text(_notPublished), findsNothing);
+    // Codes are unknown, so columns fall back to ids: ID 7 (own) then ID 8.
+    expect(find.text('ID 7'), findsOneWidget);
+    expect(find.text('ID 8'), findsOneWidget);
+
+    await _tapCell(tester, 3, 0);
+    expect(find.text('Request shift change'), findsOneWidget);
+  });
+
+  testWidgets('employee on an unpublished month sees a neutral message and '
+      'own requests', (tester) async {
+    await _pumpSchedule(
+      tester,
+      user: _employee,
+      scheduleDs: _FakeScheduleDataSource(
+        scheduleError: const ApiException('Not found', statusCode: 404),
+      ),
+      userDs: _FakeUserDataSource(),
+    );
+
+    expect(find.text(_notPublished), findsOneWidget);
+    expect(find.textContaining('Generate schedule'), findsNothing);
+    expect(find.text('My shift-change requests'), findsOneWidget);
+  });
+
+  testWidgets('own-requests panel reports a load failure', (tester) async {
+    await _pumpSchedule(
+      tester,
+      user: _employee,
+      scheduleDs: _FakeScheduleDataSource(
+        shiftChangesError: const ApiException('boom', statusCode: 500),
+      ),
+      userDs: _FakeUserDataSource(),
+    );
+
+    expect(
+      find.text('Could not load your shift-change requests.'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('No requests yet'), findsNothing);
   });
 
   testWidgets('employee requests a change on own cell and sees it listed', (

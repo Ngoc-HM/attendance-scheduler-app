@@ -236,6 +236,7 @@ class AppLocalizations {
       'noShiftChangeRequests':
           'No requests yet. Tap one of your own cells in the roster to request a change.',
       'shiftChangeSubmitted': 'Shift-change request submitted.',
+      'shiftChangesLoadFailed': 'Could not load your shift-change requests.',
       'shiftCodeColumn': 'Code',
       'pickDate': 'Pick a date',
       'reportSavedTo': 'Report saved to',
@@ -615,6 +616,7 @@ class AppLocalizations {
       'noShiftChangeRequests':
           'Chưa có yêu cầu nào. Nhấn vào một ô của bạn trên lịch để yêu cầu đổi ca.',
       'shiftChangeSubmitted': 'Đã gửi yêu cầu đổi ca.',
+      'shiftChangesLoadFailed': 'Không thể tải các yêu cầu đổi ca của bạn.',
       'shiftCodeColumn': 'Mã ca',
       'pickDate': 'Chọn ngày',
       'reportSavedTo': 'Báo cáo đã lưu tại',

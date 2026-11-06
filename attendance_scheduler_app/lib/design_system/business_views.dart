@@ -221,6 +221,8 @@ class DsScheduleView extends StatelessWidget {
     this.onPublish,
     this.flightLabels = const {},
     this.onCellTap,
+    this.isRowTappable,
+    this.emptyMessage,
   });
 
   final DateTime month;
@@ -236,6 +238,13 @@ class DsScheduleView extends StatelessWidget {
   /// Cell tap: (person row, 0-based day index) — admin edit (F-09) or an
   /// employee's own shift-change request. Null → read-only roster.
   final void Function(DsRosterRowData row, int dayIndex)? onCellTap;
+
+  /// Limits [onCellTap] to the rows it returns true for; the other rows'
+  /// cells stay inert (no ripple). Null → every row is tappable.
+  final bool Function(DsRosterRowData row)? isRowTappable;
+
+  /// Empty-roster message; defaults to the admin "generate one" hint.
+  final String? emptyMessage;
 
   @override
   Widget build(BuildContext context) {
@@ -323,7 +332,7 @@ class DsScheduleView extends StatelessWidget {
                 if (rows.isEmpty)
                   _DsRosterEmptyState(
                     title: l.text('scheduleEmptyTitle'),
-                    message: l.text('scheduleEmptyMessage'),
+                    message: emptyMessage ?? l.text('scheduleEmptyMessage'),
                   )
                 else
                   _DsRosterTable(
@@ -332,6 +341,7 @@ class DsScheduleView extends StatelessWidget {
                     days: days,
                     flightLabels: flightLabels,
                     onCellTap: onCellTap,
+                    isRowTappable: isRowTappable,
                   ),
               ],
             ),
@@ -353,6 +363,7 @@ class _DsRosterTable extends StatelessWidget {
     required this.days,
     this.flightLabels = const {},
     this.onCellTap,
+    this.isRowTappable,
   });
 
   final DateTime month;
@@ -360,6 +371,7 @@ class _DsRosterTable extends StatelessWidget {
   final int days;
   final Map<int, String> flightLabels; // day-of-month → FLT codes
   final void Function(DsRosterRowData row, int dayIndex)? onCellTap;
+  final bool Function(DsRosterRowData row)? isRowTappable;
 
   static const double _dayColW = 40;
   static const double _wdColW = 48;
@@ -495,7 +507,10 @@ class _DsRosterTable extends StatelessWidget {
             SizedBox(
               width: personW,
               child: InkWell(
-                onTap: onCellTap != null && i < row.shifts.length
+                onTap:
+                    onCellTap != null &&
+                        i < row.shifts.length &&
+                        (isRowTappable?.call(row) ?? true)
                     ? () => onCellTap!(row, i)
                     : null,
                 borderRadius: BorderRadius.circular(6),

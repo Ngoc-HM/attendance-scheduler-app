@@ -63,7 +63,7 @@ class ScheduleController extends StateNotifier<ScheduleState> {
     try {
       final results = await Future.wait<Object>([
         _ds.fetchSchedule(year, month),
-        isAdmin ? _allUsers() : _userDs.directory(),
+        isAdmin ? _allUsers() : _directoryOrEmpty(),
       ]);
       state = state.copyWith(
         schedule: results[0] as MonthlySchedule,
@@ -80,6 +80,16 @@ class ScheduleController extends StateNotifier<ScheduleState> {
     for (final u in await _userDs.list())
       UserDirectoryEntry(id: u.id, code: u.code, role: u.role),
   ];
+
+  /// Employee view: the directory only supplies column codes (rows fall back
+  /// to "ID n"), so its failure must not hide the published roster.
+  Future<List<UserDirectoryEntry>> _directoryOrEmpty() async {
+    try {
+      return await _userDs.directory();
+    } catch (_) {
+      return const [];
+    }
+  }
 
   /// Rethrows the backend's 409 (month published or manually edited, needs
   /// [force]) so the page can confirm with the admin and retry; every other

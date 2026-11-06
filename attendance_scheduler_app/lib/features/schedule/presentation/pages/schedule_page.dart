@@ -103,17 +103,13 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
-    // Non-admin gets 404 for drafts — show graceful message.
-    if (scheduleState.error != null && !isAdmin) {
-      return _ScheduleNotPublished(
-        month: _month,
-        onPrevious: _prevMonth,
-        onNext: _nextMonth,
-        errorMessage: l.text('scheduleNotPublishedYet'),
-      );
-    }
-
-    final rows = _buildRows(scheduleState);
+    // Non-admin gets 404 for drafts: show an empty roster with a neutral
+    // message (no "generate" hint) and keep the own-requests panel below.
+    // The state may still hold the previous month's schedule, so no rows.
+    final notPublished = scheduleState.error != null && !isAdmin;
+    final rows = notPublished
+        ? const <DsRosterRowData>[]
+        : _buildRows(scheduleState);
 
     return Column(
       children: [
@@ -126,16 +122,16 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
             onNextMonth: _nextMonth,
             onGenerate: isAdmin ? () => _onGenerate(context, l) : null,
             onPublish: isAdmin ? () => _onPublish(context, l) : null,
+            emptyMessage: isAdmin ? null : l.text('scheduleNotPublishedYet'),
             onCellTap: isAdmin
                 ? (row, dayIndex) => _onEditCell(context, l, row, dayIndex)
                 : me == null
                 ? null
-                : (row, dayIndex) {
-                    // Employees may only ask to change their own cells.
-                    if (row.id == me.id) {
-                      _onRequestChange(context, l, me, dayIndex);
-                    }
-                  },
+                : (row, dayIndex) => _onRequestChange(context, l, me, dayIndex),
+            // Employees may only ask to change their own cells.
+            isRowTappable: isAdmin || me == null
+                ? null
+                : (row) => row.id == me.id,
           ),
         ),
         if (!isAdmin && me != null) ...[
@@ -530,31 +526,5 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
         tone: DsTone.success,
       );
     }
-  }
-}
-
-// ── Supplementary widgets ──────────────────────────────────────────────────────
-
-class _ScheduleNotPublished extends StatelessWidget {
-  const _ScheduleNotPublished({
-    required this.month,
-    required this.onPrevious,
-    required this.onNext,
-    required this.errorMessage,
-  });
-
-  final DateTime month;
-  final VoidCallback onPrevious;
-  final VoidCallback onNext;
-  final String errorMessage;
-
-  @override
-  Widget build(BuildContext context) {
-    return DsScheduleView(
-      month: month,
-      rows: const [],
-      onPreviousMonth: onPrevious,
-      onNextMonth: onNext,
-    );
   }
 }

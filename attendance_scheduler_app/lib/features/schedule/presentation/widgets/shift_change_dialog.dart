@@ -302,6 +302,13 @@ class MyShiftChangeRequestsPanel extends ConsumerWidget {
           const SizedBox(height: DsSpacing.x2),
           if (state.isLoading)
             const LinearProgressIndicator()
+          else if (state.loadFailed)
+            Text(
+              l.text('shiftChangesLoadFailed'),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: DsColors.danger),
+            )
           else if (state.requests.isEmpty)
             Text(
               l.text('noShiftChangeRequests'),

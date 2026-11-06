@@ -9,6 +9,7 @@ class ShiftChangeState {
     this.isLoading = false,
     this.isMutating = false,
     this.error,
+    this.loadFailed = false,
   });
 
   final List<ShiftChangeRequest> requests;
@@ -16,11 +17,16 @@ class ShiftChangeState {
   final bool isMutating;
   final String? error;
 
+  /// The last [ShiftChangeController.load] failed, so [requests] is not
+  /// trustworthy (as opposed to [error] from a failed submit or decide).
+  final bool loadFailed;
+
   ShiftChangeState copyWith({
     List<ShiftChangeRequest>? requests,
     bool? isLoading,
     bool? isMutating,
     String? error,
+    bool? loadFailed,
     bool clearError = false,
   }) =>
       ShiftChangeState(
@@ -28,6 +34,7 @@ class ShiftChangeState {
         isLoading: isLoading ?? this.isLoading,
         isMutating: isMutating ?? this.isMutating,
         error: clearError ? null : (error ?? this.error),
+        loadFailed: loadFailed ?? this.loadFailed,
       );
 }
 
@@ -37,12 +44,20 @@ class ShiftChangeController extends StateNotifier<ShiftChangeState> {
   final ScheduleRemoteDataSource _ds;
 
   Future<void> load({bool all = false}) async {
-    state = state.copyWith(isLoading: true, clearError: true);
+    state = state.copyWith(
+      isLoading: true,
+      loadFailed: false,
+      clearError: true,
+    );
     try {
       final requests = await _ds.fetchShiftChanges(all: all);
       state = state.copyWith(isLoading: false, requests: requests);
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: e.toString());
+      state = state.copyWith(
+        isLoading: false,
+        loadFailed: true,
+        error: e.toString(),
+      );
     }
   }
 
