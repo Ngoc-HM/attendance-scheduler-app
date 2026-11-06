@@ -8,6 +8,7 @@ class ApiEndpoints {
   static const String register = '/auth/register';
   static const String me = '/users/me';
   static const String users = '/users';
+  static const String usersDirectory = '/users/directory';
   static String userById(int id) => '/users/$id';
   static String approveUser(int id) => '/auth/users/$id/approve';
 

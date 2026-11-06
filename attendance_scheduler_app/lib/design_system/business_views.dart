@@ -217,8 +217,8 @@ class DsScheduleView extends StatelessWidget {
     required this.rows,
     required this.onPreviousMonth,
     required this.onNextMonth,
-    required this.onGenerate,
-    required this.onPublish,
+    this.onGenerate,
+    this.onPublish,
     this.flightLabels = const {},
     this.onCellTap,
   });
@@ -228,11 +228,13 @@ class DsScheduleView extends StatelessWidget {
   final Map<int, String> flightLabels; // day-of-month → FLT codes for the roster
   final VoidCallback onPreviousMonth;
   final VoidCallback onNextMonth;
-  final VoidCallback onGenerate;
-  final VoidCallback onPublish;
 
-  /// Admin cell edit (F-09): tapped (person row, 0-based day index). Null →
-  /// read-only roster (employee views).
+  /// Admin roster actions; each button renders only when its callback is set.
+  final VoidCallback? onGenerate;
+  final VoidCallback? onPublish;
+
+  /// Cell tap: (person row, 0-based day index) — admin edit (F-09) or an
+  /// employee's own shift-change request. Null → read-only roster.
   final void Function(DsRosterRowData row, int dayIndex)? onCellTap;
 
   @override
@@ -250,16 +252,18 @@ class DsScheduleView extends StatelessWidget {
       title: l.text('scheduleTitle'),
       subtitle: l.text('scheduleSubtitle'),
       actions: [
-        DsSecondaryButton(
-          label: l.text('publishSchedule'),
-          icon: Icons.publish_outlined,
-          onPressed: onPublish,
-        ),
-        DsPrimaryButton(
-          label: l.text('generateSchedule'),
-          icon: Icons.auto_awesome_outlined,
-          onPressed: onGenerate,
-        ),
+        if (onPublish != null)
+          DsSecondaryButton(
+            label: l.text('publishSchedule'),
+            icon: Icons.publish_outlined,
+            onPressed: onPublish,
+          ),
+        if (onGenerate != null)
+          DsPrimaryButton(
+            label: l.text('generateSchedule'),
+            icon: Icons.auto_awesome_outlined,
+            onPressed: onGenerate,
+          ),
       ],
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

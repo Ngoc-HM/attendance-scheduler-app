@@ -232,6 +232,11 @@ class AppLocalizations {
       'noHolidaysYet': 'No holidays yet.',
       'noPendingShiftChanges': 'No pending shift-change requests.',
       'pendingShiftChanges': 'Pending shift-change requests',
+      'myShiftChangeRequests': 'My shift-change requests',
+      'noShiftChangeRequests':
+          'No requests yet. Tap one of your own cells in the roster to request a change.',
+      'shiftChangeSubmitted': 'Shift-change request submitted.',
+      'shiftCodeColumn': 'Code',
       'pickDate': 'Pick a date',
       'reportSavedTo': 'Report saved to',
       'requestShiftChange': 'Request shift change',
@@ -606,6 +611,11 @@ class AppLocalizations {
       'noHolidaysYet': 'Chưa có ngày lễ nào.',
       'noPendingShiftChanges': 'Không có yêu cầu đổi ca chờ duyệt.',
       'pendingShiftChanges': 'Yêu cầu đổi ca chờ duyệt',
+      'myShiftChangeRequests': 'Yêu cầu đổi ca của tôi',
+      'noShiftChangeRequests':
+          'Chưa có yêu cầu nào. Nhấn vào một ô của bạn trên lịch để yêu cầu đổi ca.',
+      'shiftChangeSubmitted': 'Đã gửi yêu cầu đổi ca.',
+      'shiftCodeColumn': 'Mã ca',
       'pickDate': 'Chọn ngày',
       'reportSavedTo': 'Báo cáo đã lưu tại',
       'requestShiftChange': 'Yêu cầu đổi ca',

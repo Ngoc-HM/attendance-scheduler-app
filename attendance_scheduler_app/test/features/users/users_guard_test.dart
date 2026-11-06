@@ -57,6 +57,8 @@ class _StubUserDataSource implements UserManagementDataSource {
   @override
   Future<List<UserModel>> list() async => const [];
   @override
+  Future<List<UserDirectoryEntry>> directory() async => const [];
+  @override
   Future<UserModel> approve(int id, {required String role}) async =>
       throw UnimplementedError();
   @override
