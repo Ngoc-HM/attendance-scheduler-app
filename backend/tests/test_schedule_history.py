@@ -136,3 +136,56 @@ def test_role_t_holiday_work_carries_one_comp_day(client) -> None:
     finally:
         db.close()
 
+
+def test_stored_streak_fallback_only_without_any_history(client) -> None:
+    """A user WITH history but no cell on the cutoff day has a broken run
+    (unknown day = rest) → streak 0, never the stored value read back; only a
+    user with no history at all falls back to the stored ``carry_streak``."""
+    db = SessionLocal()
+    try:
+        users = []
+        for username in ("history_streak_gap", "history_streak_none"):
+            user = User(
+                username=username,
+                code=next_user_code(db, Role.T),
+                full_name=username,
+                hashed_password=get_password_hash("pass123"),
+                role=Role.T,
+                status=UserStatus.active,
+                carry_streak=4,
+            )
+            db.add(user)
+            db.flush()
+            users.append(user)
+        gap_user, no_history_user = users
+
+        schedule = MonthlySchedule(
+            year=2037, month=5, status=ScheduleStatus.published
+        )
+        db.add(schedule)
+        db.flush()
+        # Worked mid-month, but nothing on 31 May (deactivated / not scheduled).
+        for day in (10, 11, 12):
+            db.add(
+                ShiftAssignment(
+                    schedule_id=schedule.id,
+                    user_id=gap_user.id,
+                    work_date=date(2037, 5, day),
+                    code=AttendanceCode.AD,
+                )
+            )
+        db.commit()
+
+        states = build_boundary_states(db, users, 2037, 6)
+
+        gap = states[gap_user.id]
+        assert gap.carry_streak == 0
+        assert not any(gap.previous_working.values())
+
+        none = states[no_history_user.id]
+        assert none.carry_streak == 4
+        assert [none.previous_working[date(2037, 5, d)] for d in range(26, 32)] == [
+            False, False, True, True, True, True,
+        ]
+    finally:
+        db.close()

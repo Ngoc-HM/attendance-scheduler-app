@@ -106,13 +106,16 @@ def build_boundary_states(
         )
 
         # Count a genuinely contiguous run ending on the previous month's last
-        # calendar day. Missing history falls back to the legacy stored scalar.
+        # calendar day. Only a user with NO history at all falls back to the
+        # legacy stored scalar; with history, a missing cell (e.g. on the
+        # cutoff day) is an unknown day treated as rest, so it breaks the run.
+        # Never reading the stored value back for such users keeps month-close
+        # from re-writing a stale streak forever.
         carry_streak = 0
-        cursor = cutoff
-        last_code = grid.get((user.id, cursor))
-        if last_code is None:
+        if not records:
             carry_streak = max(0, user.carry_streak)
         else:
+            cursor = cutoff
             while True:
                 code = grid.get((user.id, cursor))
                 if code is None or not code.is_working:
@@ -128,8 +131,8 @@ def build_boundary_states(
             if code is not None:
                 previous_working[day] = code.is_working
             else:
-                # Legacy fallback can reconstruct the known trailing work run;
-                # unknown older days are treated as rest rather than invented work.
+                # The no-history fallback reconstructs the stored trailing work
+                # run; any other unknown day is rest rather than invented work.
                 previous_working[day] = carry_streak > 0 and day >= streak_start
 
         states[user.id] = BoundaryState(
