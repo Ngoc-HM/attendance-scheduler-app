@@ -1,9 +1,12 @@
 """Day-20 autorun job (locked decision #9, spec F-05/F-07).
 
-On day ``AUTORUN_DAY`` of month M the registration window for M+1 is closed
-(window logic, ``leave_windows``) and a DRAFT schedule for M+1 is generated —
-unless one already exists (the job NEVER clobbers a draft or published
-schedule). Admins keep the manual generate button regardless.
+The monthly registration window for M+1 stays open through the whole of day
+``AUTORUN_DAY`` of month M (``leave_windows.registration_last_day``). Once it
+has closed — at 00:05 on day ``AUTORUN_DAY + 1`` (default: day 21) — a DRAFT
+schedule for M+1 is generated, so every leave registered on the last day is
+included. The job skips when a schedule already exists (it NEVER clobbers a
+draft or published schedule). Admins keep the manual generate button
+regardless.
 
 ``maybe_run_autorun`` is a pure-ish trigger (testable without APScheduler);
 ``start_scheduler`` wires it into a background scheduler for the app lifespan.
@@ -28,12 +31,14 @@ def next_month(today: date) -> tuple[int, int]:
 
 
 def maybe_run_autorun(today: date | None = None) -> bool:
-    """Generate next month's draft if today is AUTORUN_DAY and none exists.
+    """Generate next month's draft the day after AUTORUN_DAY if none exists.
 
-    Returns True when a generation was performed (used by tests/monitoring).
+    Day ``AUTORUN_DAY`` is still inside the registration window, so the run
+    waits until ``AUTORUN_DAY + 1``. Returns True when a generation was
+    performed (used by tests/monitoring).
     """
     today = today or date.today()
-    if not settings.AUTORUN_ENABLED or today.day != settings.AUTORUN_DAY:
+    if not settings.AUTORUN_ENABLED or today.day != settings.AUTORUN_DAY + 1:
         return False
 
     year, month = next_month(today)
@@ -70,11 +75,18 @@ def maybe_run_autorun(today: date | None = None) -> bool:
 
 
 def start_scheduler() -> BackgroundScheduler | None:
-    """Start the daily check (02:00 server time). Returns None when disabled."""
+    """Start the daily check (00:05 in ``TIMEZONE``). Returns None when disabled.
+
+    00:05 is just after midnight, so on day ``AUTORUN_DAY + 1`` the run sees
+    the registration window already closed.
+    """
     if not settings.AUTORUN_ENABLED:
         return None
     scheduler = BackgroundScheduler(timezone=settings.TIMEZONE)
-    scheduler.add_job(maybe_run_autorun, "cron", hour=2, minute=0, id="day20-autorun")
+    scheduler.add_job(maybe_run_autorun, "cron", hour=0, minute=5, id="day20-autorun")
     scheduler.start()
-    logger.info("Day-20 autorun scheduler started (day=%d).", settings.AUTORUN_DAY)
+    logger.info(
+        "Autorun scheduler started (window closes after day %d; draft at 00:05 on day %d).",
+        settings.AUTORUN_DAY, settings.AUTORUN_DAY + 1,
+    )
     return scheduler

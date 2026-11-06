@@ -9,7 +9,7 @@ the just-sick person is forced to cover if a later colleague also goes sick.
 from __future__ import annotations
 
 import calendar
-from datetime import date
+from datetime import date, timedelta
 
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
@@ -21,6 +21,11 @@ from app.models.schedule import MonthlySchedule, ShiftAssignment
 from app.models.user import User
 from app.schemas.attendance import AttendanceRead, AttendanceUpsert, SickCoverResult
 from app.services import role_code_validation, sick_backfill
+
+# §6 recently-sick memory: an S within this many days before the new sick day
+# makes that person the forced A/D cover — a rolling window, so a sickness on
+# the last days of one month still counts early the next month.
+RECENTLY_SICK_LOOKBACK_DAYS = 30
 
 
 def _month_bounds(year: int, month: int) -> tuple[date, date]:
@@ -121,8 +126,7 @@ def handle_sick(db: Session, payload: AttendanceUpsert, recorded_by: int) -> Sic
         sick_user_id=payload.user_id,
         day_codes=self_day_codes(db, day),
         roles=_roles(db),
-        recently_sick=_recently_sick(db, year=day.year, month=day.month, before=day,
-                                     exclude=payload.user_id),
+        recently_sick=_recently_sick(db, before=day, exclude=payload.user_id),
         month_ad_counts=_month_ad_counts(db, day.year, day.month),
     )
     if proposal is None:
@@ -173,16 +177,17 @@ def _roles(db: Session) -> dict[int, Role]:
     return {u.id: u.role for u in db.query(User).all()}
 
 
-def _recently_sick(
-    db: Session, year: int, month: int, before: date, exclude: int
-) -> list[int]:
-    """User ids with an S earlier this month, most recent first (§6)."""
-    first, _ = _month_bounds(year, month)
+def _recently_sick(db: Session, before: date, exclude: int) -> list[int]:
+    """User ids with an S in the 30 days before ``before``, most recent first (§6).
+
+    The window rolls across month boundaries (not "since the 1st").
+    """
+    since = before - timedelta(days=RECENTLY_SICK_LOOKBACK_DAYS)
     rows = (
         db.query(AttendanceRecord)
         .filter(
             AttendanceRecord.code == AttendanceCode.S,
-            AttendanceRecord.work_date >= first,
+            AttendanceRecord.work_date >= since,
             AttendanceRecord.work_date < before,
             AttendanceRecord.user_id != exclude,
         )

@@ -2,7 +2,7 @@
 
 Coverage targets:
 - Classification boundary: 4 days → monthly, 5 days → annual.
-- Monthly window: open days 1–20, closed day 21.
+- Monthly window: open days 1–AUTORUN_DAY (20), closed the day after.
 - Annual window: prior-year ok, same-year rejected.
 - Approve decrements annual_leave_balance; approved_off_map shows AL.
 - Overlap guard → 409.
@@ -70,6 +70,21 @@ class TestMonthlyWindow:
 
     def test_closed_january_target_wrong_year(self):
         assert not is_monthly_window_open(date(2026, 1, 5), target_month=1, target_year=2026)
+
+    def test_monthly_window_closes_on_autorun_day(self, monkeypatch):
+        """The window's last day is settings.AUTORUN_DAY, not a literal 20."""
+        from app.core.config import settings
+        from app.services.leave_windows import registration_last_day
+
+        monkeypatch.setattr(settings, "AUTORUN_DAY", 20)
+        assert registration_last_day() == 20
+        assert is_monthly_window_open(date(2025, 2, 20), target_month=3, target_year=2025)
+        assert not is_monthly_window_open(date(2025, 2, 21), target_month=3, target_year=2025)
+
+        monkeypatch.setattr(settings, "AUTORUN_DAY", 15)
+        assert registration_last_day() == 15
+        assert is_monthly_window_open(date(2025, 2, 15), target_month=3, target_year=2025)
+        assert not is_monthly_window_open(date(2025, 2, 16), target_month=3, target_year=2025)
 
 
 class TestAnnualWindow:

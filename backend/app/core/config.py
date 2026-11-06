@@ -81,9 +81,9 @@ class Settings(BaseSettings):
     SOLVER_MAX_TIME_SECONDS: float = 30.0
 
     # --- Day-20 autorun (locked decision #9, F-05/F-07) --------------------
-    # On AUTORUN_DAY the background job closes registration and generates the
-    # next month's DRAFT (skips if a schedule already exists). Manual generate
-    # stays available regardless.
+    # AUTORUN_DAY is the last day of the monthly leave window; at 00:05 on the
+    # day after, the background job generates the next month's DRAFT (skips if
+    # a schedule already exists). Manual generate stays available regardless.
     AUTORUN_ENABLED: bool = True
     AUTORUN_DAY: int = 20
 
