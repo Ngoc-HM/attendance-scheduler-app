@@ -136,7 +136,8 @@ class AppLocalizations {
           'Leave of 5 days or less is monthly leave; more than 5 consecutive days must be registered as annual leave.',
 
       'leaveWindowHint':
-          'Development mode: leave dates are not restricted by registration windows.',
+          'Monthly leave: register during the previous month. '
+          'Annual leave: register the year before.',
       'requests': 'Requests',
       'type': 'Type',
       'dates': 'Dates',
@@ -499,7 +500,7 @@ class AppLocalizations {
       'chooseFile': 'Chọn tệp',
       'leaveRequests': 'Đăng ký nghỉ',
       'leaveSubtitle':
-          'Nghỉ tháng: đăng ký trước ngày {day} tháng trước. '
+          'Nghỉ tháng: đăng ký chậm nhất đến hết ngày {day} của tháng trước. '
           'Nghỉ phép năm: đăng ký từ năm trước.',
       'requestMonthlyLeave': 'Đăng ký nghỉ tháng',
       'requestAnnualLeave': 'Đăng ký nghỉ phép năm',
@@ -519,7 +520,8 @@ class AppLocalizations {
           'Nghỉ từ 5 ngày trở xuống là nghỉ tháng; trên 5 ngày liên tục phải đăng ký nghỉ phép năm.',
 
       'leaveWindowHint':
-          'Môi trường dev: không giới hạn ngày đăng ký nghỉ.',
+          'Nghỉ tháng: đăng ký trong tháng trước. '
+          'Nghỉ phép năm: đăng ký từ năm trước.',
       'requests': 'Yêu cầu',
       'type': 'Loại',
       'dates': 'Thời gian',

@@ -1038,6 +1038,7 @@ class DsLeavesView extends StatelessWidget {
     this.onRevoke,
     this.registrationOpen = true,
     this.closesOnDay,
+    required this.compDays,
   });
 
   final List<DsLeaveRowData> rows;
@@ -1060,17 +1061,15 @@ class DsLeavesView extends StatelessWidget {
   /// `closes_on_day`). Null while unknown → no subtitle rather than a guess.
   final int? closesOnDay;
 
+  /// "Comp days" card value. Given explicitly: summing [rows] would show 0
+  /// for someone with no requests and count a person once per request.
+  final int compDays;
+
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
     final pending = rows.where((row) => row.status == 'Pending').length;
     final approved = rows.where((row) => row.status == 'Approved').length;
-    // carryComp is per person, repeated on each of their requests: count
-    // every employee once.
-    final carryByEmployee = {
-      for (final row in rows) row.employee: row.carryComp,
-    };
-    final carry = carryByEmployee.values.fold<int>(0, (sum, c) => sum + c);
     final day = closesOnDay;
     return DsPage(
       title: l.text('leaveRequests'),
@@ -1106,7 +1105,7 @@ class DsLeavesView extends StatelessWidget {
               ),
               DsMetricCard(
                 label: l.text('compDays'),
-                value: '$carry',
+                value: '$compDays',
                 icon: Icons.event_repeat_outlined,
                 tone: DsTone.primary,
               ),

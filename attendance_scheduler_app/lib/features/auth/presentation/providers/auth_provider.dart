@@ -47,10 +47,12 @@ class AuthController extends StateNotifier<AuthState> {
   final TokenStorage? _tokenStorage;
 
   /// App start: sign back in with the stored token instead of forcing a new
-  /// login every launch. No token → stay signed out. A token the backend no
-  /// longer accepts (expired, user disabled, server unreachable) is dropped
-  /// so the login page shows, without a "session expired" banner — nobody
-  /// was signed in yet.
+  /// login every launch. No token → stay signed out.
+  ///
+  /// Only a token the backend refused (401/403: expired, user disabled) is
+  /// dropped, without a "session expired" banner — nobody was signed in yet.
+  /// If the server could not be reached or failed, the token is kept for the
+  /// next start and the login page says why.
   Future<void> restoreSession() async {
     final token = await _tokenStorage?.read();
     if (token == null || token.isEmpty) return;
@@ -58,9 +60,16 @@ class AuthController extends StateNotifier<AuthState> {
       final user = await _repository.currentUser();
       await _localeController.activateUser(user.id);
       state = AuthState(user: user);
+    } on DioException catch (e) {
+      final status = e.response?.statusCode;
+      if (status == 401 || status == 403) {
+        await _repository.logout();
+        state = const AuthState();
+      } else {
+        state = AuthState(error: _messageFor(e));
+      }
     } catch (_) {
-      await _repository.logout();
-      state = const AuthState();
+      state = const AuthState(error: 'unknown_failure');
     }
   }
 

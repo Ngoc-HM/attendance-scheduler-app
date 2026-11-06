@@ -117,7 +117,27 @@ void main() {
 
     expect(controller.state.user, isNull);
     expect(controller.state.isAuthenticated, isFalse);
+    expect(controller.state.error, isNull);
     expect(tokens.token, isNull);
+  });
+
+  test('restoreSession keeps the token when the server is unreachable', () async {
+    final tokens = _MemoryTokenStorage('stored-jwt');
+    final remote = _FakeAuthRemote(
+      error: DioException(
+        requestOptions: RequestOptions(path: '/users/me'),
+        type: DioExceptionType.connectionError,
+      ),
+    );
+    final (:controller, locale: _) =
+        _build(remote, tokens, _MemoryLocaleStorage());
+
+    await controller.restoreSession();
+
+    expect(controller.state.user, isNull);
+    // The login page explains the failure; the next start can retry.
+    expect(controller.state.error, 'server_unavailable');
+    expect(tokens.token, 'stored-jwt');
   });
 
   test('restoreSession without a stored token never calls the API', () async {
