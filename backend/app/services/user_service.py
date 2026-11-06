@@ -14,6 +14,7 @@ from __future__ import annotations
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.i18n import t
 from app.core.security import get_password_hash
 from app.models.attendance import AttendanceRecord
@@ -89,6 +90,7 @@ def _persist_new(db: Session, payload: UserCreate, status_: UserStatus) -> User:
         hashed_password=get_password_hash(payload.password),
         status=status_,
         code=next_user_code(db, payload.role),
+        annual_leave_quota=settings.ANNUAL_LEAVE_DEFAULT_DAYS,
     )
     db.add(user)
     db.commit()
@@ -187,7 +189,8 @@ def _fixed_team_warning(
 
 
 def update(db: Session, user_id: int, payload: UserUpdate) -> tuple[User, list[str]]:
-    """F-03 — admin edits profile/role/status (and optionally resets password).
+    """F-03 — admin edits profile/role/status/annual leave quota (and
+    optionally resets the password).
 
     Returns ``(user, warnings)``. Hard guard: last admin lockout.
     Soft warning: emptying the fixed team.
@@ -227,6 +230,9 @@ def update(db: Session, user_id: int, payload: UserUpdate) -> tuple[User, list[s
 
     if payload.password is not None:
         user.hashed_password = get_password_hash(payload.password)
+
+    if payload.annual_leave_quota is not None:
+        user.annual_leave_quota = payload.annual_leave_quota
 
     db.commit()
     db.refresh(user)

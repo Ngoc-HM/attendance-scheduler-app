@@ -25,10 +25,11 @@ class User(Base, TimestampMixin):
         SAEnum(UserStatus, name="user_status"), default=UserStatus.pending
     )
 
+    # Admin-set days of leave per calendar year (owner decision D4). The
+    # remaining balance is derived from approved leave, never stored.
+    annual_leave_quota: Mapped[int] = mapped_column(Integer, default=0)
+
     # --- Auto-calculated carry-over fields (scheduler input §5.1, F-14) ----
-    # Remaining annual-leave balance (informational; complex accrual is out of
-    # scope per F-14 note).
-    annual_leave_balance: Mapped[int] = mapped_column(Integer, default=0)
     # Outstanding compensation days (CD) carried from the previous month —
     # used as a tie-breaker when leave requests conflict (§5.4 #9).
     carry_comp: Mapped[int] = mapped_column(Integer, default=0)

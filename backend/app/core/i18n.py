@@ -56,6 +56,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "leave.staffing_short_ordinary": (
             "not enough role-A staff for ordinary A and D coverage that day."
         ),
+        "leave.balance_exceeded": "Approving exceeds this person's annual leave quota.",
         # --- Shift changes (decision #8) ---
         "swap.not_found": "Shift-change request not found.",
         "swap.own_cell_only": "You can only request changes for your own scheduled day.",
@@ -126,6 +127,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "leave.staffing_short_ordinary": (
             "không đủ nhân sự role A để phủ ca A và D thông thường trong ngày."
         ),
+        "leave.balance_exceeded": "Duyệt đơn này vượt định mức phép năm của nhân sự.",
         # --- Shift changes (decision #8) ---
         "swap.not_found": "Không tìm thấy yêu cầu đổi ca.",
         "swap.own_cell_only": "Chỉ được yêu cầu đổi ca cho ngày làm của chính mình.",

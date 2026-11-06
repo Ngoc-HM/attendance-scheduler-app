@@ -29,5 +29,5 @@ def close_month(db: DbSession, year: int, month: int, admin: AdminUser):
 
 @router.get("/summary")
 def carry_summary(db: DbSession, _admin: AdminUser):
-    """Current per-user carry values (comp / streak / premium-off / AL balance)."""
+    """Current per-user carry values (comp / streak / premium-off)."""
     return calculation_service.summary(db)

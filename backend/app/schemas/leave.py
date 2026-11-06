@@ -66,3 +66,18 @@ class LeaveWindowRead(BaseModel):
     annual_target_year: int
     closes_on_day: int
     enforced: bool
+
+
+class AnnualLeaveSummary(BaseModel):
+    """One person's leave for a calendar year (GET /leaves/balance, D4).
+
+    ``used`` / ``pending`` are the approved / pending leave days that fall
+    inside ``year``; ``remaining = quota - used`` (negative once an admin
+    approved past the quota).
+    """
+
+    year: int
+    quota: int
+    used: int
+    pending: int
+    remaining: int

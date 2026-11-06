@@ -209,3 +209,27 @@ def test_directory_lists_active_codes_only(client: TestClient) -> None:
 
 def test_directory_requires_login(client: TestClient) -> None:
     assert client.get(f"{V}/users/directory").status_code == 401
+
+
+def test_admin_can_set_quota(client: TestClient) -> None:
+    """New users get the default annual leave quota; the admin can change it."""
+    from app.core.config import settings
+
+    admin = _bearer(_token(client, "admin", "admin123"))
+    created = client.post(
+        f"{V}/users",
+        headers=admin,
+        json={"username": "quota_user", "full_name": "Q", "password": "secret1", "role": "T"},
+    )
+    assert created.status_code == 201
+    assert created.json()["annual_leave_quota"] == settings.ANNUAL_LEAVE_DEFAULT_DAYS == 30
+    uid = created.json()["id"]
+
+    r = client.patch(f"{V}/users/{uid}", headers=admin, json={"annual_leave_quota": 25})
+    assert r.status_code == 200
+    assert r.json()["user"]["annual_leave_quota"] == 25
+
+    for invalid in (-1, 366):
+        assert client.patch(
+            f"{V}/users/{uid}", headers=admin, json={"annual_leave_quota": invalid}
+        ).status_code == 422

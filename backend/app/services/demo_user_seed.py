@@ -10,6 +10,7 @@ from dataclasses import dataclass
 
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.security import get_password_hash
 from app.models.enums import Role, UserStatus
 from app.models.user import User
@@ -58,6 +59,7 @@ def seed_demo_users(db: Session, password: str) -> dict[str, int]:
                 role=spec.role,
                 status=UserStatus.active,
                 code=next_user_code(db, spec.role),
+                annual_leave_quota=settings.ANNUAL_LEAVE_DEFAULT_DAYS,
             )
         )
         created += 1

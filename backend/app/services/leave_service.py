@@ -4,7 +4,8 @@ Implements:
 - create_request: window validation, classification, overlap guard, persist.
 - list_for_user / list_all / list_pending: query helpers.
 - window_status: registration-window state for the client.
-- decide / revoke: approve, reject or revoke (no quota; advisory warnings only).
+- decide / revoke: approve, reject or revoke (advisory warnings only, incl. the
+  annual quota — see leave_balance).
 - approved_off_map: scheduler input — approved requests → {user_id: {date: AL}}.
 - conflicts_for_date: returns ranked competing requests for a given date.
 """
@@ -23,7 +24,7 @@ from app.models.enums import AttendanceCode, LeaveStatus, LeaveType, UserStatus
 from app.models.leave import LeaveRequest
 from app.models.user import User
 from app.schemas.leave import LeaveCreate, LeaveWindowRead
-from app.services import leave_conflict_resolver, schedule_history
+from app.services import leave_balance, leave_conflict_resolver, schedule_history
 from app.services.leave_windows import (
     annual_target_year,
     classify,
@@ -222,6 +223,10 @@ def decide(
         # day of the span against the 1A+1D / 1A+2D demand and warn (admin
         # still decides; never a hard block).
         warnings.extend(_staffing_warnings(db, req))
+
+    # D4: approving past the annual leave quota is allowed but flagged.
+    if new_status == LeaveStatus.approved and leave_balance.exceeds_quota(db, req):
+        warnings.append(t("leave.balance_exceeded"))
 
     req.status = new_status
     db.commit()

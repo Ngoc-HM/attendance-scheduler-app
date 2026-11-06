@@ -87,6 +87,12 @@ class Settings(BaseSettings):
     # live database does not get a lump of back-owed CDs on the next draft.
     HOLIDAY_COMP_EFFECTIVE_FROM: date = date(2026, 11, 6)
 
+    # --- Annual leave quota (owner decision D4, 2026-11-06) -----------------
+    # Days of leave per calendar year a new user starts with; the admin edits
+    # each person's quota afterwards. PLACEHOLDER until the customer confirms
+    # the real figure. Remaining = quota - approved leave days in the year.
+    ANNUAL_LEAVE_DEFAULT_DAYS: int = 30
+
     # --- Day-20 autorun (locked decision #9, F-05/F-07) --------------------
     # AUTORUN_DAY is the last day of the monthly leave window; at 00:05 on the
     # day after, the background job generates the next month's DRAFT (skips if
