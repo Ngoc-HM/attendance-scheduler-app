@@ -37,7 +37,7 @@ def request_leave(
     payload: LeaveCreate,
     current_user: ActiveUser,
 ):
-    """F-05/F-06 — register leave (monthly < 5 days, or annual >= 5 days)."""
+    """F-05/F-06 — register leave (monthly <= 5 days, or annual > 5 days)."""
     return leave_service.create_request(db, current_user.id, payload)
 
 

@@ -90,9 +90,15 @@ def create_request(
     if end < start:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=t("leave.invalid_range"))
 
-    # 2. Honor caller-supplied leave_type when provided (two distinct UI flows);
-    # fall back to span-based classification otherwise.
-    leave_type = payload.leave_type or classify(start, end)
+    # 2. The span decides the bucket (> 5 consecutive days is annual). A
+    # caller-supplied leave_type (two distinct UI flows) must agree with it,
+    # otherwise a long leave labelled monthly would dodge the annual rule.
+    leave_type = classify(start, end)
+    if payload.leave_type is not None and payload.leave_type is not leave_type:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=t("leave.type_span_mismatch"),
+        )
 
     # 3. Window enforcement.
     if enforce_window:
