@@ -4,8 +4,9 @@ Implements:
 - create_request: window validation, classification, overlap guard, persist.
 - list_for_user / list_all / list_pending: query helpers.
 - window_status: registration-window state for the client.
-- decide / revoke: approve, reject or revoke (no quota); the decision is
-  written into any already-generated month, with advisory warnings.
+- decide / revoke: approve, reject or revoke; the decision is written into any
+  already-generated month, with advisory warnings (incl. the annual quota —
+  see leave_balance).
 - approved_off_map: scheduler input — approved requests → {user_id: {date: AL}}.
 - conflicts_for_date: returns ranked competing requests for a given date.
 """
@@ -24,7 +25,7 @@ from app.models.enums import AttendanceCode, LeaveStatus, LeaveType, UserStatus
 from app.models.leave import LeaveRequest
 from app.models.user import User
 from app.schemas.leave import LeaveCreate, LeaveWindowRead
-from app.services import leave_conflict_resolver, schedule_history
+from app.services import leave_balance, leave_conflict_resolver, schedule_history
 from app.services.leave_windows import (
     annual_target_year,
     classify,
@@ -203,8 +204,8 @@ def decide(
 
     There is NO leave quota/balance (owner 2026-07-18): the only registration
     rule is the timing window (≤5 days = monthly window; >5 days must be filed
-    the previous year). Approving simply flips the status. Idempotent
-    re-decision → 409.
+    the previous year). Approving past the annual quota only adds a warning
+    (see leave_balance). Idempotent re-decision → 409.
 
     An approval is written as AL into any already-generated month of the span.
     Returns (request, warnings): warnings report that schedule update with its
@@ -216,6 +217,9 @@ def decide(
     if req.status != LeaveStatus.pending:
         raise HTTPException(status.HTTP_409_CONFLICT, detail=t("leave.already_decided"))
 
+    # D4: judge the annual quota while the request is still pending (its own
+    # days are not yet counted as approved); the warning is appended below.
+    over_quota = new_status == LeaveStatus.approved and leave_balance.exceeds_quota(db, req)
     # Status first: the schedule re-check must already see this leave approved.
     req.status = new_status
     warnings: list[str] = []
@@ -225,6 +229,10 @@ def decide(
         # day of the span against the 1A+1D / 1A+2D demand and warn (admin
         # still decides; never a hard block).
         warnings.extend(_staffing_warnings(db, req))
+
+    # D4: approving past the annual leave quota is allowed but flagged.
+    if over_quota:
+        warnings.append(t("leave.balance_exceeded"))
 
     db.commit()
     db.refresh(req)

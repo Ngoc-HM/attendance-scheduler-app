@@ -90,6 +90,9 @@ def _persist_new(db: Session, payload: UserCreate, status_: UserStatus) -> User:
         status=status_,
         code=next_user_code(db, payload.role),
     )
+    # Unset → the model default (ANNUAL_LEAVE_DEFAULT_DAYS) applies on insert.
+    if payload.annual_leave_quota is not None:
+        user.annual_leave_quota = payload.annual_leave_quota
     db.add(user)
     db.commit()
     db.refresh(user)
@@ -187,7 +190,8 @@ def _fixed_team_warning(
 
 
 def update(db: Session, user_id: int, payload: UserUpdate) -> tuple[User, list[str]]:
-    """F-03 — admin edits profile/role/status (and optionally resets password).
+    """F-03 — admin edits profile/role/status/annual leave quota (and
+    optionally resets the password).
 
     Returns ``(user, warnings)``. Hard guard: last admin lockout.
     Soft warning: emptying the fixed team.
@@ -227,6 +231,9 @@ def update(db: Session, user_id: int, payload: UserUpdate) -> tuple[User, list[s
 
     if payload.password is not None:
         user.hashed_password = get_password_hash(payload.password)
+
+    if payload.annual_leave_quota is not None:
+        user.annual_leave_quota = payload.annual_leave_quota
 
     db.commit()
     db.refresh(user)

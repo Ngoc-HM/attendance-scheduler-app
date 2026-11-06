@@ -19,9 +19,11 @@ class RegisterRequest(BaseModel):
 
 class UserCreate(RegisterRequest):
     """Admin-created user: the registration fields plus an assigned role
-    (F-01, F-03)."""
+    (F-01, F-03) and, optionally, the annual leave quota (D4; omitted →
+    ``ANNUAL_LEAVE_DEFAULT_DAYS``)."""
 
     role: Role
+    annual_leave_quota: int | None = Field(default=None, ge=0, le=365)
 
 
 class ApproveRequest(BaseModel):
@@ -35,6 +37,8 @@ class UserUpdate(BaseModel):
     role: Role | None = None
     status: UserStatus | None = None
     password: str | None = Field(default=None, min_length=6, max_length=128)
+    # Days of leave per calendar year (owner decision D4).
+    annual_leave_quota: int | None = Field(default=None, ge=0, le=365)
 
 
 class UserRead(ORMModel):
@@ -46,6 +50,7 @@ class UserRead(ORMModel):
     status: UserStatus
     carry_comp: int
     carry_streak: int
+    annual_leave_quota: int
 
 
 class UserUpdateResult(BaseModel):

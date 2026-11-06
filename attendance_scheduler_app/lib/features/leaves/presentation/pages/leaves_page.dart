@@ -56,6 +56,7 @@ class LeavesPage extends ConsumerWidget {
         registrationOpen: state.window?.monthlyOpen ?? true,
         closesOnDay: state.window?.closesOnDay,
         compDays: state.compDays,
+        annualLeaveRemaining: state.balance?.remaining,
       ),
     );
   }

@@ -10,6 +10,7 @@ class UserModel extends User {
     required super.status,
     required super.code,
     super.carryComp,
+    super.annualLeaveQuota,
   });
 
   factory UserModel.fromJson(Map<String, dynamic> json) => UserModel(
@@ -22,5 +23,6 @@ class UserModel extends User {
     status: json['status'] as String? ?? 'pending',
     code: json['code'] as String? ?? '',
     carryComp: json['carry_comp'] as int? ?? 0,
+    annualLeaveQuota: json['annual_leave_quota'] as int? ?? 0,
   );
 }

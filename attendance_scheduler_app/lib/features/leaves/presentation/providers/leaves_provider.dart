@@ -16,7 +16,12 @@ class LeaveEntry {
 
 /// UI state for the leaves page.
 class LeavesState {
-  const LeavesState({required this.entries, this.window, this.compDays = 0});
+  const LeavesState({
+    required this.entries,
+    this.window,
+    this.compDays = 0,
+    this.balance,
+  });
 
   final AsyncValue<List<LeaveEntry>> entries;
 
@@ -29,15 +34,22 @@ class LeavesState {
   /// the users, not the leave rows, so it is right with no requests too.
   final int compDays;
 
+  /// The employee's own annual leave this year (GET /leaves/balance, D4).
+  /// Null for the admin, whose page covers everyone, until it loads, or if
+  /// it could not be fetched.
+  final AnnualLeaveBalance? balance;
+
   LeavesState copyWith({
     AsyncValue<List<LeaveEntry>>? entries,
     LeaveWindow? window,
     int? compDays,
+    AnnualLeaveBalance? balance,
   }) =>
       LeavesState(
         entries: entries ?? this.entries,
         window: window ?? this.window,
         compDays: compDays ?? this.compDays,
+        balance: balance ?? this.balance,
       );
 
   /// Mapped display rows consumed by [DsLeavesView].
@@ -58,10 +70,12 @@ class LeavesController extends StateNotifier<LeavesState> {
       _ref.read(authControllerProvider).user?.isAdmin ?? false;
 
   /// Load leaves — admin sees all (GET /leaves?all=true); others own only —
-  /// together with today's registration window.
+  /// together with today's registration window and, for employees, their
+  /// remaining annual leave.
   Future<void> load() async {
     state = state.copyWith(entries: const AsyncValue.loading());
     final window = _loadWindow();
+    final balance = _loadBalance();
     int? compDays;
     final entries = await AsyncValue.guard(() async {
       final leaves = _isAdmin ? await _ds.listAll() : await _ds.listOwn();
@@ -77,6 +91,7 @@ class LeavesController extends StateNotifier<LeavesState> {
       entries: entries,
       window: await window,
       compDays: compDays,
+      balance: await balance,
     );
   }
 
@@ -86,6 +101,18 @@ class LeavesController extends StateNotifier<LeavesState> {
   Future<LeaveWindow?> _loadWindow() async {
     try {
       return await _ds.fetchWindow();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// The signed-in employee's own balance. The admin's page aggregates every
+  /// user, where one person's balance would mislead, so it is not fetched.
+  /// Like the window, a failure only hides the card.
+  Future<AnnualLeaveBalance?> _loadBalance() async {
+    if (_isAdmin) return null;
+    try {
+      return await _ds.fetchBalance();
     } catch (_) {
       return null;
     }

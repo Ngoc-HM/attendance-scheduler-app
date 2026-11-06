@@ -55,6 +55,7 @@ def update_user(
             ("role", payload.role),
             ("status", payload.status),
             ("password", payload.password),
+            ("annual_leave_quota", payload.annual_leave_quota),
         )
         if value is not None
     ]

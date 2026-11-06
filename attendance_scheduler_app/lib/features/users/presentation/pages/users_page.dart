@@ -8,6 +8,7 @@ import '../../../auth/domain/entities/user.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../providers/users_provider.dart';
 import '../widgets/create_user_dialog.dart';
+import '../widgets/edit_quota_dialog.dart';
 
 class UsersPage extends ConsumerWidget {
   const UsersPage({super.key});
@@ -60,6 +61,39 @@ class UsersPage extends ConsumerWidget {
         role,
       ),
       onDelete: (id) => _confirmDelete(context, controller, currentUser?.id, id),
+      onEditQuota: (id) => _editQuota(
+        context,
+        controller,
+        users.firstWhere((user) => user.id == id),
+      ),
+    );
+  }
+
+  /// Sets one person's annual leave quota (D4). Migrated accounts all start
+  /// at the default, so this is how the admin applies each person's figure.
+  Future<void> _editQuota(
+    BuildContext context,
+    UsersController controller,
+    User user,
+  ) async {
+    final l = AppLocalizations.of(context);
+    final quota = await showDialog<int>(
+      context: context,
+      builder: (_) => EditQuotaDialog(
+        username: user.username,
+        quota: user.annualLeaveQuota,
+      ),
+    );
+    if (quota == null || !context.mounted) return;
+    await _runMutation(
+      context,
+      controller.setAnnualLeaveQuota(user.id, quota),
+      onWarnings: _showWarnings,
+      onSuccess: () => DsFeedback.show(
+        context,
+        l.text('annualLeaveQuotaUpdated'),
+        tone: DsTone.success,
+      ),
     );
   }
 

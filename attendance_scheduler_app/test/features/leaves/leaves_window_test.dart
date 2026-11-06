@@ -1,6 +1,8 @@
-// Leave page shows the live registration window (C5) and the real carried
-// comp days from /users/me or /users (C9).
+// Leave page shows the live registration window (C5), the real carried
+// comp days from /users/me or /users (C9) and the employee's remaining
+// annual leave from /leaves/balance (D4).
 
+import 'package:attendance_scheduler_app/core/network/api_exception.dart';
 import 'package:attendance_scheduler_app/core/storage/locale_storage.dart';
 import 'package:attendance_scheduler_app/design_system/design_system.dart';
 import 'package:attendance_scheduler_app/features/auth/data/models/user_model.dart';
@@ -31,13 +33,25 @@ class _SignedIn extends AuthController {
 }
 
 class _FakeLeaves implements LeavesRemoteDataSource {
-  _FakeLeaves(this.window, this.leaves);
+  _FakeLeaves(this.window, this.leaves, this.balance);
 
   final LeaveWindow window;
   final List<LeaveModel> leaves;
 
+  /// Null → GET /leaves/balance fails.
+  final AnnualLeaveBalance? balance;
+  int balanceCalls = 0;
+
   @override
   Future<LeaveWindow> fetchWindow() async => window;
+
+  @override
+  Future<AnnualLeaveBalance> fetchBalance({int? year}) async {
+    balanceCalls++;
+    final value = balance;
+    if (value == null) throw const ApiException('boom', statusCode: 500);
+    return value;
+  }
 
   @override
   Future<List<LeaveModel>> listOwn() async => leaves;
@@ -117,14 +131,29 @@ const _enSubtitle =
     'Monthly leave: register by day 18 of the previous month. '
     'Annual leave: register the year before.';
 
-Future<void> _pump(
+/// Quota 30, 3 approved + 2 pending days → 27 left.
+const _balance27 = AnnualLeaveBalance(
+  year: 2026,
+  quota: 30,
+  used: 3,
+  pending: 2,
+  remaining: 27,
+);
+
+Future<_FakeLeaves> _pump(
   WidgetTester tester, {
   required LeaveWindow window,
   User user = _employee,
   List<LeaveModel>? leaves,
   List<UserModel> users = const [],
   String language = 'en',
+  AnnualLeaveBalance? balance = _balance27,
 }) async {
+  final leavesDs = _FakeLeaves(
+    window,
+    leaves ?? _twoPendingOf(user.id),
+    balance,
+  );
   // Wide enough for the admin Approve/Reject column in the test font.
   await tester.binding.setSurfaceSize(const Size(2000, 1000));
   addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -132,9 +161,7 @@ Future<void> _pump(
     ProviderScope(
       overrides: [
         authControllerProvider.overrideWith((ref) => _SignedIn(user)),
-        leavesDataSourceProvider.overrideWithValue(
-          _FakeLeaves(window, leaves ?? _twoPendingOf(user.id)),
-        ),
+        leavesDataSourceProvider.overrideWithValue(leavesDs),
         userManagementDataSourceProvider.overrideWithValue(_FakeUsers(users)),
       ],
       child: MaterialApp(
@@ -152,16 +179,20 @@ Future<void> _pump(
     ),
   );
   await tester.pumpAndSettle();
+  return leavesDs;
 }
 
-/// The value shown on the "Comp days" metric card.
-String _compDaysMetric(WidgetTester tester) {
+/// The value shown on the metric card labelled [label].
+String _metric(WidgetTester tester, String label) {
   final card = find.ancestor(
-    of: find.text('Comp days'),
+    of: find.text(label),
     matching: find.byType(DsMetricCard),
   );
   return tester.widget<DsMetricCard>(card).value;
 }
+
+/// The value shown on the "Comp days" metric card.
+String _compDaysMetric(WidgetTester tester) => _metric(tester, 'Comp days');
 
 void main() {
   testWidgets('closed window from the API drives banner and subtitle', (
@@ -245,5 +276,68 @@ void main() {
     );
 
     expect(_compDaysMetric(tester), '6');
+  });
+
+  testWidgets('employee sees annual leave left from /leaves/balance', (
+    tester,
+  ) async {
+    final ds = await _pump(tester, window: _window(open: true));
+
+    expect(ds.balanceCalls, 1);
+    expect(_metric(tester, 'Annual leave left'), '27');
+  });
+
+  testWidgets('annual leave left is labelled in Vietnamese', (tester) async {
+    await _pump(tester, window: _window(open: true), language: 'vi');
+
+    expect(_metric(tester, 'Phép năm còn lại'), '27');
+  });
+
+  testWidgets('leave approved past the quota shows a negative, danger card', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      window: _window(open: true),
+      balance: const AnnualLeaveBalance(
+        year: 2026,
+        quota: 4,
+        used: 6,
+        pending: 0,
+        remaining: -2,
+      ),
+    );
+
+    final card = tester.widget<DsMetricCard>(
+      find.ancestor(
+        of: find.text('Annual leave left'),
+        matching: find.byType(DsMetricCard),
+      ),
+    );
+    expect(card.value, '-2');
+    expect(card.tone, DsTone.danger);
+  });
+
+  testWidgets('a failed balance hides the card, not the leave list', (
+    tester,
+  ) async {
+    await _pump(tester, window: _window(open: true), balance: null);
+
+    expect(find.text('Annual leave left'), findsNothing);
+    expect(_compDaysMetric(tester), '3');
+    expect(find.text('Pending'), findsWidgets);
+  });
+
+  testWidgets('admin page has no personal annual leave card', (tester) async {
+    final ds = await _pump(
+      tester,
+      window: _window(open: true),
+      user: _admin,
+      leaves: _twoPendingOf(2),
+      users: [_member(2, 2)],
+    );
+
+    expect(ds.balanceCalls, 0);
+    expect(find.text('Annual leave left'), findsNothing);
   });
 }

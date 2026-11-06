@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../core/constants/shift_codes.dart';
 import '../i18n/app_localizations.dart';
@@ -1058,6 +1059,7 @@ class DsLeavesView extends StatelessWidget {
     this.registrationOpen = true,
     this.closesOnDay,
     required this.compDays,
+    this.annualLeaveRemaining,
   });
 
   final List<DsLeaveRowData> rows;
@@ -1084,12 +1086,18 @@ class DsLeavesView extends StatelessWidget {
   /// for someone with no requests and count a person once per request.
   final int compDays;
 
+  /// "Annual leave left" card value (quota minus approved days this year).
+  /// Null → no card (admin view, or the balance could not be loaded);
+  /// negative once leave was approved past the quota.
+  final int? annualLeaveRemaining;
+
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
     final pending = rows.where((row) => row.status == 'Pending').length;
     final approved = rows.where((row) => row.status == 'Approved').length;
     final day = closesOnDay;
+    final annualLeft = annualLeaveRemaining;
     return DsPage(
       title: l.text('leaveRequests'),
       subtitle: day == null ? null : l.leaveSubtitle(day),
@@ -1128,6 +1136,13 @@ class DsLeavesView extends StatelessWidget {
                 icon: Icons.event_repeat_outlined,
                 tone: DsTone.primary,
               ),
+              if (annualLeft != null)
+                DsMetricCard(
+                  label: l.text('annualLeaveRemaining'),
+                  value: '$annualLeft',
+                  icon: Icons.beach_access_outlined,
+                  tone: annualLeft < 0 ? DsTone.danger : DsTone.primary,
+                ),
             ],
           ),
           const SizedBox(height: DsSpacing.x6),
@@ -1569,6 +1584,7 @@ class DsUsersView extends StatelessWidget {
     required this.onEnable,
     required this.onChangeRole,
     this.onDelete,
+    this.onEditQuota,
     this.error,
   });
 
@@ -1588,6 +1604,9 @@ class DsUsersView extends StatelessWidget {
   /// Hard-delete (with cascade) — optional so callers without permission can
   /// omit it and the action button is hidden.
   final ValueChanged<int>? onDelete;
+
+  /// Edit the user's annual leave quota (D4); null hides the action.
+  final ValueChanged<int>? onEditQuota;
 
   @override
   Widget build(BuildContext context) {
@@ -1663,6 +1682,7 @@ class DsUsersView extends StatelessWidget {
                 onEnable: onEnable,
                 onChangeRole: onChangeRole,
                 onDelete: onDelete,
+                onEditQuota: onEditQuota,
               ),
             ),
         ],
@@ -1681,6 +1701,7 @@ class _UsersTable extends StatelessWidget {
     required this.onEnable,
     required this.onChangeRole,
     this.onDelete,
+    this.onEditQuota,
   });
 
   final List<DsUserRowData> users;
@@ -1689,6 +1710,7 @@ class _UsersTable extends StatelessWidget {
   final ValueChanged<int> onEnable;
   final void Function(int id, String role) onChangeRole;
   final ValueChanged<int>? onDelete;
+  final ValueChanged<int>? onEditQuota;
 
   @override
   Widget build(BuildContext context) {
@@ -1722,70 +1744,59 @@ class _UsersTable extends StatelessWidget {
                 _ => DsTone.neutral,
               },
             ),
-            // Actions cell: approve / disable+change-role / enable
-            switch (user.status) {
-              'pending' => Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _ActionButton(
-                    label: l.approve,
-                    tone: DsTone.success,
-                    onPressed: () => onApprove(user.id),
-                  ),
-                  if (onDelete != null) ...[
-                    const SizedBox(width: DsSpacing.x2),
+            // Actions cell: the status action(s) — approve / change-role +
+            // disable / enable — then edit quota and delete; wraps if cramped.
+            Wrap(
+              spacing: DsSpacing.x2,
+              runSpacing: DsSpacing.x1,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                ...switch (user.status) {
+                  'pending' => [
                     _ActionButton(
-                      label: l.text('delete'),
-                      tone: DsTone.danger,
-                      onPressed: () => onDelete!(user.id),
+                      label: l.approve,
+                      tone: DsTone.success,
+                      onPressed: () => onApprove(user.id),
                     ),
                   ],
-                ],
-              ),
-              // Active users can be disabled AND have their role changed
-              // (e.g. promoted to admin `M`); both actions wrap if cramped.
-              'active' => Wrap(
-                spacing: DsSpacing.x2,
-                runSpacing: DsSpacing.x1,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  _RoleChangeMenu(
-                    currentRole: user.role,
-                    onSelected: (role) => onChangeRole(user.id, role),
-                  ),
-                  _ActionButton(
-                    label: l.disable,
-                    tone: DsTone.danger,
-                    onPressed: () => onDisable(user.id),
-                  ),
-                  if (onDelete != null)
-                    _ActionButton(
-                      label: l.text('delete'),
-                      tone: DsTone.danger,
-                      onPressed: () => onDelete!(user.id),
+                  // Active users can be disabled AND have their role changed
+                  // (e.g. promoted to admin `M`).
+                  'active' => [
+                    _RoleChangeMenu(
+                      currentRole: user.role,
+                      onSelected: (role) => onChangeRole(user.id, role),
                     ),
-                ],
-              ),
-              // Disabled (or any other non-pending, non-active status).
-              _ => Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
+                    _ActionButton(
+                      label: l.disable,
+                      tone: DsTone.danger,
+                      onPressed: () => onDisable(user.id),
+                    ),
+                  ],
+                  // Disabled (or any other non-pending, non-active status).
+                  _ => [
+                    _ActionButton(
+                      label: l.enable,
+                      tone: DsTone.primary,
+                      onPressed: () => onEnable(user.id),
+                    ),
+                  ],
+                },
+                // Every status: a pending account can be set up before
+                // approval, a disabled one before re-enabling.
+                if (onEditQuota != null)
                   _ActionButton(
-                    label: l.enable,
+                    label: l.text('editAnnualLeaveQuota'),
                     tone: DsTone.primary,
-                    onPressed: () => onEnable(user.id),
+                    onPressed: () => onEditQuota!(user.id),
                   ),
-                  if (onDelete != null) ...[
-                    const SizedBox(width: DsSpacing.x2),
-                    _ActionButton(
-                      label: l.text('delete'),
-                      tone: DsTone.danger,
-                      onPressed: () => onDelete!(user.id),
-                    ),
-                  ],
-                ],
-              ),
-            },
+                if (onDelete != null)
+                  _ActionButton(
+                    label: l.text('delete'),
+                    tone: DsTone.danger,
+                    onPressed: () => onDelete!(user.id),
+                  ),
+              ],
+            ),
           ],
       ],
     );
@@ -1923,6 +1934,10 @@ class DsCreateUserDialog<T> extends StatelessWidget {
     required this.minThreeMessage,
     required this.requiredMessage,
     required this.minSixMessage,
+    required this.quotaController,
+    required this.quotaLabel,
+    required this.quotaHint,
+    required this.quotaInvalidMessage,
     this.error,
     this.loading = false,
   });
@@ -1931,6 +1946,13 @@ class DsCreateUserDialog<T> extends StatelessWidget {
   final TextEditingController usernameController;
   final TextEditingController fullNameController;
   final TextEditingController passwordController;
+
+  /// Optional annual leave quota in days (0–365); empty keeps the server
+  /// default.
+  final TextEditingController quotaController;
+  final String quotaLabel;
+  final String quotaHint;
+  final String quotaInvalidMessage;
   final T role;
   final List<DsSelectOption<T>> roleOptions;
   final ValueChanged<T> onRoleChanged;
@@ -1996,6 +2018,14 @@ class DsCreateUserDialog<T> extends StatelessWidget {
                 if (value != null) onRoleChanged(value);
               },
             ),
+            const SizedBox(height: DsSpacing.x4),
+            DsAnnualLeaveQuotaField(
+              controller: quotaController,
+              label: quotaLabel,
+              hint: quotaHint,
+              invalidMessage: quotaInvalidMessage,
+              optional: true,
+            ),
             if (error != null) ...[
               const SizedBox(height: DsSpacing.x4),
               DsInlineAlert(
@@ -2015,6 +2045,43 @@ class DsCreateUserDialog<T> extends StatelessWidget {
           loading: loading,
         ),
       ],
+    );
+  }
+}
+
+/// Annual leave quota input: whole days per calendar year, 0–365 (owner
+/// decision D4). Empty passes validation only when [optional] (the server
+/// default then applies).
+class DsAnnualLeaveQuotaField extends StatelessWidget {
+  const DsAnnualLeaveQuotaField({
+    super.key,
+    required this.controller,
+    required this.label,
+    required this.invalidMessage,
+    this.hint,
+    this.optional = false,
+  });
+
+  final TextEditingController controller;
+  final String label;
+  final String invalidMessage;
+  final String? hint;
+  final bool optional;
+
+  @override
+  Widget build(BuildContext context) {
+    return DsTextField(
+      controller: controller,
+      label: label,
+      hint: hint,
+      keyboardType: TextInputType.number,
+      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+      validator: (value) {
+        final text = value?.trim() ?? '';
+        if (text.isEmpty) return optional ? null : invalidMessage;
+        final days = int.tryParse(text);
+        return (days == null || days < 0 || days > 365) ? invalidMessage : null;
+      },
     );
   }
 }

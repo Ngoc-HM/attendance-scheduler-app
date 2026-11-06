@@ -25,6 +25,7 @@ class ApiEndpoints {
   static const String leaves = '/leaves';
   static const String leavesPending = '/leaves/pending';
   static const String leavesWindow = '/leaves/window';
+  static const String leaveBalance = '/leaves/balance'; // ?year=&user_id=
   static String leaveDecide(int id) => '/leaves/$id/decide';
   static String leaveRevoke(int id) => '/leaves/$id/revoke';
   static const String leaveConflicts = '/leaves/conflicts'; // ?date=YYYY-MM-DD

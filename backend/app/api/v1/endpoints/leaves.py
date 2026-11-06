@@ -7,10 +7,18 @@ from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query, status
 
-from app.api.deps import ActiveUser, AdminUser, DbSession
+from app.api.deps import ActiveUser, AdminUser, DbSession, ensure_self_or_admin
+from app.core.business_time import business_today
 from app.models.enums import LeaveStatus
-from app.schemas.leave import ConflictEntry, LeaveCreate, LeaveDecision, LeaveRead, LeaveWindowRead
-from app.services import audit_service, leave_service
+from app.schemas.leave import (
+    AnnualLeaveSummary,
+    ConflictEntry,
+    LeaveCreate,
+    LeaveDecision,
+    LeaveRead,
+    LeaveWindowRead,
+)
+from app.services import audit_service, leave_balance, leave_service
 
 router = APIRouter()
 
@@ -52,6 +60,25 @@ def pending_leaves(db: DbSession, _admin: AdminUser):
 def leave_window(_user: ActiveUser):
     """Whether monthly registration is open today, and for which month."""
     return leave_service.window_status()
+
+
+@router.get("/balance", response_model=AnnualLeaveSummary)
+def leave_balance_summary(
+    db: DbSession,
+    current_user: ActiveUser,
+    year: Annotated[int | None, Query(ge=1, le=9999)] = None,
+    user_id: int | None = None,
+):
+    """Annual leave quota, used, pending and remaining days (D4).
+
+    Defaults to the caller's own balance for the current business year; only
+    an admin may read someone else's.
+    """
+    target_id = current_user.id if user_id is None else user_id
+    ensure_self_or_admin(current_user, target_id)
+    return leave_balance.annual_leave_summary(
+        db, target_id, business_today().year if year is None else year
+    )
 
 
 @router.get("/conflicts", response_model=list[ConflictEntry])

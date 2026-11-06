@@ -22,17 +22,21 @@ class UsersController extends StateNotifier<AsyncValue<List<User>>> {
     if (mounted) state = result;
   }
 
+  /// Creates an active account; a null [annualLeaveQuota] keeps the server
+  /// default (D4).
   Future<void> create({
     required String username,
     required String fullName,
     required String password,
     required UserRole role,
+    int? annualLeaveQuota,
   }) async {
     await _ds.create(
       username: username,
       fullName: fullName,
       password: password,
       role: role.apiValue,
+      annualLeaveQuota: annualLeaveQuota,
     );
     await load();
   }
@@ -54,6 +58,14 @@ class UsersController extends StateNotifier<AsyncValue<List<User>>> {
   /// Returns any soft warnings. Throws on hard errors.
   Future<List<String>> setRole(int id, UserRole role) async {
     final result = await _ds.update(id, {'role': role.apiValue});
+    await load();
+    return result.warnings;
+  }
+
+  /// Sets a person's annual leave quota in days (D4). Returns any soft
+  /// warnings. Throws on hard errors.
+  Future<List<String>> setAnnualLeaveQuota(int id, int days) async {
+    final result = await _ds.update(id, {'annual_leave_quota': days});
     await load();
     return result.warnings;
   }

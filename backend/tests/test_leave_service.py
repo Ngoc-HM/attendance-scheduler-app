@@ -4,7 +4,8 @@ Coverage targets:
 - Classification boundary: 5 days → monthly, more than 5 days → annual.
 - Monthly window: open days 1–AUTORUN_DAY (20), closed the day after.
 - Annual window: prior-year ok, same-year rejected.
-- Approve decrements annual_leave_balance; approved_off_map shows AL.
+- Approve keeps the stored quota; approved_off_map shows AL.
+- Annual leave quota: remaining = quota - approved days in the year (D4).
 - Overlap guard → 409.
 - Conflict ranking by carry_comp.
 """
@@ -247,8 +248,9 @@ class TestLeaveEndpoints:
         finally:
             db.close()
 
-    def test_approve_keeps_informational_balance(self, client: TestClient):
-        """Current policy has no leave quota; approval keeps the info balance."""
+    def test_approve_within_quota_keeps_quota(self, client: TestClient):
+        """Approving within the quota warns nothing; the stored quota is never
+        decremented (the remaining balance is derived from approved leave)."""
         admin = self._admin_headers(client)
 
         # Create user.
@@ -264,9 +266,9 @@ class TestLeaveEndpoints:
         db_gen = get_db()
         db = next(db_gen)
         try:
-            # Set balance to 10 directly via DB.
+            # Set the quota to 10 directly via DB.
             user = db.get(User, uid)
-            user.annual_leave_balance = 10
+            user.annual_leave_quota = 10
             db.commit()
 
             # Window: submitting on day 10 of month M for month M+1.
@@ -286,9 +288,8 @@ class TestLeaveEndpoints:
             assert req_approved.status == LeaveStatus.approved
             assert warnings == []
 
-            # No leave quota/balance mutation under the current policy.
             db.refresh(user)
-            assert user.annual_leave_balance == 10
+            assert user.annual_leave_quota == 10
         finally:
             db.close()
 
@@ -296,7 +297,6 @@ class TestLeaveEndpoints:
         """approved_off_map includes AL for approved leave days in that month."""
         from app.core.database import get_db
         from app.models.enums import AttendanceCode
-        from app.models.user import User
         from app.schemas.leave import LeaveCreate
         from app.services import leave_service
 
@@ -307,11 +307,6 @@ class TestLeaveEndpoints:
         db_gen = get_db()
         db = next(db_gen)
         try:
-            # Set balance via DB directly.
-            user = db.get(User, uid)
-            user.annual_leave_balance = 20
-            db.commit()
-
             today = date(2025, 2, 5)
             payload = LeaveCreate(
                 start_date=date(2025, 3, 10),
@@ -762,3 +757,117 @@ def test_leave_window_status_uses_business_date(monkeypatch) -> None:
         business_time, "_utcnow", lambda: datetime(2026, 12, 20, 23, 30, tzinfo=UTC)
     )
     assert leave_service.window_status().monthly_open is False
+
+
+# ---------------------------------------------------------------------------
+# Annual leave quota and remaining balance (owner decision D4, 2026-11-06)
+# ---------------------------------------------------------------------------
+
+def _leave(db, user_id, start, end):
+    from app.schemas.leave import LeaveCreate
+    from app.services import leave_service
+
+    return leave_service.create_request(
+        db, user_id, LeaveCreate(start_date=start, end_date=end), enforce_window=False
+    )
+
+
+def test_annual_leave_summary_counts_approved_days_in_year(client: TestClient) -> None:
+    """quota 30; approved 3 days; pending 2 days → used 3, pending 2, remaining 27."""
+    from app.core.database import get_db
+    from app.services import leave_balance, leave_service
+
+    admin = _bearer(_token(client, "admin", "admin123"))
+    uid = _create_user(client, admin, "d4_summary_user", role="T").json()["id"]
+    db = next(get_db())
+    try:
+        approved = _leave(db, uid, date(2040, 12, 20), date(2040, 12, 22))
+        leave_service.decide(db, approved.id, LeaveStatus.approved, admin_id=1)
+        _leave(db, uid, date(2040, 12, 27), date(2040, 12, 28))  # stays pending
+        rejected = _leave(db, uid, date(2040, 11, 5), date(2040, 11, 6))
+        leave_service.decide(db, rejected.id, LeaveStatus.rejected, admin_id=1)
+
+        summary = leave_balance.annual_leave_summary(db, uid, 2040)
+        assert (
+            summary.year, summary.quota, summary.used, summary.pending, summary.remaining
+        ) == (2040, 30, 3, 2, 27)
+
+        # A leave across New Year counts only its days inside each year.
+        across = _leave(db, uid, date(2040, 12, 30), date(2041, 1, 2))
+        leave_service.decide(db, across.id, LeaveStatus.approved, admin_id=1)
+        assert leave_balance.annual_leave_summary(db, uid, 2040).used == 5
+        assert leave_balance.annual_leave_summary(db, uid, 2041).used == 2
+    finally:
+        db.close()
+
+
+def test_approve_beyond_annual_quota_warns(client: TestClient) -> None:
+    """Going past the quota is allowed (admin decides) but warns; reaching it does not."""
+    from app.core.database import get_db
+    from app.core.i18n import t
+    from app.services import leave_service
+
+    admin = _bearer(_token(client, "admin", "admin123"))
+    uid = _create_user(client, admin, "d4_quota_warn_user", role="T").json()["id"]
+    assert client.patch(
+        f"{V}/users/{uid}", headers=admin, json={"annual_leave_quota": 5}
+    ).status_code == 200
+    exceeded = t("leave.balance_exceeded", "en")
+    assert exceeded == "Approving exceeds this person's annual leave quota."
+    db = next(get_db())
+    try:
+        first = _leave(db, uid, date(2040, 3, 5), date(2040, 3, 7))  # 3 of 5
+        _, warnings = leave_service.decide(db, first.id, LeaveStatus.approved, admin_id=1)
+        assert exceeded not in warnings
+
+        exact = _leave(db, uid, date(2040, 4, 2), date(2040, 4, 3))  # 5 of 5
+        _, warnings = leave_service.decide(db, exact.id, LeaveStatus.approved, admin_id=1)
+        assert exceeded not in warnings
+
+        over = _leave(db, uid, date(2040, 5, 7), date(2040, 5, 7))  # 6 of 5
+        decided, warnings = leave_service.decide(
+            db, over.id, LeaveStatus.approved, admin_id=1
+        )
+        assert decided.status is LeaveStatus.approved
+        assert exceeded in warnings
+    finally:
+        db.close()
+
+
+def test_balance_endpoint_self_and_admin(client: TestClient) -> None:
+    """Own balance 200; someone else's 403; admin may read anyone's."""
+    from app.core.business_time import business_today
+
+    admin = _bearer(_token(client, "admin", "admin123"))
+    me_id = _create_user(client, admin, "d4_balance_self", role="T").json()["id"]
+    other_id = _create_user(client, admin, "d4_balance_other", role="T").json()["id"]
+    me = _bearer(_token(client, "d4_balance_self", "secret1"))
+
+    own = client.get(f"{V}/leaves/balance", headers=me, params={"year": 2040})
+    assert own.status_code == 200
+    assert own.json() == {
+        "year": 2040, "quota": 30, "used": 0, "pending": 0, "remaining": 30,
+    }
+    explicit = client.get(
+        f"{V}/leaves/balance", headers=me, params={"user_id": me_id, "year": 2040}
+    )
+    assert explicit.json() == own.json()
+
+    # Defaults: the caller's own balance for the current business year.
+    default = client.get(f"{V}/leaves/balance", headers=me)
+    assert default.status_code == 200
+    assert default.json()["year"] == business_today().year
+
+    forbidden = client.get(
+        f"{V}/leaves/balance", headers=me, params={"user_id": other_id}
+    )
+    assert forbidden.status_code == 403
+
+    as_admin = client.get(
+        f"{V}/leaves/balance", headers=admin, params={"user_id": other_id, "year": 2040}
+    )
+    assert as_admin.status_code == 200
+    assert as_admin.json()["remaining"] == 30
+    assert client.get(
+        f"{V}/leaves/balance", headers=admin, params={"user_id": 999_999}
+    ).status_code == 404

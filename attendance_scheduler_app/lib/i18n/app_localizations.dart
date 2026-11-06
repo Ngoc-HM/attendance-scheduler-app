@@ -405,6 +405,13 @@ class AppLocalizations {
       'selectYearFirst': 'Select a year first.',
       'statusReady': 'Ready',
       'statusComplete': 'Complete',
+      // --- Annual leave quota (owner decision D4, 2026-11-06) ---
+      'annualLeaveRemaining': 'Annual leave left',
+      'annualLeaveQuota': 'Annual leave quota',
+      'annualLeaveQuotaHint': 'Days per year — leave empty for the default',
+      'annualLeaveQuotaInvalid': 'Enter a whole number from 0 to 365.',
+      'editAnnualLeaveQuota': 'Edit leave quota',
+      'annualLeaveQuotaUpdated': 'Annual leave quota updated.',
     },
     'vi': {
       'appTitle': 'Xếp lịch & Chấm công',
@@ -790,6 +797,13 @@ class AppLocalizations {
       'selectYearFirst': 'Vui lòng chọn năm.',
       'statusReady': 'Sẵn sàng',
       'statusComplete': 'Hoàn tất',
+      // --- Annual leave quota (owner decision D4, 2026-11-06) ---
+      'annualLeaveRemaining': 'Phép năm còn lại',
+      'annualLeaveQuota': 'Định mức phép năm',
+      'annualLeaveQuotaHint': 'Số ngày mỗi năm — để trống để dùng mặc định',
+      'annualLeaveQuotaInvalid': 'Nhập số nguyên từ 0 đến 365.',
+      'editAnnualLeaveQuota': 'Sửa định mức phép',
+      'annualLeaveQuotaUpdated': 'Đã cập nhật định mức phép năm.',
     },
   };
 

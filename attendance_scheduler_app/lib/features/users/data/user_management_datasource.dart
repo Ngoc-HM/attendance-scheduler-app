@@ -70,12 +70,14 @@ class UserManagementDataSource {
         .toList();
   }
 
-  /// POST /users — admin creates an active account with a role.
+  /// POST /users — admin creates an active account with a role and,
+  /// optionally, an annual leave quota (omitted → the server default).
   Future<UserModel> create({
     required String username,
     required String fullName,
     required String password,
     required String role,
+    int? annualLeaveQuota,
   }) async {
     final response = await _dio.post(
       ApiEndpoints.users,
@@ -84,6 +86,7 @@ class UserManagementDataSource {
         'full_name': fullName,
         'password': password,
         'role': role,
+        'annual_leave_quota': ?annualLeaveQuota,
       },
     );
     return UserModel.fromJson(response.data as Map<String, dynamic>);
