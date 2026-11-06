@@ -174,3 +174,28 @@ def test_autorun_fires_day_after_close(client: TestClient, monkeypatch) -> None:
         assert (fields["hour"], fields["minute"]) == ("0", "5")
     finally:
         scheduler.shutdown(wait=False)
+
+
+def test_autorun_uses_business_timezone_date(client: TestClient, monkeypatch) -> None:
+    """The process may run in UTC (Docker sets no TZ): at 00:05 Berlin on day 21
+    the UTC date is still day 20, so the run must read the date in TIMEZONE."""
+    from datetime import UTC, datetime
+
+    from app.core import business_time
+    from app.core.config import settings
+    from app.services.schedule_autorun import maybe_run_autorun
+
+    monkeypatch.setattr(settings, "AUTORUN_ENABLED", True)
+    monkeypatch.setattr(settings, "AUTORUN_DAY", 20)
+    monkeypatch.setattr(settings, "TIMEZONE", "Europe/Berlin")
+    monkeypatch.setattr(settings, "SOLVER_MAX_TIME_SECONDS", 5.0)
+    # 23:30 UTC on 2026-12-20 is already 00:30 on 2026-12-21 in Berlin (CET).
+    monkeypatch.setattr(
+        business_time, "_utcnow", lambda: datetime(2026, 12, 20, 23, 30, tzinfo=UTC)
+    )
+    admin = _admin_headers(client)
+
+    assert business_time.business_today() == date(2026, 12, 21)
+    assert client.get("/api/v1/schedules/2027/1", headers=admin).status_code == 404
+    assert maybe_run_autorun() is True  # no injected date → business date
+    assert client.get("/api/v1/schedules/2027/1", headers=admin).status_code == 200

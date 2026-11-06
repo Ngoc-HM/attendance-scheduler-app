@@ -19,6 +19,7 @@ from datetime import date
 
 from apscheduler.schedulers.background import BackgroundScheduler
 
+from app.core.business_time import business_today
 from app.core.config import settings
 from app.core.database import SessionLocal
 from app.models.schedule import MonthlySchedule
@@ -34,10 +35,12 @@ def maybe_run_autorun(today: date | None = None) -> bool:
     """Generate next month's draft the day after AUTORUN_DAY if none exists.
 
     Day ``AUTORUN_DAY`` is still inside the registration window, so the run
-    waits until ``AUTORUN_DAY + 1``. Returns True when a generation was
-    performed (used by tests/monitoring).
+    waits until ``AUTORUN_DAY + 1``. ``today`` defaults to the business date in
+    ``TIMEZONE`` — the cron fires at 00:05 Berlin, when a UTC host still reads
+    the previous day. Returns True when a generation was performed (used by
+    tests/monitoring).
     """
-    today = today or date.today()
+    today = today or business_today()
     if not settings.AUTORUN_ENABLED or today.day != settings.AUTORUN_DAY + 1:
         return False
 
