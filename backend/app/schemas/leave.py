@@ -49,3 +49,20 @@ class ConflictEntry(ORMModel):
     note: str | None
     # Rank position (1 = highest priority).
     rank: int
+
+
+class LeaveWindowRead(BaseModel):
+    """Registration window state for the client (GET /leaves/window).
+
+    ``monthly_open`` says whether leave for ``monthly_target_month`` can be
+    filed today (days 1–``closes_on_day`` of the month before it); annual
+    leave can be filed for ``annual_target_year``. When ``enforced`` is false
+    (dev) the window never closes.
+    """
+
+    monthly_open: bool
+    monthly_target_year: int
+    monthly_target_month: int
+    annual_target_year: int
+    closes_on_day: int
+    enforced: bool

@@ -360,3 +360,46 @@ class TestLeaveEndpoints:
             assert exc_info.value.status_code == 400
         finally:
             db.close()
+
+
+def test_leave_window_status(client: TestClient, monkeypatch) -> None:
+    """Window is open days 1–AUTORUN_DAY for next month; dev never closes it."""
+    from app.core.config import settings
+    from app.services import leave_service
+
+    monkeypatch.setattr(settings, "ENVIRONMENT", "staging")
+
+    day5 = leave_service.window_status(today=date(2026, 11, 5))
+    assert day5.monthly_open is True
+    assert (day5.monthly_target_year, day5.monthly_target_month) == (2026, 12)
+    assert day5.annual_target_year == 2027
+    assert day5.closes_on_day == settings.AUTORUN_DAY
+    assert day5.enforced is True
+
+    day25 = leave_service.window_status(today=date(2026, 11, 25))
+    assert day25.monthly_open is False
+    assert (day25.monthly_target_year, day25.monthly_target_month) == (2026, 12)
+
+    # December rolls the monthly target into January of the next year.
+    december = leave_service.window_status(today=date(2026, 12, 5))
+    assert (december.monthly_target_year, december.monthly_target_month) == (2027, 1)
+    assert december.monthly_open is True
+
+    # Dev does not enforce the window, so registration is always open.
+    monkeypatch.setattr(settings, "ENVIRONMENT", "dev")
+    dev = leave_service.window_status(today=date(2026, 11, 25))
+    assert dev.enforced is False
+    assert dev.monthly_open is True
+
+    # Wiring: any signed-in active user (not only admin) can read it.
+    admin = _bearer(_token(client, "admin", "admin123"))
+    _create_user(client, admin, "window_status_user")
+    employee = _bearer(_token(client, "window_status_user", "secret1"))
+    r = client.get(f"{V}/leaves/window", headers=employee)
+    assert r.status_code == 200
+    assert set(r.json()) == {
+        "monthly_open", "monthly_target_year", "monthly_target_month",
+        "annual_target_year", "closes_on_day", "enforced",
+    }
+    assert r.json()["enforced"] is False
+    assert r.json()["monthly_open"] is True

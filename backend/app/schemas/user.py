@@ -47,3 +47,15 @@ class UserUpdateResult(BaseModel):
 
     user: UserRead
     warnings: list[str] = Field(default_factory=list)
+
+
+class UserDirectoryEntry(ORMModel):
+    """Code directory any signed-in user may read (GET /users/directory).
+
+    Deliberately carries no name: the client shows people by their
+    confidential code (e.g. "A3", "T1").
+    """
+
+    id: int
+    code: str
+    role: Role

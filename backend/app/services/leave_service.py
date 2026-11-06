@@ -3,6 +3,7 @@
 Implements:
 - create_request: window validation, classification, overlap guard, persist.
 - list_for_user / list_all / list_pending: query helpers.
+- window_status: registration-window state for the client.
 - decide / revoke: approve, reject or revoke (no quota; advisory warnings only).
 - approved_off_map: scheduler input — approved requests → {user_id: {date: AL}}.
 - conflicts_for_date: returns ranked competing requests for a given date.
@@ -20,7 +21,7 @@ from app.core.i18n import t
 from app.models.enums import AttendanceCode, LeaveStatus, LeaveType, UserStatus
 from app.models.leave import LeaveRequest
 from app.models.user import User
-from app.schemas.leave import LeaveCreate
+from app.schemas.leave import LeaveCreate, LeaveWindowRead
 from app.services import leave_conflict_resolver
 from app.services.leave_windows import classify, is_annual_window_open, is_monthly_window_open
 
@@ -151,6 +152,32 @@ def list_pending(db: Session) -> list[LeaveRequest]:
         .filter(LeaveRequest.status == LeaveStatus.pending)
         .order_by(LeaveRequest.created_at)
         .all()
+    )
+
+
+def window_status(today: date | None = None) -> LeaveWindowRead:
+    """Registration-window state the client shows on the leave page.
+
+    The monthly target is always next month, filed on days 1–AUTORUN_DAY of
+    the current month; annual leave targets next year. Mirrors the
+    enforcement in ``create_request``: dev never closes the window.
+    """
+    if today is None:
+        today = date.today()
+    if today.month == 12:
+        target_year, target_month = today.year + 1, 1
+    else:
+        target_year, target_month = today.year, today.month + 1
+    enforced = settings.ENVIRONMENT != "dev"
+    return LeaveWindowRead(
+        monthly_open=(
+            not enforced or is_monthly_window_open(today, target_month, target_year)
+        ),
+        monthly_target_year=target_year,
+        monthly_target_month=target_month,
+        annual_target_year=today.year + 1,
+        closes_on_day=settings.AUTORUN_DAY,
+        enforced=enforced,
     )
 
 
