@@ -21,7 +21,7 @@ from app.models.enums import AttendanceCode, LeaveStatus, LeaveType, UserStatus
 from app.models.leave import LeaveRequest
 from app.models.user import User
 from app.schemas.leave import LeaveCreate
-from app.services import leave_conflict_resolver
+from app.services import leave_conflict_resolver, schedule_history
 from app.services.leave_windows import classify, is_annual_window_open, is_monthly_window_open
 
 # ---------------------------------------------------------------------------
@@ -378,7 +378,9 @@ def conflicts_for_date(
 ) -> list[LeaveRequest]:
     """Return ranked competing requests (pending + approved) for a given date.
 
-    Uses leave_conflict_resolver.rank with carry_comp look-up.
+    Uses leave_conflict_resolver.rank with carry_comp derived by
+    schedule_history for the contested month — the same values the scheduler
+    uses, so no month-close is needed for the ranking to be current.
     """
     requests = (
         db.query(LeaveRequest)
@@ -394,7 +396,12 @@ def conflicts_for_date(
 
     user_ids = {r.user_id for r in requests}
     users = db.query(User).filter(User.id.in_(user_ids)).all()
-    users_by_id = {u.id: u for u in users}
+    carry = {
+        uid: s.carry_comp
+        for uid, s in schedule_history.build_boundary_states(
+            db, users, target_date.year, target_date.month
+        ).items()
+    }
 
     # Criterion 2 input: off days these users ALREADY hold (approved) around
     # the contested date — one month either side covers every 7-day block a
@@ -418,4 +425,4 @@ def conflicts_for_date(
             approved_off_by_user.setdefault(req.user_id, set()).add(day)
             day += timedelta(days=1)
 
-    return leave_conflict_resolver.rank(requests, users_by_id, approved_off_by_user)
+    return leave_conflict_resolver.rank(requests, carry, approved_off_by_user)
