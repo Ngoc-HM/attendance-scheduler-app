@@ -72,10 +72,12 @@ class _FakeScheduleDataSource extends ScheduleRemoteDataSource {
 
   final created = <Map<String, Object?>>[];
   final fetchAllFlags = <bool>[];
+  final fetchedMonths = <(int, int)>[];
   final _requests = <ShiftChangeRequest>[];
 
   @override
   Future<MonthlySchedule> fetchSchedule(int year, int month) async {
+    fetchedMonths.add((year, month));
     if (scheduleError != null) throw scheduleError!;
     final days = DateTime(year, month + 1, 0).day;
     return MonthlySchedule(
@@ -210,6 +212,7 @@ Future<void> _pumpSchedule(
   required User user,
   required _FakeScheduleDataSource scheduleDs,
   required _FakeUserDataSource userDs,
+  DateTime? initialMonth,
 }) async {
   await tester.binding.setSurfaceSize(const Size(1400, 1800));
   addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -234,7 +237,7 @@ Future<void> _pumpSchedule(
         ],
         supportedLocales: AppLocalizations.supportedLocales,
         locale: const Locale('en'),
-        home: const Scaffold(body: SchedulePage()),
+        home: Scaffold(body: SchedulePage(initialMonth: initialMonth)),
       ),
     ),
   );
@@ -338,6 +341,21 @@ void main() {
         ShiftCode.x,
       ]);
     });
+  });
+
+  testWidgets('opens on the injected month, normalised to its first day', (
+    tester,
+  ) async {
+    final scheduleDs = _FakeScheduleDataSource();
+    await _pumpSchedule(
+      tester,
+      user: _employee,
+      scheduleDs: scheduleDs,
+      userDs: _FakeUserDataSource(),
+      initialMonth: DateTime(2031, 2, 14, 9, 30),
+    );
+
+    expect(scheduleDs.fetchedMonths, [(2031, 2)]);
   });
 
   testWidgets('employee sees no generate/publish and cannot pick S', (
