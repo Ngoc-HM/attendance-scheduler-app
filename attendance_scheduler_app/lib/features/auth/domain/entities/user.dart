@@ -35,6 +35,7 @@ class User extends Equatable {
     required this.status,
     required this.code,
     this.carryComp = 0,
+    this.annualLeaveQuota = 0,
   });
 
   final int id;
@@ -50,9 +51,12 @@ class User extends Equatable {
   /// month close (`carry_comp` on `/users/me` and `/users`).
   final int carryComp;
 
+  /// Admin-set days of leave per calendar year (`annual_leave_quota`, D4).
+  final int annualLeaveQuota;
+
   bool get isAdmin => role.isAdmin;
 
   @override
   List<Object?> get props =>
-      [id, username, fullName, role, status, code, carryComp];
+      [id, username, fullName, role, status, code, carryComp, annualLeaveQuota];
 }

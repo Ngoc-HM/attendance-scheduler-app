@@ -35,6 +35,8 @@ class _StubUserDataSource implements UserManagementDataSource {
   _StubUserDataSource({this.createException});
 
   final Object? createException;
+  final created = <String>[];
+  final updates = <(int, Map<String, dynamic>)>[];
 
   @override
   Future<UserModel> create({
@@ -44,8 +46,9 @@ class _StubUserDataSource implements UserManagementDataSource {
     required String role,
   }) async {
     if (createException != null) throw createException!;
+    created.add(username);
     return UserModel(
-      id: 1,
+      id: 41,
       username: username,
       fullName: fullName,
       role: UserRoleX.fromApi(role),
@@ -62,10 +65,34 @@ class _StubUserDataSource implements UserManagementDataSource {
   Future<UserModel> approve(int id, {required String role}) async =>
       throw UnimplementedError();
   @override
-  Future<UserUpdateResult> update(int id, Map<String, dynamic> changes) async =>
-      throw UnimplementedError();
+  Future<UserUpdateResult> update(int id, Map<String, dynamic> changes) async {
+    updates.add((id, changes));
+    return const UserUpdateResult(
+      user: UserModel(
+        id: 41,
+        username: 'long',
+        fullName: 'Long',
+        role: UserRole.t,
+        status: 'active',
+        code: 'T1',
+      ),
+      warnings: [],
+    );
+  }
+
   @override
   Future<void> delete(int id) async {}
+}
+
+/// Fills the create-user form; [quota] goes in the annual leave quota field.
+Future<void> _fillCreateForm(WidgetTester tester, {String quota = ''}) async {
+  await tester.enterText(find.byType(TextField).at(0), 'long');
+  await tester.enterText(find.byType(TextField).at(1), 'Long');
+  await tester.enterText(find.byType(TextField).at(2), 'secret1');
+  await tester.enterText(
+    find.widgetWithText(TextField, 'Annual leave quota'),
+    quota,
+  );
 }
 
 class _NoopAttendanceDataSource implements AttendanceRemoteDataSource {
@@ -192,6 +219,59 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Could not create the user.'), findsOneWidget);
+    });
+
+    Future<_StubUserDataSource> pumpDialog(WidgetTester tester) async {
+      await tester.binding.setSurfaceSize(const Size(800, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final ds = _StubUserDataSource();
+      await tester.pumpWidget(
+        _wrap(
+          const CreateUserDialog(),
+          overrides: [userManagementDataSourceProvider.overrideWithValue(ds)],
+        ),
+      );
+      await tester.pumpAndSettle();
+      return ds;
+    }
+
+    testWidgets('saves the annual leave quota on the new user', (
+      tester,
+    ) async {
+      final ds = await pumpDialog(tester);
+
+      await _fillCreateForm(tester, quota: '25');
+      await tester.tap(find.text('Create'));
+      await tester.pumpAndSettle();
+
+      expect(ds.created, ['long']);
+      final (id, changes) = ds.updates.single;
+      expect(id, 41);
+      expect(changes, {'annual_leave_quota': 25});
+    });
+
+    testWidgets('an empty quota keeps the server default', (tester) async {
+      final ds = await pumpDialog(tester);
+
+      await _fillCreateForm(tester);
+      await tester.tap(find.text('Create'));
+      await tester.pumpAndSettle();
+
+      expect(ds.created, ['long']);
+      expect(ds.updates, isEmpty);
+    });
+
+    testWidgets('a quota above 365 is rejected before any request', (
+      tester,
+    ) async {
+      final ds = await pumpDialog(tester);
+
+      await _fillCreateForm(tester, quota: '366');
+      await tester.tap(find.text('Create'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Enter a whole number from 0 to 365.'), findsOneWidget);
+      expect(ds.created, isEmpty);
     });
   });
 }

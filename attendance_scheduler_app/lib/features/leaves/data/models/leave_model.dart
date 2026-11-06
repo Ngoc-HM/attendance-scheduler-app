@@ -93,3 +93,32 @@ class LeaveWindow {
     enforced: json['enforced'] as bool,
   );
 }
+
+/// One person's annual leave for a calendar year from `GET /leaves/balance`
+/// (backend `AnnualLeaveSummary`, owner decision D4). [used] and [pending]
+/// are approved / pending leave days in [year]; [remaining] is [quota] minus
+/// [used] and goes negative once leave was approved past the quota.
+class AnnualLeaveBalance {
+  const AnnualLeaveBalance({
+    required this.year,
+    required this.quota,
+    required this.used,
+    required this.pending,
+    required this.remaining,
+  });
+
+  final int year;
+  final int quota;
+  final int used;
+  final int pending;
+  final int remaining;
+
+  factory AnnualLeaveBalance.fromJson(Map<String, dynamic> json) =>
+      AnnualLeaveBalance(
+        year: json['year'] as int,
+        quota: json['quota'] as int,
+        used: json['used'] as int,
+        pending: json['pending'] as int,
+        remaining: json['remaining'] as int,
+      );
+}

@@ -19,6 +19,7 @@ class _CreateUserDialogState extends ConsumerState<CreateUserDialog> {
   final _username = TextEditingController();
   final _fullName = TextEditingController();
   final _password = TextEditingController();
+  final _quota = TextEditingController();
   UserRole _role = UserRole.t;
   bool _isLoading = false;
   String? _error;
@@ -28,6 +29,7 @@ class _CreateUserDialogState extends ConsumerState<CreateUserDialog> {
     _username.dispose();
     _fullName.dispose();
     _password.dispose();
+    _quota.dispose();
     super.dispose();
     _password.removeListener(_rebuild);
     _username.removeListener(_rebuild);
@@ -50,6 +52,8 @@ class _CreateUserDialogState extends ConsumerState<CreateUserDialog> {
       _isLoading = true;
       _error = null;
     });
+    // Validated above: empty (server default) or a whole number 0–365.
+    final quota = _quota.text.trim();
     try {
       await ref
           .read(usersControllerProvider.notifier)
@@ -58,6 +62,7 @@ class _CreateUserDialogState extends ConsumerState<CreateUserDialog> {
             fullName: _fullName.text.trim(),
             password: _password.text,
             role: _role,
+            annualLeaveQuota: quota.isEmpty ? null : int.parse(quota),
           );
       if (mounted) Navigator.of(context).pop(true);
     } on ApiException catch (e) {
@@ -100,6 +105,10 @@ class _CreateUserDialogState extends ConsumerState<CreateUserDialog> {
       minThreeMessage: l.minThreeChars,
       requiredMessage: l.fieldRequired,
       minSixMessage: l.minSixChars,
+      quotaController: _quota,
+      quotaLabel: l.text('annualLeaveQuota'),
+      quotaHint: l.text('annualLeaveQuotaHint'),
+      quotaInvalidMessage: l.text('annualLeaveQuotaInvalid'),
       error: _error,
       loading: _isLoading,
     );

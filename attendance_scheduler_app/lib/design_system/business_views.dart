@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../core/constants/shift_codes.dart';
 import '../i18n/app_localizations.dart';
@@ -1058,6 +1059,7 @@ class DsLeavesView extends StatelessWidget {
     this.registrationOpen = true,
     this.closesOnDay,
     required this.compDays,
+    this.annualLeaveRemaining,
   });
 
   final List<DsLeaveRowData> rows;
@@ -1084,12 +1086,18 @@ class DsLeavesView extends StatelessWidget {
   /// for someone with no requests and count a person once per request.
   final int compDays;
 
+  /// "Annual leave left" card value (quota minus approved days this year).
+  /// Null → no card (admin view, or the balance could not be loaded);
+  /// negative once leave was approved past the quota.
+  final int? annualLeaveRemaining;
+
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
     final pending = rows.where((row) => row.status == 'Pending').length;
     final approved = rows.where((row) => row.status == 'Approved').length;
     final day = closesOnDay;
+    final annualLeft = annualLeaveRemaining;
     return DsPage(
       title: l.text('leaveRequests'),
       subtitle: day == null ? null : l.leaveSubtitle(day),
@@ -1128,6 +1136,13 @@ class DsLeavesView extends StatelessWidget {
                 icon: Icons.event_repeat_outlined,
                 tone: DsTone.primary,
               ),
+              if (annualLeft != null)
+                DsMetricCard(
+                  label: l.text('annualLeaveRemaining'),
+                  value: '$annualLeft',
+                  icon: Icons.beach_access_outlined,
+                  tone: annualLeft < 0 ? DsTone.danger : DsTone.primary,
+                ),
             ],
           ),
           const SizedBox(height: DsSpacing.x6),
@@ -1923,6 +1938,10 @@ class DsCreateUserDialog<T> extends StatelessWidget {
     required this.minThreeMessage,
     required this.requiredMessage,
     required this.minSixMessage,
+    required this.quotaController,
+    required this.quotaLabel,
+    required this.quotaHint,
+    required this.quotaInvalidMessage,
     this.error,
     this.loading = false,
   });
@@ -1931,6 +1950,13 @@ class DsCreateUserDialog<T> extends StatelessWidget {
   final TextEditingController usernameController;
   final TextEditingController fullNameController;
   final TextEditingController passwordController;
+
+  /// Optional annual leave quota in days (0–365); empty keeps the server
+  /// default.
+  final TextEditingController quotaController;
+  final String quotaLabel;
+  final String quotaHint;
+  final String quotaInvalidMessage;
   final T role;
   final List<DsSelectOption<T>> roleOptions;
   final ValueChanged<T> onRoleChanged;
@@ -1994,6 +2020,22 @@ class DsCreateUserDialog<T> extends StatelessWidget {
               ],
               onChanged: (value) {
                 if (value != null) onRoleChanged(value);
+              },
+            ),
+            const SizedBox(height: DsSpacing.x4),
+            DsTextField(
+              controller: quotaController,
+              label: quotaLabel,
+              hint: quotaHint,
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              validator: (value) {
+                final text = value?.trim() ?? '';
+                if (text.isEmpty) return null;
+                final days = int.tryParse(text);
+                return (days == null || days < 0 || days > 365)
+                    ? quotaInvalidMessage
+                    : null;
               },
             ),
             if (error != null) ...[

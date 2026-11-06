@@ -22,19 +22,30 @@ class UsersController extends StateNotifier<AsyncValue<List<User>>> {
     if (mounted) state = result;
   }
 
+  /// Creates an active account. POST /users takes no quota (the server
+  /// applies its default), so a non-null [annualLeaveQuota] is saved with a
+  /// follow-up PATCH (D4).
   Future<void> create({
     required String username,
     required String fullName,
     required String password,
     required UserRole role,
+    int? annualLeaveQuota,
   }) async {
-    await _ds.create(
+    final created = await _ds.create(
       username: username,
       fullName: fullName,
       password: password,
       role: role.apiValue,
     );
-    await load();
+    try {
+      if (annualLeaveQuota != null) {
+        await _ds.update(created.id, {'annual_leave_quota': annualLeaveQuota});
+      }
+    } finally {
+      // The account exists even if the quota PATCH failed — list it.
+      await load();
+    }
   }
 
   /// Activates a pending account with the role the admin picked (F-03).
