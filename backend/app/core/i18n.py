@@ -50,7 +50,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "leave.overlap": "An overlapping leave request already exists.",
         "leave.invalid_range": "End date must not be before start date.",
         "leave.type_span_mismatch": "Leave of 5 days or less is monthly leave; more than 5 consecutive days must be registered as annual leave.",
-        "leave.schedule_stale": "This leave overlaps a month whose schedule was already generated — regenerate that month so the leave appears in it.",
+        "leave.schedule_applied": "The already-generated schedule was updated with this decision; review the warnings.",
+        "leave.schedule_not_generated": "no schedule yet — this decision applies when the month is generated.",
         "leave.revoke_only_approved": "Only an approved leave can be revoked.",
         "leave.staffing_impossible": "flights CANNOT be covered — too few group-A staff remain that day.",
         "leave.staffing_short_ordinary": (
@@ -120,7 +121,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "leave.overlap": "Đã tồn tại đơn nghỉ trùng thời gian.",
         "leave.invalid_range": "Ngày kết thúc không được trước ngày bắt đầu.",
         "leave.type_span_mismatch": "Nghỉ từ 5 ngày trở xuống là nghỉ tháng; trên 5 ngày liên tục phải đăng ký nghỉ phép năm.",
-        "leave.schedule_stale": "Ngày nghỉ này trùng tháng đã tạo lịch — cần tạo lại lịch tháng đó để ngày nghỉ được cập nhật.",
+        "leave.schedule_applied": "Lịch đã tạo được cập nhật theo quyết định này; hãy xem các cảnh báo.",
+        "leave.schedule_not_generated": "chưa có lịch — quyết định này sẽ được áp dụng khi tạo lịch tháng đó.",
         "leave.revoke_only_approved": "Chỉ hủy được đơn nghỉ đã duyệt.",
         "leave.staffing_impossible": "KHÔNG thể phủ chuyến bay — nhóm A còn lại quá ít người ngày này.",
         "leave.staffing_short_ordinary": (
