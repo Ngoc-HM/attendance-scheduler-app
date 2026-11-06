@@ -265,6 +265,7 @@ def apply_leave_span(
     code: AttendanceCode,
     *,
     only_if: AttendanceCode | None = None,
+    skip: AttendanceCode | None = None,
 ) -> list[str]:
     """B4 — write a leave decision (AL approve / X revoke) into generated months.
 
@@ -272,7 +273,9 @@ def apply_leave_span(
     of the span that already has a schedule get the code directly (published
     months also move their still-seeded actuals). ``only_if`` limits the write
     to cells currently holding that code: revoke passes AL, so a cell the
-    admin re-coded after approval (or a CD) stays. A month without a schedule
+    admin re-coded after approval (or a CD) stays. ``skip`` leaves cells
+    holding that code alone: approve passes X, so the weekly off days stay X
+    (leave does not replace them, decision #4). A month without a schedule
     needs nothing: it reads approved leave when generated. Returns [] when no
     cell changed; otherwise the ``leave.schedule_applied`` notice, a note per
     month not generated yet, then each changed month's re-check warnings.
@@ -299,6 +302,7 @@ def apply_leave_span(
             and cell.work_date in days
             and cell.code is not code
             and (only_if is None or cell.code is only_if)
+            and (skip is None or cell.code is not skip)
         ]
         for cell in changed:
             cell.code = code

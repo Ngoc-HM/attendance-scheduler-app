@@ -202,12 +202,15 @@ def decide(
 ) -> tuple[LeaveRequest, list[str]]:
     """Admin approve or reject a leave request.
 
-    There is NO leave quota/balance (owner 2026-07-18): the only registration
-    rule is the timing window (≤5 days = monthly window; >5 days must be filed
-    the previous year). Approving past the annual quota only adds a warning
-    (see leave_balance). Idempotent re-decision → 409.
+    Registration is bound by the timing window (≤5 days = monthly window;
+    >5 days must be filed the previous year). Each user has an annual leave
+    quota (owner D4, 2026-11-06; see leave_balance): approving past it is
+    allowed but adds the ``leave.balance_exceeded`` warning — the quota never
+    blocks a decision. Idempotent re-decision → 409.
 
-    An approval is written as AL into any already-generated month of the span.
+    An approval is written as AL into any already-generated month of the span,
+    except over the person's X cells: leave does not replace the weekly off
+    days (decision #4), so those stay X.
     Returns (request, warnings): warnings report that schedule update with its
     re-check and any flight-coverage impact — advisory only, the admin always
     decides.
@@ -224,7 +227,9 @@ def decide(
     req.status = new_status
     warnings: list[str] = []
     if new_status == LeaveStatus.approved:
-        warnings += _write_into_schedule(db, req, AttendanceCode.AL)
+        warnings += _write_into_schedule(
+            db, req, AttendanceCode.AL, skip=AttendanceCode.X
+        )
         # Approving must never silently break flight coverage — check every
         # day of the span against the 1A+1D / 1A+2D demand and warn (admin
         # still decides; never a hard block).
@@ -330,12 +335,14 @@ def _write_into_schedule(
     req: LeaveRequest,
     code: AttendanceCode,
     only_if: AttendanceCode | None = None,
+    skip: AttendanceCode | None = None,
 ) -> list[str]:
     """Put the decision into already-generated months of the span (B4)."""
     from app.services import schedule_service  # local: it imports this module
 
     return schedule_service.apply_leave_span(
-        db, req.user_id, req.start_date, req.end_date, code, only_if=only_if
+        db, req.user_id, req.start_date, req.end_date, code,
+        only_if=only_if, skip=skip,
     )
 
 
