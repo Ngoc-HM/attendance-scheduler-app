@@ -26,6 +26,7 @@ from app.schemas.schedule import (
     ScheduleResult,
 )
 from app.services import (
+    attendance_service,
     flight_service,
     leave_service,
     role_code_validation,
@@ -171,6 +172,8 @@ def manual_override(
         )
     cell.code = payload.code
     cell.is_manual_override = True
+    if schedule.status is ScheduleStatus.published:
+        attendance_service.sync_planned_cell(db, cell.user_id, cell.work_date, cell.code)
     db.commit()
     db.refresh(schedule)
     return ScheduleResult(
@@ -185,10 +188,9 @@ def publish(db: Session, schedule_id: int) -> MonthlySchedule:
     schedule = _get_by_id(db, schedule_id)
     schedule.status = ScheduleStatus.published
     db.commit()
-    # Published assignments become the initial actual-attendance baseline.
-    # Existing actual edits are never overwritten by the seeding service.
-    from app.services import attendance_service
-
+    # Published assignments become the actual-attendance baseline: missing
+    # actuals are seeded and still-seeded ones re-synced (re-publish after a
+    # regenerate); admin-recorded actuals are never overwritten.
     attendance_service.seed_from_schedule(db, schedule.year, schedule.month)
     db.refresh(schedule)
     return schedule
@@ -217,6 +219,7 @@ def apply_shift_change(db: Session, req: ShiftChangeRequest) -> list[str]:
     if mine is None:
         raise HTTPException(status.HTTP_409_CONFLICT, detail=t("swap.no_schedule"))
 
+    changed = [mine]
     if req.kind is SwapKind.change_code:
         requester = db.get(User, req.requester_id)
         if requester is None:
@@ -245,7 +248,11 @@ def apply_shift_change(db: Session, req: ShiftChangeRequest) -> list[str]:
         role_code_validation.validate_planned(counterpart.role, mine.code)
         mine.code, theirs.code = theirs.code, mine.code
         mine.is_manual_override = theirs.is_manual_override = True
+        changed.append(theirs)
 
+    if schedule.status is ScheduleStatus.published:
+        for cell in changed:
+            attendance_service.sync_planned_cell(db, cell.user_id, cell.work_date, cell.code)
     db.commit()
     return [f"{v.rule}: {v.message}" for v in _recheck_violations(db, schedule)]
 
