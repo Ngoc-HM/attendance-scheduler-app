@@ -28,6 +28,9 @@ class _RecordingUserDataSource implements UserManagementDataSource {
   Future<List<UserModel>> list() async => const [_pending];
 
   @override
+  Future<List<UserDirectoryEntry>> directory() async => const [];
+
+  @override
   Future<UserModel> approve(int id, {required String role}) async {
     approvals.add((id, role));
     return _pending;

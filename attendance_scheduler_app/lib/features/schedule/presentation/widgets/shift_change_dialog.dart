@@ -5,21 +5,26 @@ import '../../../../core/constants/shift_codes.dart';
 import '../../../../design_system/design_system.dart';
 import '../../../../i18n/app_localizations.dart';
 import '../../../auth/domain/entities/user.dart';
+import '../../../users/data/user_management_datasource.dart';
+import '../../domain/entities/schedule_entities.dart';
 import '../providers/shift_change_provider.dart';
 
 /// Dialog for a user to request a shift-change on their own cell.
-/// [workDate] is the day tapped. [users] is the full user list for swap_with.
-/// [currentUserId] is used to exclude self from counterpart picker.
+/// [workDate] is the day tapped; [role] (the requester's) limits the codes
+/// offered to the planned-grid set. [people] is the code directory for
+/// swap_with; [currentUserId] is excluded from the counterpart picker.
 class ShiftChangeRequestDialog extends ConsumerStatefulWidget {
   const ShiftChangeRequestDialog({
     super.key,
     required this.workDate,
-    required this.users,
+    required this.role,
+    required this.people,
     required this.currentUserId,
   });
 
   final DateTime workDate;
-  final List<User> users;
+  final UserRole role;
+  final List<UserDirectoryEntry> people;
   final int currentUserId;
 
   @override
@@ -30,7 +35,7 @@ class ShiftChangeRequestDialog extends ConsumerStatefulWidget {
 class _ShiftChangeRequestDialogState
     extends ConsumerState<ShiftChangeRequestDialog> {
   String _kind = 'change_code';
-  ShiftCode _selectedCode = ShiftCode.x;
+  ShiftCode _selectedCode = ShiftCode.x; // planned for every role
   int? _counterpartUserId;
   final _noteCtrl = TextEditingController();
 
@@ -40,9 +45,22 @@ class _ShiftChangeRequestDialogState
     super.dispose();
   }
 
-  List<User> get _colleagues => widget.users
-      .where((u) => u.id != widget.currentUserId)
-      .toList();
+  /// Everyone but the requester, in natural code order (A2 before A10).
+  List<UserDirectoryEntry> get _colleagues =>
+      widget.people.where((p) => p.id != widget.currentUserId).toList()
+        ..sort((a, b) => _compareCodes(a.code, b.code));
+
+  static int _compareCodes(String a, String b) {
+    final prefix = _codePrefix(a).compareTo(_codePrefix(b));
+    if (prefix != 0) return prefix;
+    return _codeSeq(a).compareTo(_codeSeq(b));
+  }
+
+  static String _codePrefix(String code) =>
+      code.replaceAll(RegExp(r'[0-9]'), '');
+
+  static int _codeSeq(String code) =>
+      int.tryParse(code.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
 
   @override
   Widget build(BuildContext context) {
@@ -83,7 +101,7 @@ class _ShiftChangeRequestDialogState
             DropdownButton<ShiftCode>(
               value: _selectedCode,
               isExpanded: true,
-              items: ShiftCode.values
+              items: ShiftCodeX.plannedCodesFor(widget.role)
                   .map(
                     (c) => DropdownMenuItem(
                       value: c,
@@ -104,12 +122,7 @@ class _ShiftChangeRequestDialogState
               hint: Text(l.text('selectColleague')),
               items: _colleagues
                   .map(
-                    (u) => DropdownMenuItem(
-                      value: u.id,
-                      child: Text(u.fullName.isNotEmpty
-                          ? u.fullName
-                          : u.username),
-                    ),
+                    (p) => DropdownMenuItem(value: p.id, child: Text(p.code)),
                   )
                   .toList(),
               onChanged: (v) => setState(() => _counterpartUserId = v),
@@ -257,5 +270,101 @@ class ShiftChangePendingPanel extends ConsumerWidget {
         tone: ok ? DsTone.success : DsTone.danger,
       );
     }
+  }
+}
+
+/// Employee panel under the roster: the signed-in user's own shift-change
+/// requests (GET /shift-changes) and where each one stands.
+class MyShiftChangeRequestsPanel extends ConsumerWidget {
+  const MyShiftChangeRequestsPanel({super.key, required this.codeById});
+
+  /// Person id → code, to show who a swap request targets.
+  final Map<int, String> codeById;
+
+  /// Keeps the roster above usable; longer lists scroll inside the panel.
+  static const double _maxTableHeight = 200;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l = AppLocalizations.of(context);
+    final state = ref.watch(shiftChangeControllerProvider);
+
+    return Padding(
+      padding: const EdgeInsets.all(DsSpacing.x4),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            l.text('myShiftChangeRequests'),
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: DsSpacing.x2),
+          if (state.isLoading)
+            const LinearProgressIndicator()
+          else if (state.loadFailed)
+            Text(
+              l.text('shiftChangesLoadFailed'),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: DsColors.danger),
+            )
+          else if (state.requests.isEmpty)
+            Text(
+              l.text('noShiftChangeRequests'),
+              style: Theme.of(context).textTheme.bodySmall,
+            )
+          else
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: _maxTableHeight),
+              child: SingleChildScrollView(
+                child: DsSurface(
+                  padding: EdgeInsets.zero,
+                  child: DsDataTable(
+                    columns: [
+                      DsTableColumn(header: l.text('date'), flex: 2),
+                      DsTableColumn(header: l.text('type'), flex: 3),
+                      DsTableColumn(header: l.text('shiftCodeColumn'), flex: 2),
+                      DsTableColumn(header: l.status, flex: 2),
+                    ],
+                    rows: [
+                      for (final request in state.requests) _row(l, request),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  List<Widget> _row(AppLocalizations l, ShiftChangeRequest request) {
+    final isSwap = request.kind == 'swap_with';
+    final target = isSwap
+        ? '⇄ ${codeById[request.counterpartUserId] ?? '—'}'
+        : (request.requestedCode ?? '—');
+    final date = request.workDate;
+    return [
+      Text(
+        '${date.year}-${date.month.toString().padLeft(2, '0')}-'
+        '${date.day.toString().padLeft(2, '0')}',
+        style: DsType.tableCell,
+      ),
+      Text(
+        l.text(isSwap ? 'swapWith' : 'changeCode'),
+        style: DsType.tableCell,
+        overflow: TextOverflow.ellipsis,
+      ),
+      Text(target, style: DsType.tableCell),
+      DsBadge(
+        label: l.statusLabel(request.status),
+        tone: switch (request.status) {
+          'approved' => DsTone.success,
+          'rejected' => DsTone.danger,
+          _ => DsTone.warning,
+        },
+      ),
+    ];
   }
 }

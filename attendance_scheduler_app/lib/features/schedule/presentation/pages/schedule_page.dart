@@ -6,6 +6,7 @@ import '../../../../core/network/api_exception.dart';
 import '../../../../design_system/design_system.dart';
 import '../../../../i18n/app_localizations.dart';
 import '../../../auth/domain/entities/user.dart';
+import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../../flights/data/datasources/flights_remote_datasource.dart';
 import '../../../flights/data/models/flight_day_model.dart';
 import '../../domain/entities/schedule_entities.dart';
@@ -41,6 +42,8 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
     if (isAdmin) {
       ref.read(shiftChangeControllerProvider.notifier).load(all: true);
       ref.read(selfArrangeAdminControllerProvider.notifier).load();
+    } else {
+      ref.read(shiftChangeControllerProvider.notifier).load();
     }
     _loadFlights();
   }
@@ -93,23 +96,20 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
     final isAdmin = ref.watch(isAdminProvider);
+    final me = ref.watch(authControllerProvider).user;
     final scheduleState = ref.watch(scheduleControllerProvider);
 
     if (scheduleState.isLoading) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
-    // Non-admin gets 404 for drafts — show graceful message.
-    if (scheduleState.error != null && !isAdmin) {
-      return _ScheduleNotPublished(
-        month: _month,
-        onPrevious: _prevMonth,
-        onNext: _nextMonth,
-        errorMessage: l.text('scheduleNotPublishedYet'),
-      );
-    }
-
-    final rows = _buildRows(scheduleState);
+    // Non-admin gets 404 for drafts: show an empty roster with a neutral
+    // message (no "generate" hint) and keep the own-requests panel below.
+    // The state may still hold the previous month's schedule, so no rows.
+    final notPublished = scheduleState.error != null && !isAdmin;
+    final rows = notPublished
+        ? const <DsRosterRowData>[]
+        : _buildRows(scheduleState);
 
     return Column(
       children: [
@@ -120,13 +120,26 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
             flightLabels: _flightLabels,
             onPreviousMonth: _prevMonth,
             onNextMonth: _nextMonth,
-            onGenerate: isAdmin ? () => _onGenerate(context, l) : () {},
-            onPublish: isAdmin ? () => _onPublish(context, l) : () {},
+            onGenerate: isAdmin ? () => _onGenerate(context, l) : null,
+            onPublish: isAdmin ? () => _onPublish(context, l) : null,
+            emptyMessage: isAdmin ? null : l.text('scheduleNotPublishedYet'),
             onCellTap: isAdmin
                 ? (row, dayIndex) => _onEditCell(context, l, row, dayIndex)
-                : null,
+                : me == null
+                ? null
+                : (row, dayIndex) => _onRequestChange(context, l, me, dayIndex),
+            // Employees may only ask to change their own cells.
+            isRowTappable: isAdmin || me == null
+                ? null
+                : (row) => row.id == me.id,
           ),
         ),
+        if (!isAdmin && me != null) ...[
+          const Divider(height: 1),
+          MyShiftChangeRequestsPanel(
+            codeById: {for (final p in scheduleState.people) p.id: p.code},
+          ),
+        ],
         if (isAdmin && _showShiftChanges) ...[
           const Divider(height: 1),
           Padding(
@@ -178,9 +191,9 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
     final schedule = state.schedule;
     if (schedule == null) return [];
 
-    // Build user id→code map (employee code, e.g. "A3"). Admin has the users
-    // list; non-admin falls back to the raw id.
-    final userMap = <int, String>{for (final u in state.users) u.id: u.code};
+    // Build user id→code map (employee code, e.g. "A3") — admin from /users,
+    // employees from the name-free /users/directory.
+    final userMap = <int, String>{for (final p in state.people) p.id: p.code};
 
     // Group assignments by user_id.
     final byUser = <int, List<ShiftAssignment>>{};
@@ -197,7 +210,8 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
       final userId = entry.key;
       final assignments = entry.value;
       final shifts = assignments.map((a) => _codeToShiftCode(a.code)).toList();
-      final name = userMap[userId] ?? 'User $userId';
+      // Same anonymous fallback as the leaves list when the code is unknown.
+      final name = userMap[userId] ?? 'ID $userId';
       final role = _roleLabel(userId, state);
 
       final arrivals = shifts
@@ -234,8 +248,8 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
       int.tryParse(code.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
 
   String _roleLabel(int userId, ScheduleState state) {
-    final user = state.users.where((u) => u.id == userId).firstOrNull;
-    return user?.role.apiValue ?? '';
+    final person = state.people.where((p) => p.id == userId).firstOrNull;
+    return person?.role.apiValue ?? '';
   }
 
   ShiftCode _codeToShiftCode(String code) => switch (code) {
@@ -385,6 +399,8 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
 
   /// F-09 admin cell edit: tap a roster cell → pick a code → save. The edit
   /// is ALWAYS saved server-side; recheck warnings come back for display.
+  /// Only the row role's planned codes are offered (never S — the backend
+  /// rejects it on the planned grid).
   Future<void> _onEditCell(
     BuildContext context,
     AppLocalizations l,
@@ -394,7 +410,11 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
     final userId = row.id;
     if (userId == null) return;
     final workDate = DateTime(_month.year, _month.month, dayIndex + 1);
-    var selected = row.shifts[dayIndex];
+    final current = row.shifts[dayIndex];
+    final allowed = ShiftCodeX.plannedCodesFor(UserRoleX.fromApi(row.role));
+    // A current code outside the role's set (legacy data) shows as the hint
+    // until the admin picks an allowed one.
+    ShiftCode? selected = allowed.contains(current) ? current : null;
 
     final confirmed = await showDialog<bool>(
       context: context,
@@ -406,7 +426,8 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
           content: DropdownButton<ShiftCode>(
             value: selected,
             isExpanded: true,
-            items: ShiftCode.values
+            hint: Text(current.code),
+            items: allowed
                 .map((c) => DropdownMenuItem(value: c, child: Text(c.code)))
                 .toList(),
             onChanged: (v) {
@@ -420,17 +441,20 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
             ),
             DsPrimaryButton(
               label: l.text('save'),
-              onPressed: () => Navigator.of(context).pop(true),
+              onPressed: selected == null
+                  ? null
+                  : () => Navigator.of(context).pop(true),
             ),
           ],
         ),
       ),
     );
-    if (confirmed != true || !mounted) return;
+    final code = selected;
+    if (confirmed != true || code == null || !mounted) return;
 
     final warnings = await ref
         .read(scheduleControllerProvider.notifier)
-        .overrideCell(userId: userId, workDate: workDate, code: selected.code);
+        .overrideCell(userId: userId, workDate: workDate, code: code.code);
     if (!context.mounted) return;
     if (warnings == null) {
       DsFeedback.show(
@@ -447,6 +471,40 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
         context,
         '${l.text('cellSaved')} ${warnings.length} ${l.text('ruleWarnings')}',
         tone: DsTone.warning,
+      );
+    }
+  }
+
+  /// Employee taps one of their own cells → shift-change request (decision
+  /// #8). The admin decides it later; the own-requests list reloads here.
+  Future<void> _onRequestChange(
+    BuildContext context,
+    AppLocalizations l,
+    User me,
+    int dayIndex,
+  ) async {
+    final submitted = await showDialog<bool>(
+      context: context,
+      builder: (_) => ShiftChangeRequestDialog(
+        workDate: DateTime(_month.year, _month.month, dayIndex + 1),
+        role: me.role,
+        people: ref.read(scheduleControllerProvider).people,
+        currentUserId: me.id,
+      ),
+    );
+    if (submitted == null || !context.mounted) return; // cancelled
+    if (submitted) {
+      DsFeedback.show(
+        context,
+        l.text('shiftChangeSubmitted'),
+        tone: DsTone.success,
+      );
+      ref.read(shiftChangeControllerProvider.notifier).load();
+    } else {
+      DsFeedback.show(
+        context,
+        ref.read(shiftChangeControllerProvider).error ?? l.text('loadFailed'),
+        tone: DsTone.danger,
       );
     }
   }
@@ -468,33 +526,5 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
         tone: DsTone.success,
       );
     }
-  }
-}
-
-// ── Supplementary widgets ──────────────────────────────────────────────────────
-
-class _ScheduleNotPublished extends StatelessWidget {
-  const _ScheduleNotPublished({
-    required this.month,
-    required this.onPrevious,
-    required this.onNext,
-    required this.errorMessage,
-  });
-
-  final DateTime month;
-  final VoidCallback onPrevious;
-  final VoidCallback onNext;
-  final String errorMessage;
-
-  @override
-  Widget build(BuildContext context) {
-    return DsScheduleView(
-      month: month,
-      rows: const [],
-      onPreviousMonth: onPrevious,
-      onNextMonth: onNext,
-      onGenerate: () {},
-      onPublish: () {},
-    );
   }
 }

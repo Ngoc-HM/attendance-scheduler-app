@@ -217,10 +217,12 @@ class DsScheduleView extends StatelessWidget {
     required this.rows,
     required this.onPreviousMonth,
     required this.onNextMonth,
-    required this.onGenerate,
-    required this.onPublish,
+    this.onGenerate,
+    this.onPublish,
     this.flightLabels = const {},
     this.onCellTap,
+    this.isRowTappable,
+    this.emptyMessage,
   });
 
   final DateTime month;
@@ -228,12 +230,21 @@ class DsScheduleView extends StatelessWidget {
   final Map<int, String> flightLabels; // day-of-month → FLT codes for the roster
   final VoidCallback onPreviousMonth;
   final VoidCallback onNextMonth;
-  final VoidCallback onGenerate;
-  final VoidCallback onPublish;
 
-  /// Admin cell edit (F-09): tapped (person row, 0-based day index). Null →
-  /// read-only roster (employee views).
+  /// Admin roster actions; each button renders only when its callback is set.
+  final VoidCallback? onGenerate;
+  final VoidCallback? onPublish;
+
+  /// Cell tap: (person row, 0-based day index) — admin edit (F-09) or an
+  /// employee's own shift-change request. Null → read-only roster.
   final void Function(DsRosterRowData row, int dayIndex)? onCellTap;
+
+  /// Limits [onCellTap] to the rows it returns true for; the other rows'
+  /// cells stay inert (no ripple). Null → every row is tappable.
+  final bool Function(DsRosterRowData row)? isRowTappable;
+
+  /// Empty-roster message; defaults to the admin "generate one" hint.
+  final String? emptyMessage;
 
   @override
   Widget build(BuildContext context) {
@@ -250,16 +261,18 @@ class DsScheduleView extends StatelessWidget {
       title: l.text('scheduleTitle'),
       subtitle: l.text('scheduleSubtitle'),
       actions: [
-        DsSecondaryButton(
-          label: l.text('publishSchedule'),
-          icon: Icons.publish_outlined,
-          onPressed: onPublish,
-        ),
-        DsPrimaryButton(
-          label: l.text('generateSchedule'),
-          icon: Icons.auto_awesome_outlined,
-          onPressed: onGenerate,
-        ),
+        if (onPublish != null)
+          DsSecondaryButton(
+            label: l.text('publishSchedule'),
+            icon: Icons.publish_outlined,
+            onPressed: onPublish,
+          ),
+        if (onGenerate != null)
+          DsPrimaryButton(
+            label: l.text('generateSchedule'),
+            icon: Icons.auto_awesome_outlined,
+            onPressed: onGenerate,
+          ),
       ],
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -319,7 +332,7 @@ class DsScheduleView extends StatelessWidget {
                 if (rows.isEmpty)
                   _DsRosterEmptyState(
                     title: l.text('scheduleEmptyTitle'),
-                    message: l.text('scheduleEmptyMessage'),
+                    message: emptyMessage ?? l.text('scheduleEmptyMessage'),
                   )
                 else
                   _DsRosterTable(
@@ -328,6 +341,7 @@ class DsScheduleView extends StatelessWidget {
                     days: days,
                     flightLabels: flightLabels,
                     onCellTap: onCellTap,
+                    isRowTappable: isRowTappable,
                   ),
               ],
             ),
@@ -349,6 +363,7 @@ class _DsRosterTable extends StatelessWidget {
     required this.days,
     this.flightLabels = const {},
     this.onCellTap,
+    this.isRowTappable,
   });
 
   final DateTime month;
@@ -356,6 +371,7 @@ class _DsRosterTable extends StatelessWidget {
   final int days;
   final Map<int, String> flightLabels; // day-of-month → FLT codes
   final void Function(DsRosterRowData row, int dayIndex)? onCellTap;
+  final bool Function(DsRosterRowData row)? isRowTappable;
 
   static const double _dayColW = 40;
   static const double _wdColW = 48;
@@ -491,7 +507,10 @@ class _DsRosterTable extends StatelessWidget {
             SizedBox(
               width: personW,
               child: InkWell(
-                onTap: onCellTap != null && i < row.shifts.length
+                onTap:
+                    onCellTap != null &&
+                        i < row.shifts.length &&
+                        (isRowTappable?.call(row) ?? true)
                     ? () => onCellTap!(row, i)
                     : null,
                 borderRadius: BorderRadius.circular(6),
