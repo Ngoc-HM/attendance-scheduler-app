@@ -90,8 +90,8 @@ class TestConflictRank:
     """Pure ranking logic — no DB needed.
 
     Uses simple namespace objects to avoid SQLAlchemy ORM instrumentation.
-    The rank() function only reads .id, .user_id, and .created_at — no ORM
-    operations, so plain objects work perfectly.
+    The rank() function only reads request fields plus the carry_comp map the
+    caller derived from schedule_history, so plain objects work perfectly.
     """
 
     def _make_req(self, id_, user_id, created_offset_days=0):
@@ -108,41 +108,31 @@ class TestConflictRank:
             created_at=datetime(2025, 1, 1) + timedelta(days=created_offset_days),
         )
 
-    def _make_user(self, id_, carry_comp):
-        from types import SimpleNamespace
-        return SimpleNamespace(id=id_, carry_comp=carry_comp)
-
     def test_higher_carry_comp_ranks_first(self):
         req_a = self._make_req(1, user_id=1, created_offset_days=0)
         req_b = self._make_req(2, user_id=2, created_offset_days=0)
-        user_a = self._make_user(1, carry_comp=3)
-        user_b = self._make_user(2, carry_comp=1)
-        ranked = rank([req_b, req_a], {1: user_a, 2: user_b})
+        ranked = rank([req_b, req_a], {1: 3, 2: 0})
         assert ranked[0].user_id == 1  # higher carry_comp first
 
     def test_equal_carry_comp_tiebreak_by_created_at(self):
         req_a = self._make_req(1, user_id=1, created_offset_days=0)
         req_b = self._make_req(2, user_id=2, created_offset_days=1)
-        user_a = self._make_user(1, carry_comp=2)
-        user_b = self._make_user(2, carry_comp=2)
-        ranked = rank([req_b, req_a], {1: user_a, 2: user_b})
+        ranked = rank([req_b, req_a], {1: 2, 2: 2})
         assert ranked[0].id == 1  # earlier created_at wins
 
     def test_unknown_user_treated_as_zero_comp(self):
         req_a = self._make_req(1, user_id=99)  # user 99 not in map
         req_b = self._make_req(2, user_id=2)
-        user_b = self._make_user(2, carry_comp=1)
-        ranked = rank([req_a, req_b], {2: user_b})
+        ranked = rank([req_a, req_b], {2: 1})
         assert ranked[0].user_id == 2  # user_b has carry_comp=1 > 0
 
     def test_fewer_offs_already_held_in_block_ranks_first(self):
         """Criterion (b): the person with less of their weekly rest entitlement wins."""
         req_a = self._make_req(1, user_id=1)
         req_b = self._make_req(2, user_id=2)
-        users = {1: self._make_user(1, 0), 2: self._make_user(2, 0)}
         # User 1 already holds 2 approved offs in the same 7-day block (May 1–7).
         held = {1: {date(2025, 5, 5), date(2025, 5, 6)}, 2: set()}
-        ranked = rank([req_a, req_b], users, held)
+        ranked = rank([req_a, req_b], {1: 0, 2: 0}, held)
         assert ranked[0].user_id == 2
 
     def test_weekend_pairing_breaks_ties(self):
@@ -161,8 +151,8 @@ class TestConflictRank:
         fri_sat = req(2, 2, date(2025, 5, 2), date(2025, 5, 3))   # Fri–Sat
         sun_mon = req(3, 3, date(2025, 5, 4), date(2025, 5, 5))   # Sun–Mon
         midweek = req(4, 4, date(2025, 5, 6), date(2025, 5, 7))   # Tue–Wed
-        users = {i: self._make_user(i, 0) for i in range(1, 5)}
-        ranked = rank([midweek, sun_mon, fri_sat, sat_sun], users)
+        carry = {i: 0 for i in range(1, 5)}
+        ranked = rank([midweek, sun_mon, fri_sat, sat_sun], carry)
         assert [r.id for r in ranked] == [1, 2, 3, 4]
 
 
@@ -360,3 +350,36 @@ class TestLeaveEndpoints:
             assert exc_info.value.status_code == 400
         finally:
             db.close()
+
+    def test_conflicts_rank_by_carry_from_schedule_history(self, client: TestClient):
+        """B6: conflict ranking reads carry_comp from history, not the stored column."""
+        from app.core.database import SessionLocal
+        from app.models.leave import LeaveRequest
+
+        admin = self._admin_headers(client)
+        early = _create_user(client, admin, "conflict_early").json()["id"]
+        owed = _create_user(client, admin, "conflict_owed").json()["id"]
+        # One A/D the month before earns a comp day that no month-close has
+        # persisted yet, so users.carry_comp is still 0 for both.
+        client.put(
+            f"{V}/attendance", headers=admin,
+            json={"user_id": owed, "work_date": "2031-02-10", "code": "A/D"},
+        )
+
+        db = SessionLocal()
+        try:
+            for uid in (early, owed):  # `early` submits first
+                db.add(LeaveRequest(
+                    user_id=uid, start_date=date(2031, 3, 10),
+                    end_date=date(2031, 3, 10), leave_type=LeaveType.monthly,
+                ))
+                db.flush()
+            db.commit()
+        finally:
+            db.close()
+
+        res = client.get(
+            f"{V}/leaves/conflicts", headers=admin, params={"date": "2031-03-10"}
+        )
+        assert res.status_code == 200
+        assert [e["user_id"] for e in res.json()] == [owed, early]
