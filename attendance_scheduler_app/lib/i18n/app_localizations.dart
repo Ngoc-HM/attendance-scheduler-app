@@ -126,9 +126,11 @@ class AppLocalizations {
       'compDays': 'Comp days',
       'registrationOpen': 'Registration open',
       'shortLeaveMessage':
-          'Monthly leave is under 5 consecutive days. Longer leave uses the annual request.',
-      'monthlyLeaveHint': 'Monthly leave is under 5 consecutive days.',
-      'annualLeaveHint': 'Annual leave is 5 or more consecutive days, limited to the next year (Y+1).',
+          'Monthly leave is 5 consecutive days or fewer. Longer leave uses the annual request.',
+      'monthlyLeaveHint': 'Monthly leave is 5 consecutive days or fewer.',
+      'annualLeaveHint': 'Annual leave is more than 5 consecutive days, limited to the next year (Y+1).',
+      'leaveTypeSpanMismatch':
+          'Leave of 5 days or less is monthly leave; more than 5 consecutive days must be registered as annual leave.',
 
       'leaveWindowHint':
           'Development mode: leave dates are not restricted by registration windows.',
@@ -491,9 +493,11 @@ class AppLocalizations {
       'compDays': 'Ngày nghỉ bù',
       'registrationOpen': 'Đang mở đăng ký',
       'shortLeaveMessage':
-          'Nghỉ hàng tháng dưới 5 ngày liên tục. Nghỉ dài hơn dùng đăng ký phép năm.',
-      'monthlyLeaveHint': 'Nghỉ hàng tháng dưới 5 ngày liên tục.',
-      'annualLeaveHint': 'Nghỉ phép năm từ 5 ngày liên tục trở lên, chỉ được đăng ký năm sau (Y+1).',
+          'Nghỉ hàng tháng từ 5 ngày liên tục trở xuống. Nghỉ dài hơn dùng đăng ký phép năm.',
+      'monthlyLeaveHint': 'Nghỉ hàng tháng từ 5 ngày liên tục trở xuống.',
+      'annualLeaveHint': 'Nghỉ phép năm trên 5 ngày liên tục, chỉ được đăng ký năm sau (Y+1).',
+      'leaveTypeSpanMismatch':
+          'Nghỉ từ 5 ngày trở xuống là nghỉ tháng; trên 5 ngày liên tục phải đăng ký nghỉ phép năm.',
 
       'leaveWindowHint':
           'Môi trường dev: không giới hạn ngày đăng ký nghỉ.',

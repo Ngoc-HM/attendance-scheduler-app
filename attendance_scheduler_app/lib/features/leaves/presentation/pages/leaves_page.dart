@@ -310,6 +310,27 @@ class LeavesPage extends ConsumerWidget {
                   DsFeedback.show(ctx, l.fieldRequired, tone: DsTone.warning);
                   return;
                 }
+                // The span decides the type (> 5 consecutive days is annual)
+                // and the backend rejects a mismatch, so warn up front. UTC
+                // dates keep a DST change inside the range from losing a day;
+                // a reversed range is left to the backend's invalid-range error.
+                final start = startDate!;
+                final end = endDate!;
+                final days = DateTime.utc(end.year, end.month, end.day)
+                        .difference(
+                          DateTime.utc(start.year, start.month, start.day),
+                        )
+                        .inDays +
+                    1;
+                if (days > 0 &&
+                    ((isAnnual && days <= 5) || (!isAnnual && days > 5))) {
+                  DsFeedback.show(
+                    ctx,
+                    l.text('leaveTypeSpanMismatch'),
+                    tone: DsTone.warning,
+                  );
+                  return;
+                }
                 final ctrl = ref.read(leavesControllerProvider.notifier);
                 try {
                   await ctrl.submitRequest(

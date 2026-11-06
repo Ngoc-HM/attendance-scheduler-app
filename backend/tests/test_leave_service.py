@@ -360,3 +360,53 @@ class TestLeaveEndpoints:
             assert exc_info.value.status_code == 400
         finally:
             db.close()
+
+
+# ---------------------------------------------------------------------------
+# B3 — caller-supplied leave_type must match the span (> 5 days is annual)
+# ---------------------------------------------------------------------------
+
+_TYPE_SPAN_MISMATCH = (
+    "Leave of 5 days or less is monthly leave; more than 5 consecutive days "
+    "must be registered as annual leave."
+)
+
+
+def _post_leave_as_new_user(client, username, start, end, leave_type):
+    admin = _bearer(_token(client, "admin", "admin123"))
+    assert _create_user(client, admin, username).status_code == 201
+    user = _bearer(_token(client, username, "secret1"))
+    return client.post(
+        f"{V}/leaves",
+        headers=user,
+        json={
+            "start_date": start.isoformat(),
+            "end_date": end.isoformat(),
+            "leave_type": leave_type,
+        },
+    )
+
+
+def test_monthly_label_on_long_span_rejected(client):
+    # 10 consecutive days labelled monthly would bypass the annual rule.
+    r = _post_leave_as_new_user(
+        client, "b3_long_monthly", date(2033, 6, 1), date(2033, 6, 10), "monthly"
+    )
+    assert r.status_code == 422
+    assert r.json()["detail"] == _TYPE_SPAN_MISMATCH
+
+
+def test_annual_label_on_short_span_rejected(client):
+    r = _post_leave_as_new_user(
+        client, "b3_short_annual", date(2033, 7, 1), date(2033, 7, 3), "annual"
+    )
+    assert r.status_code == 422
+    assert r.json()["detail"] == _TYPE_SPAN_MISMATCH
+
+
+def test_matching_label_accepted(client):
+    r = _post_leave_as_new_user(
+        client, "b3_short_monthly", date(2033, 8, 1), date(2033, 8, 3), "monthly"
+    )
+    assert r.status_code == 201
+    assert r.json()["leave_type"] == "monthly"
