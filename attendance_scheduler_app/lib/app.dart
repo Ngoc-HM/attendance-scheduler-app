@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/router/app_router.dart';
 import 'design_system/design_system.dart';
+import 'features/auth/presentation/providers/auth_provider.dart';
 import 'i18n/app_localizations.dart';
 import 'i18n/locale_provider.dart';
 
@@ -13,6 +14,17 @@ class AttendanceSchedulerApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Session restore runs before the router exists: a returning user lands
+    // on their pages instead of flashing the login screen first.
+    if (ref.watch(sessionRestoreProvider).isLoading) {
+      return MaterialApp(
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.light,
+        home: const Scaffold(
+          body: Center(child: CircularProgressIndicator()),
+        ),
+      );
+    }
     final router = ref.watch(appRouterProvider);
     final locale = ref.watch(localeControllerProvider);
 

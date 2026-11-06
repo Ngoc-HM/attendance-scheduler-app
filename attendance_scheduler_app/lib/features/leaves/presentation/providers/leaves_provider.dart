@@ -16,12 +16,29 @@ class LeaveEntry {
 
 /// UI state for the leaves page.
 class LeavesState {
-  const LeavesState({required this.entries});
+  const LeavesState({required this.entries, this.window, this.compDays = 0});
 
   final AsyncValue<List<LeaveEntry>> entries;
 
-  LeavesState copyWith({AsyncValue<List<LeaveEntry>>? entries}) =>
-      LeavesState(entries: entries ?? this.entries);
+  /// Today's registration window (GET /leaves/window); null until it loads
+  /// or if it could not be fetched.
+  final LeaveWindow? window;
+
+  /// Carried comp days for the "Comp days" card — the employee's own
+  /// balance, or for the admin the total over every active user. Taken from
+  /// the users, not the leave rows, so it is right with no requests too.
+  final int compDays;
+
+  LeavesState copyWith({
+    AsyncValue<List<LeaveEntry>>? entries,
+    LeaveWindow? window,
+    int? compDays,
+  }) =>
+      LeavesState(
+        entries: entries ?? this.entries,
+        window: window ?? this.window,
+        compDays: compDays ?? this.compDays,
+      );
 
   /// Mapped display rows consumed by [DsLeavesView].
   AsyncValue<List<DsLeaveRowData>> get rows =>
@@ -40,18 +57,38 @@ class LeavesController extends StateNotifier<LeavesState> {
   bool get _isAdmin =>
       _ref.read(authControllerProvider).user?.isAdmin ?? false;
 
-  /// Load leaves — admin sees all (GET /leaves?all=true); others own only.
+  /// Load leaves — admin sees all (GET /leaves?all=true); others own only —
+  /// together with today's registration window.
   Future<void> load() async {
     state = state.copyWith(entries: const AsyncValue.loading());
+    final window = _loadWindow();
+    int? compDays;
+    final entries = await AsyncValue.guard(() async {
+      final leaves = _isAdmin ? await _ds.listAll() : await _ds.listOwn();
+      final userById = await _loadUserMap();
+      compDays = userById.values
+          .where((u) => u.status == 'active')
+          .fold<int>(0, (sum, u) => sum + u.carryComp);
+      return leaves
+          .map((l) => LeaveEntry(id: l.id, row: _toRow(l, userById)))
+          .toList();
+    });
     state = state.copyWith(
-      entries: await AsyncValue.guard(() async {
-        final leaves = _isAdmin ? await _ds.listAll() : await _ds.listOwn();
-        final userById = await _loadUserMap();
-        return leaves
-            .map((l) => LeaveEntry(id: l.id, row: _toRow(l, userById)))
-            .toList();
-      }),
+      entries: entries,
+      window: await window,
+      compDays: compDays,
     );
+  }
+
+  /// The window only drives the banner and subtitle, so a failed fetch must
+  /// not take the leave list down with it; the server re-checks the window
+  /// on every submit anyway.
+  Future<LeaveWindow?> _loadWindow() async {
+    try {
+      return await _ds.fetchWindow();
+    } catch (_) {
+      return null;
+    }
   }
 
   /// Submit a new leave request then reload.
@@ -132,7 +169,8 @@ class LeavesController extends StateNotifier<LeavesState> {
       range: m.dateRange,
       days: m.days,
       status: m.statusDisplay,
-      carryComp: 0,
+      // Comp days the requester carries into this month (last month close).
+      carryComp: u?.carryComp ?? 0,
     );
   }
 }

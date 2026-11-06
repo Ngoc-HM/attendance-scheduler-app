@@ -115,7 +115,9 @@ class AppLocalizations {
       'excelFileHint': 'Excel files up to 10 MB',
       'chooseFile': 'Choose file',
       'leaveRequests': 'Leave requests',
-      'leaveSubtitle': 'Leave registration is unrestricted in development',
+      'leaveSubtitle':
+          'Monthly leave: register by day {day} of the previous month. '
+          'Annual leave: register the year before.',
       'requestMonthlyLeave': 'Request monthly leave',
       'requestAnnualLeave': 'Request annual leave',
       'pending': 'Pending',
@@ -123,9 +125,7 @@ class AppLocalizations {
       'rejected': 'Rejected',
       'active': 'Active',
       'disabled': 'Disabled',
-      'complete': 'Complete',
       'review': 'Review',
-      'ready': 'Ready',
       'compDays': 'Comp days',
       'registrationOpen': 'Registration open',
       'shortLeaveMessage':
@@ -136,7 +136,8 @@ class AppLocalizations {
           'Leave of 5 days or less is monthly leave; more than 5 consecutive days must be registered as annual leave.',
 
       'leaveWindowHint':
-          'Development mode: leave dates are not restricted by registration windows.',
+          'Monthly leave: register during the previous month. '
+          'Annual leave: register the year before.',
       'requests': 'Requests',
       'type': 'Type',
       'dates': 'Dates',
@@ -211,7 +212,6 @@ class AppLocalizations {
       // --- Phase 09 wiring: flights / leaves / reports / schedule / attendance
       'addFlightDay': 'Add flight day',
       'addHoliday': 'Add holiday',
-      'adminOnlyAction': 'This action requires admin privileges.',
       'allYear': 'Full year',
       'attendanceUpdated': 'Attendance updated.',
       'autoAssignCover': 'Auto-assign A/D cover',
@@ -349,8 +349,8 @@ class AppLocalizations {
       // --- Leave window banner (audit fix 2026-07-17) ---
       'registrationClosed': 'Monthly registration closed',
       'registrationClosedMessage':
-          'Monthly-leave registration is open from day 1 to day 20 (for the '
-          'next month). Annual leave (more than 5 days) is registered during the '
+          'Registration of monthly leave for next month has closed for this '
+          'month. Annual leave (more than 5 days) is registered during the '
           'previous year.',
       // --- Revoke approval (owner 2026-07-17) ---
       'revokeApproval': 'Revoke approval',
@@ -395,6 +395,16 @@ class AppLocalizations {
       'carryComp': 'Comp days',
       'carryStreak': 'Working streak',
       'carryPremiumOff': 'Premium off',
+      // --- My attendance, leave window, i18n cleanup (review 2026-11-06) ---
+      'navMyAttendance': 'My attendance',
+      'myAttendanceEmptyMessage':
+          'No records for this month yet. They appear once the roster is '
+          'published.',
+      'userFallback': 'ID {id}',
+      'selectYearMonthFirst': 'Select a year and month first.',
+      'selectYearFirst': 'Select a year first.',
+      'statusReady': 'Ready',
+      'statusComplete': 'Complete',
     },
     'vi': {
       'appTitle': 'Xếp lịch & Chấm công',
@@ -495,7 +505,9 @@ class AppLocalizations {
       'excelFileHint': 'Tệp Excel tối đa 10 MB',
       'chooseFile': 'Chọn tệp',
       'leaveRequests': 'Đăng ký nghỉ',
-      'leaveSubtitle': 'Môi trường dev không giới hạn thời gian đăng ký',
+      'leaveSubtitle':
+          'Nghỉ tháng: đăng ký chậm nhất đến hết ngày {day} của tháng trước. '
+          'Nghỉ phép năm: đăng ký từ năm trước.',
       'requestMonthlyLeave': 'Đăng ký nghỉ tháng',
       'requestAnnualLeave': 'Đăng ký nghỉ phép năm',
       'pending': 'Chờ duyệt',
@@ -503,9 +515,7 @@ class AppLocalizations {
       'rejected': 'Đã từ chối',
       'active': 'Đang hoạt động',
       'disabled': 'Đã vô hiệu hóa',
-      'complete': 'Hoàn tất',
       'review': 'Cần rà soát',
-      'ready': 'Sẵn sàng',
       'compDays': 'Ngày nghỉ bù',
       'registrationOpen': 'Đang mở đăng ký',
       'shortLeaveMessage':
@@ -516,7 +526,8 @@ class AppLocalizations {
           'Nghỉ từ 5 ngày trở xuống là nghỉ tháng; trên 5 ngày liên tục phải đăng ký nghỉ phép năm.',
 
       'leaveWindowHint':
-          'Môi trường dev: không giới hạn ngày đăng ký nghỉ.',
+          'Nghỉ tháng: đăng ký trong tháng trước. '
+          'Nghỉ phép năm: đăng ký từ năm trước.',
       'requests': 'Yêu cầu',
       'type': 'Loại',
       'dates': 'Thời gian',
@@ -591,7 +602,6 @@ class AppLocalizations {
       // --- Phase 09 wiring: flights / leaves / reports / schedule / attendance
       'addFlightDay': 'Thêm ngày bay',
       'addHoliday': 'Thêm ngày lễ',
-      'adminOnlyAction': 'Thao tác này cần quyền quản trị.',
       'allYear': 'Cả năm',
       'attendanceUpdated': 'Đã cập nhật chấm công.',
       'autoAssignCover': 'Tự gán người bù ca A/D',
@@ -728,7 +738,7 @@ class AppLocalizations {
       // --- Leave window banner (audit fix 2026-07-17) ---
       'registrationClosed': 'Đã đóng đăng ký nghỉ tháng',
       'registrationClosedMessage':
-          'Đăng ký nghỉ tháng mở từ ngày 1 đến ngày 20 (cho tháng kế tiếp). '
+          'Tháng này đã hết hạn đăng ký nghỉ cho tháng kế tiếp. '
           'Nghỉ phép năm (trên 5 ngày) đăng ký trong năm trước.',
       // --- Revoke approval (owner 2026-07-17) ---
       'revokeApproval': 'Hủy duyệt',
@@ -771,6 +781,15 @@ class AppLocalizations {
       'carryComp': 'Ngày bù',
       'carryStreak': 'Chuỗi ngày làm',
       'carryPremiumOff': 'Nghỉ premium',
+      // --- My attendance, leave window, i18n cleanup (review 2026-11-06) ---
+      'navMyAttendance': 'Chấm công của tôi',
+      'myAttendanceEmptyMessage':
+          'Tháng này chưa có bản ghi. Chấm công sẽ hiện khi lịch được công bố.',
+      'userFallback': 'ID {id}',
+      'selectYearMonthFirst': 'Vui lòng chọn năm và tháng.',
+      'selectYearFirst': 'Vui lòng chọn năm.',
+      'statusReady': 'Sẵn sàng',
+      'statusComplete': 'Hoàn tất',
     },
   };
 
@@ -899,11 +918,11 @@ class AppLocalizations {
     'active' => text('active'),
     'pending' => text('pending'),
     'disabled' => text('disabled'),
-    'complete' => text('complete'),
+    'complete' => text('statusComplete'),
     'review' => text('review'),
     'approved' => text('approved'),
     'rejected' => text('rejected'),
-    'ready' => text('ready'),
+    'ready' => text('statusReady'),
     _ => status,
   };
 
@@ -939,6 +958,14 @@ class AppLocalizations {
   /// "Close March 2026?" (F-14).
   String closeMonthConfirmTitle(DateTime month) =>
       text('closeMonthConfirmTitle').replaceAll('{month}', monthYear(month));
+
+  /// Leave page subtitle with the live window's last registration day.
+  String leaveSubtitle(int closesOnDay) =>
+      text('leaveSubtitle').replaceAll('{day}', '$closesOnDay');
+
+  /// "ID 7" — a row whose user is not in the loaded directory.
+  String userFallback(int userId) =>
+      text('userFallback').replaceAll('{id}', '$userId');
 
   static String _two(int value) => value.toString().padLeft(2, '0');
 }

@@ -9,6 +9,7 @@ class UserModel extends User {
     required super.role,
     required super.status,
     required super.code,
+    super.carryComp,
   });
 
   factory UserModel.fromJson(Map<String, dynamic> json) => UserModel(
@@ -20,5 +21,6 @@ class UserModel extends User {
     role: UserRoleX.fromApi(json['role'] as String? ?? 'T'),
     status: json['status'] as String? ?? 'pending',
     code: json['code'] as String? ?? '',
+    carryComp: json['carry_comp'] as int? ?? 0,
   );
 }

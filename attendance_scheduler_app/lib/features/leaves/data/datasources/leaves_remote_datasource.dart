@@ -49,6 +49,16 @@ class LeavesRemoteDataSource {
     }
   }
 
+  /// GET /leaves/window — today's registration window (any active user).
+  Future<LeaveWindow> fetchWindow() async {
+    try {
+      final response = await _dio.get(ApiEndpoints.leavesWindow);
+      return LeaveWindow.fromJson(response.data as Map<String, dynamic>);
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e, 'Failed to load the leave window');
+    }
+  }
+
   /// POST /leaves — submit a leave request.
   Future<LeaveModel> create({
     required DateTime startDate,

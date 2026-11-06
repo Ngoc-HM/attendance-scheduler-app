@@ -66,21 +66,18 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
       return _AttendanceError(message: state.error!, onRetry: _loadMonth);
     }
 
-    final rows = _buildRows(state);
+    final me = ref.watch(authControllerProvider.select((auth) => auth.user));
+    final rows = _buildRows(state, me, l);
 
+    // Employees get a read-only view of their own month (GET /attendance/me):
+    // every admin action is null, so DsAttendanceView hides its button.
     return DsAttendanceView(
       month: _month,
       rows: rows,
       onPreviousMonth: _prevMonth,
       onNextMonth: _nextMonth,
-      onUpdate: isAdmin
-          ? () => _showUpsertDialog(context, state.users)
-          : () => DsFeedback.show(
-                context,
-                l.text('adminOnlyAction'),
-                tone: DsTone.warning,
-              ),
-      onHolidays: () => _showHolidaysDialog(context),
+      onUpdate: isAdmin ? () => _showUpsertDialog(context, state.users) : null,
+      onHolidays: isAdmin ? () => _showHolidaysDialog(context) : null,
       onCloseMonth: isAdmin ? _closeMonth : null,
     );
   }
@@ -140,7 +137,11 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
 
   // ── Row builder ───────────────────────────────────────────────────────────
 
-  List<DsAttendanceRowData> _buildRows(AttendanceState state) {
+  List<DsAttendanceRowData> _buildRows(
+    AttendanceState state,
+    User? me,
+    AppLocalizations l,
+  ) {
     final byUser = <int, List<AttendanceRecord>>{};
     for (final r in state.records) {
       if (r.workDate.year == _month.year &&
@@ -152,7 +153,11 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
       list.sort((a, b) => a.workDate.compareTo(b.workDate));
     }
 
-    final userMap = <int, User>{for (final u in state.users) u.id: u};
+    // Admin: the full roster. Employee: GET /users is admin-only and the
+    // records are their own, so the signed-in user names the single row.
+    final userMap = <int, User>{
+      for (final u in [?me, ...state.users]) u.id: u,
+    };
 
     final daysInMonth = DateTime(_month.year, _month.month + 1, 0).day;
 
@@ -167,7 +172,7 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
       final user = userMap[userId];
       final name = user != null
           ? (user.fullName.isNotEmpty ? user.fullName : user.username)
-          : 'User $userId';
+          : l.userFallback(userId);
       final role = user?.role.apiValue ?? '';
       final workdays = shifts.fold<int>(0, (s, c) => s + c.workdayValue);
       final absences = shifts.where((c) => c == ShiftCode.x).length;

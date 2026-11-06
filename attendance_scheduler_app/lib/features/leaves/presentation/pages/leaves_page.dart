@@ -51,8 +51,11 @@ class LeavesPage extends ConsumerWidget {
         onRevoke: isAdmin
             ? (index) => _confirmRevoke(context, ref, ctrl, index, l)
             : null,
-        // Development mode: registration is intentionally always open.
-        registrationOpen: true,
+        // Live window (GET /leaves/window). Unknown → assume open; the
+        // server still rejects a submit outside the window.
+        registrationOpen: state.window?.monthlyOpen ?? true,
+        closesOnDay: state.window?.closesOnDay,
+        compDays: state.compDays,
       ),
     );
   }
@@ -171,6 +174,12 @@ class LeavesPage extends ConsumerWidget {
     final startCtrl = TextEditingController();
     final endCtrl = TextEditingController();
 
+    // The real registration rule, with the live closing day once known.
+    final closesOnDay = ref.read(leavesControllerProvider).window?.closesOnDay;
+    final windowHint = closesOnDay == null
+        ? l.text('leaveWindowHint')
+        : l.leaveSubtitle(closesOnDay);
+
     final now = DateTime.now();
     final firstAllowed = DateTime(2000);
     final annualFirst = DateTime(now.year + 1, 1, 1);
@@ -198,7 +207,7 @@ class LeavesPage extends ConsumerWidget {
             children: [
               // Registration-window guidance (matches backend leave_windows).
               Text(
-                l.text('leaveWindowHint'),
+                windowHint,
                 style: Theme.of(ctx).textTheme.bodySmall,
               ),
               const SizedBox(height: DsSpacing.x3),
