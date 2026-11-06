@@ -42,6 +42,7 @@ class _RecordingUserDataSource implements UserManagementDataSource {
     required String fullName,
     required String password,
     required String role,
+    int? annualLeaveQuota,
   }) async => throw UnimplementedError();
 
   @override

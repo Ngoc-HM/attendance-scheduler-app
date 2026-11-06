@@ -35,8 +35,9 @@ class _StubUserDataSource implements UserManagementDataSource {
   _StubUserDataSource({this.createException});
 
   final Object? createException;
-  final created = <String>[];
-  final updates = <(int, Map<String, dynamic>)>[];
+
+  /// (username, annual leave quota sent with POST /users).
+  final created = <(String, int?)>[];
 
   @override
   Future<UserModel> create({
@@ -44,9 +45,10 @@ class _StubUserDataSource implements UserManagementDataSource {
     required String fullName,
     required String password,
     required String role,
+    int? annualLeaveQuota,
   }) async {
     if (createException != null) throw createException!;
-    created.add(username);
+    created.add((username, annualLeaveQuota));
     return UserModel(
       id: 41,
       username: username,
@@ -64,21 +66,10 @@ class _StubUserDataSource implements UserManagementDataSource {
   @override
   Future<UserModel> approve(int id, {required String role}) async =>
       throw UnimplementedError();
+  /// Creating a user is a single POST: any PATCH here is a regression.
   @override
-  Future<UserUpdateResult> update(int id, Map<String, dynamic> changes) async {
-    updates.add((id, changes));
-    return const UserUpdateResult(
-      user: UserModel(
-        id: 41,
-        username: 'long',
-        fullName: 'Long',
-        role: UserRole.t,
-        status: 'active',
-        code: 'T1',
-      ),
-      warnings: [],
-    );
-  }
+  Future<UserUpdateResult> update(int id, Map<String, dynamic> changes) async =>
+      throw UnimplementedError();
 
   @override
   Future<void> delete(int id) async {}
@@ -235,7 +226,7 @@ void main() {
       return ds;
     }
 
-    testWidgets('saves the annual leave quota on the new user', (
+    testWidgets('sends the annual leave quota in the create request', (
       tester,
     ) async {
       final ds = await pumpDialog(tester);
@@ -244,10 +235,7 @@ void main() {
       await tester.tap(find.text('Create'));
       await tester.pumpAndSettle();
 
-      expect(ds.created, ['long']);
-      final (id, changes) = ds.updates.single;
-      expect(id, 41);
-      expect(changes, {'annual_leave_quota': 25});
+      expect(ds.created, [('long', 25)]);
     });
 
     testWidgets('an empty quota keeps the server default', (tester) async {
@@ -257,8 +245,7 @@ void main() {
       await tester.tap(find.text('Create'));
       await tester.pumpAndSettle();
 
-      expect(ds.created, ['long']);
-      expect(ds.updates, isEmpty);
+      expect(ds.created, [('long', null)]);
     });
 
     testWidgets('a quota above 365 is rejected before any request', (

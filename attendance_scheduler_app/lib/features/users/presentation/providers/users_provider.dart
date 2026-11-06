@@ -22,9 +22,8 @@ class UsersController extends StateNotifier<AsyncValue<List<User>>> {
     if (mounted) state = result;
   }
 
-  /// Creates an active account. POST /users takes no quota (the server
-  /// applies its default), so a non-null [annualLeaveQuota] is saved with a
-  /// follow-up PATCH (D4).
+  /// Creates an active account; a null [annualLeaveQuota] keeps the server
+  /// default (D4).
   Future<void> create({
     required String username,
     required String fullName,
@@ -32,20 +31,14 @@ class UsersController extends StateNotifier<AsyncValue<List<User>>> {
     required UserRole role,
     int? annualLeaveQuota,
   }) async {
-    final created = await _ds.create(
+    await _ds.create(
       username: username,
       fullName: fullName,
       password: password,
       role: role.apiValue,
+      annualLeaveQuota: annualLeaveQuota,
     );
-    try {
-      if (annualLeaveQuota != null) {
-        await _ds.update(created.id, {'annual_leave_quota': annualLeaveQuota});
-      }
-    } finally {
-      // The account exists even if the quota PATCH failed — list it.
-      await load();
-    }
+    await load();
   }
 
   /// Activates a pending account with the role the admin picked (F-03).
@@ -65,6 +58,14 @@ class UsersController extends StateNotifier<AsyncValue<List<User>>> {
   /// Returns any soft warnings. Throws on hard errors.
   Future<List<String>> setRole(int id, UserRole role) async {
     final result = await _ds.update(id, {'role': role.apiValue});
+    await load();
+    return result.warnings;
+  }
+
+  /// Sets a person's annual leave quota in days (D4). Returns any soft
+  /// warnings. Throws on hard errors.
+  Future<List<String>> setAnnualLeaveQuota(int id, int days) async {
+    final result = await _ds.update(id, {'annual_leave_quota': days});
     await load();
     return result.warnings;
   }

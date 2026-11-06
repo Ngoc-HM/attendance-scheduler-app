@@ -410,6 +410,8 @@ class AppLocalizations {
       'annualLeaveQuota': 'Annual leave quota',
       'annualLeaveQuotaHint': 'Days per year — leave empty for the default',
       'annualLeaveQuotaInvalid': 'Enter a whole number from 0 to 365.',
+      'editAnnualLeaveQuota': 'Edit leave quota',
+      'annualLeaveQuotaUpdated': 'Annual leave quota updated.',
     },
     'vi': {
       'appTitle': 'Xếp lịch & Chấm công',
@@ -800,6 +802,8 @@ class AppLocalizations {
       'annualLeaveQuota': 'Định mức phép năm',
       'annualLeaveQuotaHint': 'Số ngày mỗi năm — để trống để dùng mặc định',
       'annualLeaveQuotaInvalid': 'Nhập số nguyên từ 0 đến 365.',
+      'editAnnualLeaveQuota': 'Sửa định mức phép',
+      'annualLeaveQuotaUpdated': 'Đã cập nhật định mức phép năm.',
     },
   };
 
