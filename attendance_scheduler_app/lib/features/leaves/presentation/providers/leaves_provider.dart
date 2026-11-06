@@ -154,7 +154,9 @@ class LeavesController extends StateNotifier<LeavesState> {
   }
 
   /// Admin: revoke an APPROVED leave at display [index] (owner 2026-07-17) —
-  /// balance restored server-side, request flips to rejected.
+  /// the request flips to rejected, so its days no longer count against the
+  /// annual quota (the remaining balance is derived from approved leave), and
+  /// span cells still on AL in a generated month go back to X.
   Future<List<String>> revoke(int index) async {
     final id = _idAt(index);
     if (id == null) return const [];

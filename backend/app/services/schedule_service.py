@@ -229,7 +229,9 @@ def apply_shift_change(db: Session, req: ShiftChangeRequest) -> list[str]:
                 status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="A requested code is required for a code change.",
             )
-        role_code_validation.validate_planned(requester.role, req.requested_code)
+        # Re-checked here too: a request filed before the rule existed must
+        # not slip an AL/CD/admin code through approval.
+        role_code_validation.validate_requestable(requester.role, req.requested_code)
         mine.code = req.requested_code
         mine.is_manual_override = True
     else:  # swap_with — exchange the two users' codes for that date
@@ -244,8 +246,10 @@ def apply_shift_change(db: Session, req: ShiftChangeRequest) -> list[str]:
         counterpart = db.get(User, req.counterpart_user_id)
         if requester is None or counterpart is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail=t("user.not_found"))
-        role_code_validation.validate_planned(requester.role, theirs.code)
-        role_code_validation.validate_planned(counterpart.role, mine.code)
+        # Each person's resulting code must be one they could request: a swap
+        # must not hand over leave (AL), a comp day (CD) or an admin code.
+        role_code_validation.validate_requestable(requester.role, theirs.code)
+        role_code_validation.validate_requestable(counterpart.role, mine.code)
         mine.code, theirs.code = theirs.code, mine.code
         mine.is_manual_override = theirs.is_manual_override = True
         changed.append(theirs)
@@ -265,6 +269,7 @@ def apply_leave_span(
     code: AttendanceCode,
     *,
     only_if: AttendanceCode | None = None,
+    skip: AttendanceCode | None = None,
 ) -> list[str]:
     """B4 — write a leave decision (AL approve / X revoke) into generated months.
 
@@ -272,7 +277,9 @@ def apply_leave_span(
     of the span that already has a schedule get the code directly (published
     months also move their still-seeded actuals). ``only_if`` limits the write
     to cells currently holding that code: revoke passes AL, so a cell the
-    admin re-coded after approval (or a CD) stays. A month without a schedule
+    admin re-coded after approval (or a CD) stays. ``skip`` leaves cells
+    holding that code alone: approve passes X, so the weekly off days stay X
+    (leave does not replace them, decision #4). A month without a schedule
     needs nothing: it reads approved leave when generated. Returns [] when no
     cell changed; otherwise the ``leave.schedule_applied`` notice, a note per
     month not generated yet, then each changed month's re-check warnings.
@@ -299,6 +306,7 @@ def apply_leave_span(
             and cell.work_date in days
             and cell.code is not code
             and (only_if is None or cell.code is only_if)
+            and (skip is None or cell.code is not skip)
         ]
         for cell in changed:
             cell.code = code

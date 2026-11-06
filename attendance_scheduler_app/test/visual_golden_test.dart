@@ -36,6 +36,11 @@ class _FakeFlightsDataSource extends FlightsRemoteDataSource {
   Future<List<FlightDayModel>> listDays(int year, int month) async => [];
 }
 
+/// The schedule goldens show a fixed month (a 30-day June) so they do not
+/// change with the clock: the roster's day columns and the month title would
+/// otherwise follow DateTime.now().
+final _goldenMonth = DateTime(2026, 6);
+
 List<Override> _scheduleOverrides() => [
       scheduleControllerProvider.overrideWith((ref) => _FakeScheduleController()),
       shiftChangeControllerProvider
@@ -77,9 +82,12 @@ void main() {
         overrides: _scheduleOverrides(),
         child: MaterialApp(
           theme: AppTheme.light,
-          home: const RepaintBoundary(
-            key: Key('schedule-golden'),
-            child: HomeShell(location: '/schedule', child: SchedulePage()),
+          home: RepaintBoundary(
+            key: const Key('schedule-golden'),
+            child: HomeShell(
+              location: '/schedule',
+              child: SchedulePage(initialMonth: _goldenMonth),
+            ),
           ),
         ),
       ),
@@ -101,9 +109,12 @@ void main() {
         overrides: _scheduleOverrides(),
         child: MaterialApp(
           theme: AppTheme.light,
-          home: const RepaintBoundary(
-            key: Key('schedule-compact-golden'),
-            child: HomeShell(location: '/schedule', child: SchedulePage()),
+          home: RepaintBoundary(
+            key: const Key('schedule-compact-golden'),
+            child: HomeShell(
+              location: '/schedule',
+              child: SchedulePage(initialMonth: _goldenMonth),
+            ),
           ),
         ),
       ),

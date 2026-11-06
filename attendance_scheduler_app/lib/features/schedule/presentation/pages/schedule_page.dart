@@ -17,20 +17,27 @@ import '../widgets/self_arrange_pending_panel.dart';
 import '../widgets/shift_change_dialog.dart';
 
 class SchedulePage extends ConsumerStatefulWidget {
-  const SchedulePage({super.key});
+  const SchedulePage({super.key, this.initialMonth});
+
+  /// Month shown first (only its year and month count). Defaults to the
+  /// current month; tests and goldens pin it so they do not depend on the
+  /// clock.
+  final DateTime? initialMonth;
 
   @override
   ConsumerState<SchedulePage> createState() => _SchedulePageState();
 }
 
 class _SchedulePageState extends ConsumerState<SchedulePage> {
-  DateTime _month = DateTime(DateTime.now().year, DateTime.now().month);
+  late DateTime _month;
   bool _showShiftChanges = false;
   Map<int, String> _flightLabels = const {}; // day-of-month → FLT codes
 
   @override
   void initState() {
     super.initState();
+    final start = widget.initialMonth ?? DateTime.now();
+    _month = DateTime(start.year, start.month);
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadMonth());
   }
 

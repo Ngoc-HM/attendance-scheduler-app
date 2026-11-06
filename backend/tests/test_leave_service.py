@@ -609,16 +609,23 @@ def _approve(client, admin, leave_id) -> list[str]:
     return res.json()["warnings"]
 
 
+def _after_approve(before: dict[str, str]) -> dict[str, str]:
+    """Approval writes AL over the span but keeps the weekly X (decision #4)."""
+    return {day: ("X" if code == "X" else "AL") for day, code in before.items()}
+
+
 def test_approve_after_generate_writes_al_into_grid(client):
     admin = _bearer(_token(client, "admin", "admin123"))
     users = _role_a_users(client, admin, "b4_approve_a")
     _generate(client, admin, 2039, 3)
+    days = [date(2039, 3, d) for d in (20, 21, 22)]
+    before = _planned(client, admin, users[0], days)
+    assert set(before.values()) != {"X"}, before  # at least one cell to change
     leave_id = _file_leave(client, "b4_approve_a1", date(2039, 3, 20), date(2039, 3, 22))
 
     warnings = _approve(client, admin, leave_id)
 
-    days = [date(2039, 3, d) for d in (20, 21, 22)]
-    assert _planned(client, admin, users[0], days) == {d.isoformat(): "AL" for d in days}
+    assert _planned(client, admin, users[0], days) == _after_approve(before)
     assert any("updated" in w for w in warnings)
 
     # Someone added after generation has no cells in March: nothing changes,
@@ -635,10 +642,12 @@ def test_revoke_restores_x(client):
     _generate(client, admin, 2039, 5, publish=True)
     leave_id = _file_leave(client, "b4_revoke_a1", date(2039, 5, 14), date(2039, 5, 16))
     days = [date(2039, 5, d) for d in (14, 15, 16)]
+    expected = _after_approve(_planned(client, admin, users[0], days))
+    assert "AL" in expected.values(), expected
 
     _approve(client, admin, leave_id)
-    assert _planned(client, admin, users[0], days) == {d.isoformat(): "AL" for d in days}
-    assert _actual(client, admin, users[0], days) == {d.isoformat(): "AL" for d in days}
+    assert _planned(client, admin, users[0], days) == expected
+    assert _actual(client, admin, users[0], days) == expected
 
     res = client.post(f"{V}/leaves/{leave_id}/revoke", headers=admin)
     assert res.status_code == 200, res.text
@@ -677,11 +686,13 @@ def test_leave_spanning_two_months_updates_only_existing_schedule(client):
     users = _role_a_users(client, admin, "b4_span_a")
     _generate(client, admin, 2039, 7)
     leave_id = _file_leave(client, "b4_span_a1", date(2039, 7, 30), date(2039, 8, 1))
+    july = [date(2039, 7, 30), date(2039, 7, 31)]
+    expected = _after_approve(_planned(client, admin, users[0], july))
+    assert "AL" in expected.values(), expected
 
     warnings = _approve(client, admin, leave_id)
 
-    july = [date(2039, 7, 30), date(2039, 7, 31)]
-    assert _planned(client, admin, users[0], july) == {d.isoformat(): "AL" for d in july}
+    assert _planned(client, admin, users[0], july) == expected
     assert any("updated" in w for w in warnings)
     assert any(w.startswith("2039-08:") for w in warnings)
     assert client.get(f"{V}/schedules/2039/8", headers=admin).status_code == 404
@@ -689,6 +700,45 @@ def test_leave_spanning_two_months_updates_only_existing_schedule(client):
     # August picks the approved day up when it is generated later.
     _generate(client, admin, 2039, 8)
     assert _planned(client, admin, users[0], [date(2039, 8, 1)]) == {"2039-08-01": "AL"}
+
+
+def test_approve_keeps_the_weekly_off_days(client):
+    """Decision #4 / D5: leave does not replace the weekly X. Approving after
+    generation writes AL only over the non-X cells of the span, so the block
+    keeps its genuine X and the re-check reports no off-quota breach for it."""
+    admin = _bearer(_token(client, "admin", "admin123"))
+    users = _role_a_users(client, admin, "f1_keepx_a")
+    _generate(client, admin, 2042, 3)
+    me = users[0]
+
+    # A 4-day span inside one 7-day block that holds at least one of this
+    # person's X days and at least one working day.
+    plan = _planned(client, admin, me, [date(2042, 3, d) for d in range(1, 29)])
+
+    def codes(start: int) -> set[str]:
+        return {plan[date(2042, 3, start + i).isoformat()] for i in range(4)}
+
+    first = next(
+        s
+        for block_start in (1, 8, 15, 22)
+        for s in range(block_start, block_start + 4)
+        if "X" in codes(s) and codes(s) != {"X"}
+    )
+    span = [date(2042, 3, first + i) for i in range(4)]
+    block_start = date(2042, 3, (first - 1) // 7 * 7 + 1)
+    before = _planned(client, admin, me, span)
+
+    leave_id = _file_leave(client, "f1_keepx_a1", span[0], span[-1])
+    warnings = _approve(client, admin, leave_id)
+
+    assert any("updated" in w for w in warnings)
+    assert not any(
+        f"User {me}: " in w
+        and "off day(s) instead of" in w
+        and f"block starting {block_start}" in w
+        for w in warnings
+    ), warnings
+    assert _planned(client, admin, me, span) == _after_approve(before)
 
 
 def test_leave_window_status(client: TestClient, monkeypatch) -> None:

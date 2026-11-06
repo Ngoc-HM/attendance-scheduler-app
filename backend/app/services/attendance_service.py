@@ -116,8 +116,13 @@ def sync_planned_cell(
 
 
 def _follow_plan(cell: AttendanceRecord, code: AttendanceCode) -> bool:
-    """Set a still-seeded actual (``recorded_by`` NULL) to the planned code."""
-    if cell.recorded_by is not None:
+    """Set a still-seeded actual (``recorded_by`` NULL) to the planned code.
+
+    A sick day (S) never follows the plan, whoever recorded it: the planned
+    grid can never hold S (§9.1), so an S actual is always a real record —
+    e.g. one whose recorder was deleted before decision #39 kept it attributed.
+    """
+    if cell.recorded_by is not None or cell.code is AttendanceCode.S:
         return False
     cell.code = code
     return True

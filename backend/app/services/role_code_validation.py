@@ -2,13 +2,18 @@
 
 Two grids, two rule sets (§9.1):
 
-* **Planned schedule** (``ShiftAssignment`` — manual override, shift-change,
+* **Planned schedule** (``ShiftAssignment`` — admin manual override,
   self-arrange): the role's solver domain plus the operational codes
   X / T / B / AL, and A/D for role A only. Sickness ``S`` is NEVER allowed
   here — the planned roster is visible to every active user, and sickness is
   special-category health data.
 * **Actual attendance** (``AttendanceRecord`` — admin-only grid): the same
   set plus ``S``.
+
+What an EMPLOYEE may ask for through a shift-change request is narrower
+still: the role's regular working or off codes (solver domain minus CD).
+Leave (AL) and comp days (CD) have their own flows, and A/D, T, B are
+admin-assigned operational codes.
 """
 
 from __future__ import annotations
@@ -81,3 +86,21 @@ def validate_planned(role: Role, code: AttendanceCode) -> None:
     allowed = allowed_planned_codes(role)
     if code not in allowed:
         _reject(role, code, allowed)
+
+
+def requestable_codes(role: Role) -> set[AttendanceCode]:
+    """Codes an employee may request for their own cell (shift change / swap).
+
+    The role's solver domain minus CD: A → {A, D, X}; T, F → {AD, X};
+    M → {O/D, X}.
+    """
+    return set(ROLE_CODES[role]) - {AttendanceCode.CD}
+
+
+def validate_requestable(role: Role, code: AttendanceCode) -> None:
+    """Employee-request validation — 422 ``swap.code_not_requestable``."""
+    if code not in requestable_codes(role):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=t("swap.code_not_requestable"),
+        )

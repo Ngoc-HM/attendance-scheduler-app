@@ -3,9 +3,11 @@
 Closes a month and persists each user's carry-over for the NEXT month. The
 values come from ``schedule_history.build_boundary_states`` (planned schedule
 with actual attendance overlaid) — the single source the scheduler and the
-leave-conflict ranking also read, so the stored columns never disagree with
-them. Idempotent by design: values are absolute recomputations, so re-running
-yields the same result.
+leave-conflict ranking also read. The stored columns are a snapshot persisted
+at month close (for reporting); the scheduler derives live values, so a later
+edit to the closed month shows up there before any re-close. Idempotent by
+design: values are absolute recomputations, so re-running yields the same
+result.
 
 Per F-14: only comp-day / streak / premium-off logic — no complex annual-leave
 accrual.

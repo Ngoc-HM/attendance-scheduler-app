@@ -96,3 +96,26 @@ def test_admin_mutation_writes_audit_row(client: TestClient) -> None:
         assert all(r.actor_id is not None for r in rows)
     finally:
         db.close()
+
+
+def test_schedule_generate_audit_records_the_force_flag(client: TestClient) -> None:
+    """A forced regenerate drops manual edits — the trail must say so."""
+    admin = _admin(client)
+    for force in (False, True):
+        res = client.post(
+            "/api/v1/schedules/generate", headers=admin,
+            json={"year": 2044, "month": 1, "force": force},
+        )
+        assert res.status_code == 200, res.text
+
+    from app.core.database import SessionLocal
+
+    db = SessionLocal()
+    try:
+        details = {
+            r.detail
+            for r in db.query(AuditLog).filter(AuditLog.action == "schedule.generate")
+        }
+        assert {"2044-01 force=False", "2044-01 force=True"} <= details, details
+    finally:
+        db.close()

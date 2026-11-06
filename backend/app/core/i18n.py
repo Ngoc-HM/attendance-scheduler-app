@@ -65,6 +65,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "swap.counterpart_required": "A colleague must be selected for a swap request.",
         "swap.code_required": "A requested code is required for a change request.",
         "swap.no_schedule": "There is no schedule for that date yet.",
+        "swap.code_not_requestable": "Employees may only request their regular working or off codes.",
         # --- Attendance / holidays (F-10..F-13) ---
         "attendance.not_found": "Attendance record not found.",
         "holiday.not_found": "Holiday not found.",
@@ -137,6 +138,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "swap.counterpart_required": "Cần chọn đồng nghiệp để hoán đổi ca.",
         "swap.code_required": "Cần chọn mã ca muốn đổi.",
         "swap.no_schedule": "Chưa có lịch cho ngày này.",
+        "swap.code_not_requestable": "Nhân viên chỉ được yêu cầu mã ca làm hoặc nghỉ thông thường.",
         # --- Attendance / holidays (F-10..F-13) ---
         "attendance.not_found": "Không tìm thấy bản ghi chấm công.",
         "holiday.not_found": "Không tìm thấy ngày lễ.",

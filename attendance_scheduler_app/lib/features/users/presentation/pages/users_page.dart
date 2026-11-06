@@ -98,16 +98,18 @@ class UsersPage extends ConsumerWidget {
   }
 
   /// Approval assigns the role (F-03): self-registration cannot pick one, so
-  /// the admin chooses it here, starting from the account's current role. The
-  /// backend reassigns the code if the role changes. Errors (e.g. last-admin
-  /// lockout) are shown like any other mutation.
+  /// the admin chooses it here, starting from the account's current role —
+  /// except admin (M), which is never preselected: such an account starts on
+  /// T, and granting admin rights takes an explicit pick. The backend
+  /// reassigns the code if the role changes. Errors (e.g. last-admin lockout)
+  /// are shown like any other mutation.
   Future<void> _confirmApprove(
     BuildContext context,
     UsersController controller,
     User user,
   ) async {
     final l = AppLocalizations.of(context);
-    var selected = user.role;
+    var selected = user.role == UserRole.m ? UserRole.t : user.role;
     final role = await showDialog<UserRole>(
       context: context,
       builder: (dialogContext) => DsFormDialog(

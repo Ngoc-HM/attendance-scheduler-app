@@ -1,5 +1,29 @@
 # Project Changelog
 
+## 2026-11-07 — Final-review fixes
+
+- Approving leave after generation keeps the person's weekly X days as X; only
+  the other span days become AL, so the block keeps its genuine off days and
+  the re-check stays clean (#28, #4).
+- Employees may request only their regular working or off codes (A: A/D/X,
+  T/F: AD/X, M: O/D/X); AL, CD, A/D, T, B and S are refused with 422
+  `swap.code_not_requestable`, also for either cell of a swap at approval. The
+  Flutter request picker offers the same list (#40).
+- Maintenance scripts run only with `ENVIRONMENT=dev` and a local database
+  (`app/core/script_guard.py`); `reset_all_passwords.py` requires `--password`
+  (#33).
+- Deleting an admin reattributes the actuals they recorded to the acting
+  admin; seeded-actual syncs never overwrite S (#39).
+- `schedule.generate` audit detail records `force=True/False`; the autorun job
+  id is `autorun`.
+- Flutter: the regenerate confirmation says employees lose access until the
+  month is published again; the approve dialog never preselects M; the
+  annual-leave picker uses the server's annual target year; the schedule
+  goldens are pinned to June 2026 (`SchedulePage.initialMonth`).
+- Gates: backend 291 pytest tests pass, `ruff check app tests scripts` and
+  `mypy app` clean; Flutter `analyze` clean, 65 tests pass including the 3
+  goldens (rendered on macOS; Ubuntu CI not yet verified).
+
 ## 2026-11-07 — Review remediation (owner decisions 2026-11-06)
 
 Fixes the findings of the 2026-11-06 full-project review (B1–B10, C1–C11) and
@@ -41,7 +65,8 @@ D6 and D7 stay open. Decisions #24–#38 and the customer notes are in
 - `GET /users/directory` lists active users' id, code and role for any signed-in
   user (#32).
 - `reset_all_passwords.py` and `seed_demo_users.py` refuse to run outside
-  `ENVIRONMENT=dev` unless `--allow-non-dev` (#33).
+  `ENVIRONMENT=dev` unless `--allow-non-dev` (#33; tightened to "dev and a
+  local database" in the final-review fixes above).
 
 ### UI (Flutter)
 - Session restore at start-up; the token is kept when the server is

@@ -93,7 +93,7 @@ class Settings(BaseSettings):
     # the real figure. Remaining = quota - approved leave days in the year.
     ANNUAL_LEAVE_DEFAULT_DAYS: int = 30
 
-    # --- Day-20 autorun (locked decision #9, F-05/F-07) --------------------
+    # --- Autorun (locked decision #9, F-05/F-07) ----------------------------
     # AUTORUN_DAY is the last day of the monthly leave window; at 00:05 on the
     # day after, the background job generates the next month's DRAFT (skips if
     # a schedule already exists). Manual generate stays available regardless.

@@ -10,22 +10,25 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-/// One pending account whose role is F, so the test can tell "defaults to
+/// One pending account, role F by default, so the test can tell "defaults to
 /// the account's role" apart from "defaults to T".
 class _RecordingUserDataSource implements UserManagementDataSource {
+  _RecordingUserDataSource({UserRole pendingRole = UserRole.f})
+    : _pending = UserModel(
+        id: 7,
+        username: 'longg',
+        fullName: 'Long',
+        role: pendingRole,
+        status: 'pending',
+        code: '${pendingRole.apiValue}4',
+      );
+
   final approvals = <(int, String)>[];
 
-  static const _pending = UserModel(
-    id: 7,
-    username: 'longg',
-    fullName: 'Long',
-    role: UserRole.f,
-    status: 'pending',
-    code: 'F4',
-  );
+  final UserModel _pending;
 
   @override
-  Future<List<UserModel>> list() async => const [_pending];
+  Future<List<UserModel>> list() async => [_pending];
 
   @override
   Future<List<UserDirectoryEntry>> directory() async => const [];
@@ -98,6 +101,22 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(ds.approvals, [(7, 'F')]);
+  });
+
+  testWidgets('approve never preselects admin: a pending M defaults to T', (
+    tester,
+  ) async {
+    final ds = _RecordingUserDataSource(pendingRole: UserRole.m);
+    await _pumpUsersPage(tester, ds);
+
+    await _openApproveDialog(tester);
+    expect(_inDialog(find.text('T — Flexible')), findsOneWidget);
+    expect(_inDialog(find.text('M — Admin')), findsNothing);
+
+    await tester.tap(_inDialog(find.text('Approve')));
+    await tester.pumpAndSettle();
+
+    expect(ds.approvals, [(7, 'T')]);
   });
 
   testWidgets('approve sends the role the admin picks', (tester) async {

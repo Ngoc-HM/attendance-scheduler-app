@@ -35,8 +35,18 @@ extension ShiftCodeX on ShiftCode {
   /// Working-day weight (A/D counts as 2 — spec §7).
   int get workdayValue => this == ShiftCode.aD ? 2 : (isWorking ? 1 : 0);
 
+  /// Codes an employee of [role] may ask for in a shift-change request:
+  /// the role's regular working or off codes (solver domain minus CD).
+  /// Mirrors the backend `requestable_codes`. Leave (AL) and comp days (CD)
+  /// have their own flows; A/D, T and B are admin-assigned.
+  static List<ShiftCode> requestableCodesFor(UserRole role) => switch (role) {
+    UserRole.a => const [ShiftCode.a, ShiftCode.d, ShiftCode.x],
+    UserRole.t || UserRole.f => const [ShiftCode.ad, ShiftCode.x],
+    UserRole.m => const [ShiftCode.oD, ShiftCode.x],
+  };
+
   /// Codes a person of [role] may carry on the PLANNED roster (admin cell
-  /// edit, shift-change request). Mirrors the backend planned-grid check:
+  /// edit). Mirrors the backend planned-grid check:
   /// the role's domain plus X / T / B / AL, with A/D for role A as the
   /// emergency code. Sickness S is never offered here — it is recorded on
   /// the admin-only actual-attendance grid.

@@ -4,8 +4,9 @@ Owner-confirmed decisions that shape the system. Several **override the spec**
 (`PROJECT_OVERVIEW.md`) — do NOT "fix" these back without re-confirming with the
 customer. Recorded 2026-06-11; amended 2026-11-07 with the owner's decisions of
 2026-11-06 (D1–D8 in `docs/superpowers/specs/2026-11-06-review-remediation-spec.md`)
-and the review remediation that followed (#24–#38). D8 (time clock, self-arrange
-and role F stay as they are) changes nothing below.
+and the review remediation that followed (#24–#38), plus the final-review fixes
+of 2026-11-07 (#28 and #33 amended, #39–#40 added). D8 (time clock,
+self-arrange and role F stay as they are) changes nothing below.
 
 | # | Decision | Rationale | Spec relation |
 |---|----------|-----------|---------------|
@@ -36,17 +37,19 @@ and role F stay as they are) changes nothing below.
 | 25 | **Self-registration carries no role** (2026-11-06, B2): `POST /auth/register` has no `role` field (one sent by the client is ignored); the account is created `pending` with role **T**. The admin picks the real role when approving (`POST /auth/users/{id}/approve` with `{"role": ...}`), which works **only on a pending account** (409 `user.not_pending`); role changes of active users go through `PATCH /users/{id}` with the last-admin and fixed-team guards. Approving as another role allocates a new code for that role (the provisional T code is never reused) | A self-registered account could choose role M and become admin on approval. Reverses the 2026-07-09 choice of offering T/F/A at sign-up | F-01, F-03 |
 | 26 | **Leave type must match the span** (2026-11-06, B3): the span decides the bucket (≤5 days = monthly, >5 consecutive days = annual, #11); a client-sent `leave_type` that disagrees is refused with **422** `leave.type_span_mismatch`. The Flutter form checks the same rule before submitting | A 10-day leave sent as `monthly` used to dodge the prior-year annual-leave window | F-05, F-06 |
 | 27 | **Edits to a published roster reach the seeded actuals** (2026-11-06, B5): a manual override, an approved shift change, an approved self-arrange and a leave decision (#28) on a PUBLISHED month also update the matching attendance row while it is still as seeded (`recorded_by` NULL); a row an admin recorded is never overwritten. Publishing inserts missing actuals and, on a re-publish, re-syncs still-seeded ones | The attendance grid kept the old plan after the roster changed | F-09, F-11 |
-| 28 | **Leave decisions are written into existing schedules** (2026-11-06, B4): approving writes AL into the requester's cells in every month of the span that already has a schedule (draft or published; published months also move seeded actuals, #27). Revoking turns back to X **only the cells still on AL** — a CD or a cell re-coded after approval stays. Months not generated yet pick the approval up when generated. When at least one cell changed, the decision returns `leave.schedule_applied`, a note per month not generated yet and each changed month's re-check warnings; when no cell changed it returns none of these | Approving after generation used to change nothing but a warning, so the admin had to regenerate and lose edits | F-05, F-06, §5.6 #14 |
+| 28 | **Leave decisions are written into existing schedules** (2026-11-06, B4): approving writes AL into the requester's cells in every month of the span that already has a schedule (draft or published; published months also move seeded actuals, #27), **except cells on X**: those keep X, because leave does not replace the weekly off days (#4, D5), so the block keeps its genuine X and the re-check stays clean (final review, 2026-11-07). Revoking turns back to X **only the cells still on AL** — a CD or a cell re-coded after approval stays. Months not generated yet pick the approval up when generated. When at least one cell changed, the decision returns `leave.schedule_applied`, a note per month not generated yet and each changed month's re-check warnings; when no cell changed it returns none of these | Approving after generation used to change nothing but a warning, so the admin had to regenerate and lose edits | F-05, F-06, §5.6 #14 |
 | 29 | **One source for carry values** (2026-11-06, B6): `carry_comp`, `carry_streak` and `carry_premium_off` come from `schedule_history.build_boundary_states` (planned cells with actual attendance on top) for the engine input, the F-09 re-check, the leave-conflict ranking (#19) and month-close; month-close only stores them for reporting | The ranking read the stored column, the engine its own history and month-close actuals only, so the three could disagree | F-14, §5.4 #9 |
 | 30 | **Annual leave quota and remaining balance** (owner D4, 2026-11-06): each user has an admin-set `annual_leave_quota` (days per calendar year). Migration `0008` adds it (existing users get 30) and drops the never-used `annual_leave_balance`. New users start at `ANNUAL_LEAVE_DEFAULT_DAYS` = **30 — a placeholder until the customer gives the real figure** — unless the admin sets a quota on create; the Users page edits it per person. Remaining = quota − approved leave days in that calendar year (calendar days of every approved request, monthly or annual). `GET /leaves/balance?year=&user_id=` returns quota / used / pending / remaining (own balance; an admin may read anyone's). Approving past the quota is allowed with the **advisory** warning `leave.balance_exceeded`. The Leaves page shows an employee their own days left for the current business year | D4: the customer wants "annual leave left" per person. Nothing is stored, so approve / reject / revoke show up at once | F-06 |
 | 31 | **Leave window and autorun share `AUTORUN_DAY`** (2026-11-06, B8): `AUTORUN_DAY` is validated **1–27** so day `AUTORUN_DAY + 1` exists in every month; `leave_windows.registration_last_day()` returns it, so the monthly window (days 1–`AUTORUN_DAY` of the month before) and the autorun (#9) cannot drift apart, and the window-closed error names the real day (`leave.window_closed_monthly` with `{day}`) | The autorun used to fire on day 20 while registration stayed open for the rest of day 20 | §4.3, F-05, F-07 |
 | 32 | **Employee-readable directory and window** (2026-11-06, C4/C5): `GET /users/directory` gives any signed-in user the active users' `id`, `code` and `role` only (no names), ordered by code; the roster and the shift-change dialog show people by code. `GET /leaves/window` returns `monthly_open`, `monthly_target_year`/`monthly_target_month`, `annual_target_year`, `closes_on_day` and `enforced` (false in dev, where the window never closes); the Leaves page reads it instead of a hard-coded "open" | Employees saw "User 7" because `/users` is admin-only, and the client claimed registration was always open | §3, §9.1, F-05 |
-| 33 | **Maintenance scripts refuse outside dev** (2026-11-06, B9): `scripts/reset_all_passwords.py` and `scripts/seed_demo_users.py` exit with code 2 unless `ENVIRONMENT=dev`, naming the environment and database host; `--allow-non-dev` overrides on purpose | One command could reset every production password to `admin123` | §9.5 |
+| 33 | **Maintenance scripts run only against a local dev database** (2026-11-06, B9; tightened 2026-11-07): `scripts/reset_all_passwords.py` and `scripts/seed_demo_users.py` exit with code 2 unless `ENVIRONMENT=dev` **and** `DATABASE_URL` is local — SQLite, or host `localhost` / `127.0.0.1` / `::1` (`app/core/script_guard.py`: `is_local_database`, `refuse_unless_safe`) — naming the environment and database host, never the password; `--allow-non-dev` overrides on purpose. `reset_all_passwords.py` requires `--password` (no `admin123` default) and does not echo it | One command could reset every production password to `admin123`; and a dev `.env` can point at a remote/shared Postgres (the owner's does), so "dev" alone proves nothing | §9.5 |
 | 34 | **The off-chain rule counts comp days** (2026-11-06, B7): the engine's ≤5-consecutive-OFF rule (#11) counts every rest code in the person's domain — X (approved leave is pinned as X) and CD — like the post-edit re-check; annual leave stays exempt | The engine counted only X, so a generated roster could fail its own re-check | §4.3, #11, #23 |
 | 35 | **Recently-sick cover looks back 30 days** (2026-11-06, B10): when a sick day needs A/D cover, people with an S in the 30 days before it (`RECENTLY_SICK_LOOKBACK_DAYS`, rolling across month boundaries) are forced first, most recent first | The rule used to forget anyone who was sick in the previous month | §6, F-10 |
 | 36 | **Flutter session restore** (2026-11-06, C6): at start-up the app signs back in with the stored token. Only a 401/403 drops it; when the server cannot be reached the token is kept for the next start and the login page says the server is unavailable | Users had to log in at every launch, and a backend outage must not sign everyone out | F-02 |
 | 37 | **Employee self-service in the client** (2026-11-06, C1/C2/C9): an employee reads their own month on the Attendance page (`GET /attendance/me`, read-only), taps their own roster cells to request a shift change (code change or swap with a colleague picked by code, #32) and follows their requests in a panel under the roster; the Leaves page shows their comp days (`carry_comp`) and annual leave left (#30) | The shift-change dialog existed but nothing opened it, employees had no attendance view, and comp days were hard-coded to 0 | §3, #8, F-11 |
 | 38 | **Role gating in the client** (2026-11-06, C3/C7/C8): Generate, Publish, roster cell edits, holiday management, attendance updates and month-close appear only for admins (a signed-out or employee view has none of them, and a non-admin sees a neutral "not published yet" message instead of a Generate hint). The admin's cell editor offers only the planned codes valid for that person's role — never S (#17), CD for every role (#13), A/D for role A only | Every role saw admin buttons that then failed on the server, and the picker offered S and other roles' codes | §3, §9.1 |
+| 39 | **Deleting an admin keeps their recorded actuals attributed** (2026-11-07, final review): `DELETE /users/{id}` reassigns `AttendanceRecord.recorded_by` from the deleted user to the acting admin (`user_service.delete(db, user_id, acting_admin_id)`; when an admin deletes their own account, to another active admin). The audit-log actor is still nulled. Independently, a seeded-actual sync (`attendance_service._follow_plan`: roster edit, re-publish, `/attendance/seed`) never overwrites a cell whose code is `S` | `recorded_by` NULL means "still as seeded" (#27): nulling it made real actuals — sick days and A/D cover included — look seeded, so the next roster edit overwrote them | §6, §9.1, F-10, F-11 |
+| 40 | **Employees request only their regular codes** (2026-11-07, final review): a shift-change request (`POST /shift-changes`, code change or swap) may produce only the requester's role domain minus CD — A → A, D, X; T and F → AD, X; M → O/D, X (`role_code_validation.requestable_codes`). Anything else (AL, CD, A/D, T, B, S) is refused with **422** `swap.code_not_requestable`, at creation and again at approval for **both** cells of a swap. The admin's manual override keeps the wider planned set (#38). The Flutter request picker offers the same list (`ShiftCodeX.requestableCodesFor`) | Requests for AL or CD bypassed the leave window, the annual quota (#30) and the comp-day rules (#13); leave and comp days have their own flows | §3, #8, F-05, F-06 |
 
 ## Objective weights (engine)
 `Minimize( slack·10000 + compDaySlack·2000 + individualADGap·300 + balanceAD·100 + premiumOff·30 + offPairing·15 )`
@@ -99,22 +102,29 @@ stamped at `0001` then upgraded.
   production database before deploying (#25).
 - Approving a self-registered account as another role leaves a gap in the T
   codes (codes are never reused, #25).
-- Deleting a user nulls `recorded_by` on the attendance rows that admin
-  recorded, so they look seeded: a later roster edit, re-publish or
-  `/attendance/seed` on a published month rewrites them (S included) to the
-  roster code. Owner to choose an explicit "seeded" flag or never syncing over
-  S (#27).
-- Shift-change requests now accept CD for T/M/F (the admin approves; the
-  re-check warns "more comp days than owed"); T (training) and B (business
-  trip) on a holiday also earn a CD, like any working code (#5).
+- Deleting an admin hands the attendance rows they recorded to the admin who
+  deletes them (#39). Rows nulled by a delete BEFORE this fix still look
+  seeded: a later roster edit or re-publish may rewrite them to the roster
+  code, except sick days (S), which are never synced over. Check production
+  data for such rows before deploying.
+- Employees can no longer request AL, CD, A/D, T or B through a shift change
+  (#40). Pending requests filed earlier with such a code are refused (422) when
+  the admin approves them — reject them instead. T (training) and B (business
+  trip) on a holiday still earn a CD when the admin sets them (#5).
 - Self-arrange lets T/M/F move an X off a holiday and work it, which earns a CD
   (the admin approves).
 - Every existing user starts at the 30-day placeholder quota after migration
   0008.
-- The quota counts calendar days (AL is written on every day of the span,
-  weekends and holidays included); the 30-day placeholder lives in config and
+- The quota counts every calendar day of an approved request (weekends,
+  holidays and X days included); the 30-day placeholder lives in config and
   in the migration default; the Leaves page shows only the current business
   year.
+- Leave approved AFTER the month was generated keeps the person's weekly X
+  days inside the span as X (#28); leave approved BEFORE generation is pinned
+  as AL on every span day and the engine places the weekly X on the other
+  days of the block (#4).
+  The grid therefore differs by approval timing, while the quota counts the
+  same days either way.
 - A CD that was in the grid before a leave approval is overwritten by AL and
   becomes X on revoke (the comp day disappears from the grid); revoke never
   restores the pre-approval code (#28).
