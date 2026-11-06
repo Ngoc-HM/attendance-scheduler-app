@@ -6,6 +6,9 @@ from datetime import date
 
 from fastapi.testclient import TestClient
 
+from app.core.i18n import t
+
+V = "/api/v1"
 YEAR, MONTH = 2027, 3  # a clean month nothing else touches
 
 
@@ -88,16 +91,14 @@ def test_generate_override_publish_pipeline(client: TestClient) -> None:
     assert cell["code"] == "A/D" and cell["is_manual_override"] is True
     assert over["violations"]  # fewer than 2 off days that week → flagged
 
-    # Testing mode (owner 2026-07-01): admin can regenerate freely — manual
-    # overrides no longer block regeneration.
+    # A manually edited month is protected: regenerate without force → 409.
     res = client.post(
         "/api/v1/schedules/generate", headers=admin,
         json={"year": YEAR, "month": MONTH},
     )
-    assert res.status_code == 200
+    assert res.status_code == 409
 
-    # Publish → visible to normal users; regenerating is still allowed (the
-    # month simply resets to draft).
+    # Publish → visible to normal users; regenerating now requires force.
     res = client.post(f"/api/v1/schedules/{schedule['id']}/publish", headers=admin)
     assert res.status_code == 200 and res.json()["status"] == "published"
     assert client.get(f"/api/v1/schedules/{YEAR}/{MONTH}", headers=user_hdr).status_code == 200
@@ -105,7 +106,7 @@ def test_generate_override_publish_pipeline(client: TestClient) -> None:
         "/api/v1/schedules/generate", headers=admin,
         json={"year": YEAR, "month": MONTH},
     )
-    assert res.status_code == 200
+    assert res.status_code == 409
 
 
 def test_regenerate_with_force_replaces_cells(client: TestClient) -> None:
@@ -132,6 +133,77 @@ def test_regenerate_with_force_replaces_cells(client: TestClient) -> None:
     second = _gen(True)
     assert second.status_code == 200, second.text
     assert len(second.json()["schedule"]["assignments"]) == n_first
+
+
+
+def _generate(client, admin, year, month, force=None):
+    body = {"year": year, "month": month}
+    if force is not None:
+        body["force"] = force
+    return client.post(f"{V}/schedules/generate", headers=admin, json=body)
+
+
+def _override_off_day(client, admin, schedule: dict, user_id: int) -> None:
+    """Force a working code onto one of ``user_id``'s off (X) days."""
+    off_day = next(
+        a["work_date"] for a in schedule["assignments"]
+        if a["user_id"] == user_id and a["code"] == "X"
+    )
+    res = client.post(
+        f"{V}/schedules/{schedule['id']}/override", headers=admin,
+        json={"user_id": user_id, "work_date": off_day, "code": "A/D"},
+    )
+    assert res.status_code == 200, res.text
+
+
+def test_regenerate_published_requires_force(client: TestClient) -> None:
+    """B1: a published month is locked — regenerate only with force, which
+    drops the manual edits and resets the month to draft."""
+    yr, mo = 2026, 12
+    admin = _admin_headers(client)
+    users = [_make_user(client, admin, f"lockpub_a{i}", "A") for i in (1, 2, 3, 4)]
+    gen = _generate(client, admin, yr, mo)
+    assert gen.status_code == 200, gen.text
+    schedule = gen.json()["schedule"]
+    pub = client.post(f"{V}/schedules/{schedule['id']}/publish", headers=admin)
+    assert pub.status_code == 200 and pub.json()["status"] == "published"
+    _override_off_day(client, admin, schedule, users[0]["id"])
+
+    r = _generate(client, admin, yr, mo)
+    assert r.status_code == 409 and "force" in r.json()["detail"]
+    assert r.json()["detail"] == t("schedule.published_locked")
+    # The refused call left the month alone: still published, edit kept.
+    kept = client.get(f"{V}/schedules/{yr}/{mo}", headers=admin).json()
+    assert kept["status"] == "published"
+    assert any(a["is_manual_override"] for a in kept["assignments"])
+
+    r = _generate(client, admin, yr, mo, force=True)
+    assert r.status_code == 200 and r.json()["schedule"]["status"] == "draft"
+    assert not any(a["is_manual_override"] for a in r.json()["schedule"]["assignments"])
+
+
+def test_regenerate_with_overrides_requires_force(client: TestClient) -> None:
+    """B1: a draft with manual edits is protected — regenerate only with force,
+    which replaces the edited cells with a fresh solve."""
+    yr, mo = 2027, 7
+    admin = _admin_headers(client)
+    users = [_make_user(client, admin, f"lockovr_a{i}", "A") for i in (1, 2, 3, 4)]
+    gen = _generate(client, admin, yr, mo)
+    assert gen.status_code == 200, gen.text
+    schedule = gen.json()["schedule"]
+    assert schedule["status"] == "draft"
+    _override_off_day(client, admin, schedule, users[0]["id"])
+
+    r = _generate(client, admin, yr, mo)
+    assert r.status_code == 409 and "force" in r.json()["detail"]
+    assert r.json()["detail"] == t("schedule.has_overrides")
+    kept = client.get(f"{V}/schedules/{yr}/{mo}", headers=admin).json()
+    assert any(a["is_manual_override"] for a in kept["assignments"])
+
+    r = _generate(client, admin, yr, mo, force=True)
+    assert r.status_code == 200, r.text
+    assert r.json()["schedule"]["status"] == "draft"
+    assert not any(a["is_manual_override"] for a in r.json()["schedule"]["assignments"])
 
 
 def test_autorun_trigger_logic(client: TestClient) -> None:

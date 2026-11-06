@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/network/api_exception.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../../users/data/user_management_datasource.dart';
 import '../../../auth/domain/entities/user.dart';
@@ -74,6 +75,9 @@ class ScheduleController extends StateNotifier<ScheduleState> {
     }
   }
 
+  /// Rethrows the backend's 409 (month published or manually edited, needs
+  /// [force]) so the page can confirm with the admin and retry; every other
+  /// failure lands in [ScheduleState.error].
   Future<void> generate(int year, int month, {bool force = false}) async {
     state = state.copyWith(isMutating: true, clearError: true, clearResult: true);
     try {
@@ -84,6 +88,10 @@ class ScheduleController extends StateNotifier<ScheduleState> {
         lastResult: result,
       );
     } catch (e) {
+      if (e is ApiException && e.statusCode == 409) {
+        state = state.copyWith(isMutating: false);
+        rethrow;
+      }
       state = state.copyWith(isMutating: false, error: e.toString());
     }
   }

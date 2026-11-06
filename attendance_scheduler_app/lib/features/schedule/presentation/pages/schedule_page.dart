@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/constants/shift_codes.dart';
+import '../../../../core/network/api_exception.dart';
 import '../../../../design_system/design_system.dart';
 import '../../../../i18n/app_localizations.dart';
 import '../../../auth/domain/entities/user.dart';
@@ -294,6 +295,48 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
     return proceed == true;
   }
 
+  /// The backend refuses (409) to regenerate a published or manually edited
+  /// month without force: regenerating drops the manual edits and resets the
+  /// month to draft, so the admin must confirm that first.
+  Future<bool> _confirmRegenerate(
+    BuildContext context,
+    AppLocalizations l,
+  ) async {
+    final proceed = await showDialog<bool>(
+      context: context,
+      builder: (context) => DsFormDialog(
+        title: l.text('regenerateConfirmTitle'),
+        width: 400,
+        content: Text(l.text('regenerateConfirmBody')),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(l.text('cancel')),
+          ),
+          DsPrimaryButton(
+            label: l.text('regenerate'),
+            onPressed: () => Navigator.of(context).pop(true),
+          ),
+        ],
+      ),
+    );
+    return proceed == true;
+  }
+
+  /// The solve can take ~30s, so block with a spinner overlay meanwhile.
+  Future<void> _runGenerate(
+    BuildContext context,
+    AppLocalizations l, {
+    bool force = false,
+  }) =>
+      DsBusy.run(
+        context,
+        l.text('generatingSchedule'),
+        () => ref
+            .read(scheduleControllerProvider.notifier)
+            .generate(_month.year, _month.month, force: force),
+      );
+
   Future<void> _onGenerate(BuildContext context, AppLocalizations l) async {
     // Months without flight data still solve, but yield zero flight duties —
     // surface that BEFORE generating so the admin isn't surprised.
@@ -302,16 +345,15 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
       if (!await _confirmGenerateWithoutFlights(context, l)) return;
     }
     if (!context.mounted) return;
-    // Testing mode: admin regenerates freely — the backend no longer blocks a
-    // published or manually-edited month, so no confirm dialog is needed.
-    // The solve can take ~30s, so block with a spinner overlay meanwhile.
-    await DsBusy.run(
-      context,
-      l.text('generatingSchedule'),
-      () => ref
-          .read(scheduleControllerProvider.notifier)
-          .generate(_month.year, _month.month),
-    );
+    try {
+      await _runGenerate(context, l);
+    } on ApiException catch (e) {
+      if (e.statusCode != 409) rethrow;
+      if (!context.mounted) return;
+      if (!await _confirmRegenerate(context, l)) return;
+      if (!context.mounted) return;
+      await _runGenerate(context, l, force: true);
+    }
     final state = ref.read(scheduleControllerProvider);
     if (!context.mounted) return;
     if (state.error != null) {

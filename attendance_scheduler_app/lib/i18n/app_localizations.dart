@@ -325,6 +325,10 @@ class AppLocalizations {
           'roster will contain no flight duties (A/D) and may be wrong. '
           'Enter flights first, or generate anyway?',
       'generateAnyway': 'Generate anyway',
+      'regenerateConfirmTitle': 'Regenerate schedule?',
+      'regenerateConfirmBody':
+          'This schedule is published or has manual edits. Regenerating will '
+          'discard the manual edits and return the schedule to draft.',
       // --- Admin cell edit (F-09 UI, owner 2026-07-17) ---
       'editCell': 'Edit cell',
       'cellSaved': 'Cell saved.',
@@ -689,6 +693,10 @@ class AppLocalizations {
           'không có ca bay (A/D) và có thể sai sót. Nên nhập lịch bay '
           'trước, hoặc vẫn tạo lịch?',
       'generateAnyway': 'Vẫn tạo lịch',
+      'regenerateConfirmTitle': 'Tạo lại lịch?',
+      'regenerateConfirmBody':
+          'Lịch đã publish hoặc đã chỉnh tay. Tạo lại sẽ xoá chỉnh tay và '
+          'đưa lịch về nháp.',
       // --- Admin cell edit (F-09 UI, owner 2026-07-17) ---
       'editCell': 'Sửa ô lịch',
       'cellSaved': 'Đã lưu ô lịch.',

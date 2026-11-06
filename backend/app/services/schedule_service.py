@@ -69,16 +69,36 @@ def get(db: Session, year: int, month: int, include_draft: bool) -> MonthlySched
 
 
 def generate(db: Session, year: int, month: int, force: bool = False) -> ScheduleResult:
-    """F-07 — build the monthly schedule via the CP-SAT engine (§5)."""
+    """F-07 — build the monthly schedule via the CP-SAT engine (§5).
+
+    Regenerating a published month, or one with manual edits, would wipe the
+    edits and reset it to draft — refused (409) unless ``force`` is set.
+    """
     existing = (
         db.query(MonthlySchedule)
         .filter(MonthlySchedule.year == year, MonthlySchedule.month == month)
         .one_or_none()
     )
-    # Testing mode (owner 2026-07-01): admin may regenerate freely — no lock on
-    # published schedules or manual overrides. Regenerating resets to draft.
-    # ``force`` is kept in the signature for API compatibility but no longer gates.
-    _ = force
+    if existing is not None and not force:
+        if existing.status is ScheduleStatus.published:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT, detail=t("schedule.published_locked")
+            )
+        # Query, not ``existing.assignments``: loading the collection here would
+        # leave stale cells in the session ahead of the delete/re-insert below.
+        has_overrides = (
+            db.query(ShiftAssignment.id)
+            .filter(
+                ShiftAssignment.schedule_id == existing.id,
+                ShiftAssignment.is_manual_override.is_(True),
+            )
+            .first()
+            is not None
+        )
+        if has_overrides:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT, detail=t("schedule.has_overrides")
+            )
 
     inp = schedule_input_builder.build(db, year, month)
     out = SchedulerEngine().solve(inp)

@@ -54,6 +54,7 @@ def generate_schedule(
 
     Always returns a complete draft plus any rule Violations for the admin to
     resolve (§5.6 — always-feasible slack architecture, decision #2).
+    409 when the month is published or has manual edits and ``force`` is unset.
     """
     result = schedule_service.generate(db, payload.year, payload.month, payload.force)
     audit_service.record(db, admin.id, "schedule.generate", "MonthlySchedule",
