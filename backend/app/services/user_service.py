@@ -156,6 +156,32 @@ def _ensure_last_admin_preserved(
         )
 
 
+def _recorder_after_delete(db: Session, user: User, acting_admin_id: int) -> int:
+    """Who the deleted user's recorded actuals are attributed to (#39).
+
+    Normally the admin doing the delete. An admin deleting their own account
+    hands them to another active admin instead — one always exists, because
+    the last-admin guard has already run.
+    """
+    if acting_admin_id != user.id:
+        return acting_admin_id
+    other = (
+        db.query(User.id)
+        .filter(
+            User.id != user.id,
+            User.role == Role.M,
+            User.status == UserStatus.active,
+        )
+        .order_by(User.id)
+        .first()
+    )
+    if other is None:  # unreachable after the last-admin guard
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, detail=t("user.last_admin_lockout")
+        )
+    return int(other[0])
+
+
 def _ensure_last_admin_survives_delete(db: Session, user: User) -> None:
     """Raise 409 if deleting ``user`` would leave the system admin-less."""
     if not _is_active_admin(user):
@@ -240,14 +266,17 @@ def update(db: Session, user_id: int, payload: UserUpdate) -> tuple[User, list[s
     return user, warnings
 
 
-def delete(db: Session, user_id: int) -> None:
+def delete(db: Session, user_id: int, acting_admin_id: int) -> None:
     """Hard delete a user and cascade their historical rows.
 
     Cascade order avoids FK violations on SQLite/Postgres:
     1. Audit logs that *point at* this user keep their row but null ``actor_id``
        so the audit trail of OTHER users is not lost.
-    2. Attendance records ``recorded_by`` is nulled; rows owned by this user
-       are deleted (they describe the user's own day).
+    2. Attendance rows this user RECORDED (as admin) are reattributed to the
+       acting admin (decision #39): a NULL ``recorded_by`` means "still as
+       seeded from the roster", and roster edits would then overwrite those
+       real actuals. Rows owned by this user are deleted (they describe the
+       user's own day).
     3. Leave / shift / self-arrange / shift-change / time-clock rows owned by
        this user are deleted.
     4. The ``User`` row itself is removed.
@@ -264,7 +293,8 @@ def delete(db: Session, user_id: int) -> None:
     db.query(AttendanceRecord).filter(
         AttendanceRecord.recorded_by == user.id
     ).update(
-        {AttendanceRecord.recorded_by: None}, synchronize_session=False
+        {AttendanceRecord.recorded_by: _recorder_after_delete(db, user, acting_admin_id)},
+        synchronize_session=False,
     )
     db.query(AttendanceRecord).filter(AttendanceRecord.user_id == user.id).delete(
         synchronize_session=False

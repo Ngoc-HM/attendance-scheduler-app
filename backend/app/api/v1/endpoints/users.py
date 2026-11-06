@@ -71,6 +71,6 @@ def update_user(
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_user(db: DbSession, user_id: int, admin: AdminUser) -> Response:
     """F-03 (extension) — admin hard-deletes a user; cascades history."""
-    user_service.delete(db, user_id)
+    user_service.delete(db, user_id, acting_admin_id=admin.id)
     audit_service.record(db, admin.id, "user.delete", "User", user_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

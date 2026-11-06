@@ -202,3 +202,99 @@ def test_republish_resyncs_untouched_seeded_actuals(client: TestClient) -> None:
 
     assert _actual(client, admin, u, "2028-10-15")["code"] == "T"
     assert _actual(client, admin, u, "2028-10-16")["code"] == "B"
+
+
+# ---------------------------------------------------------------------------
+# Decision #39 — deleting an admin must not turn the actuals they recorded
+# back into "seeded" rows that the next roster edit would overwrite.
+# ---------------------------------------------------------------------------
+
+def test_deleting_an_admin_keeps_their_recorded_actuals_attributed(
+    client: TestClient,
+) -> None:
+    admin = _admin_headers(client)
+    me = client.get(f"{V}/users/me", headers=admin).json()["id"]
+    other_admin = _make_user(client, admin, "f4_admin2", "M")["id"]
+    users = [_make_user(client, admin, f"f4_del_a{i}", "A") for i in (1, 2, 3, 4)]
+    u = users[0]["id"]
+    schedule = _generate_and_publish(client, admin, 2043, 2)
+
+    put = client.put(
+        f"{V}/attendance", headers=_login(client, "f4_admin2"),
+        json={"user_id": u, "work_date": "2043-02-10", "code": "T"},
+    )
+    assert put.status_code == 200 and put.json()["recorded_by"] == other_admin, put.text
+
+    assert client.delete(f"{V}/users/{other_admin}", headers=admin).status_code == 204
+
+    recorded = _actual(client, admin, u, "2043-02-10")
+    assert recorded["recorded_by"] == me
+    assert recorded["code"] == "T"
+
+    # A later roster edit on that day leaves the recorded actual alone.
+    res = client.post(
+        f"{V}/schedules/{schedule['id']}/override", headers=admin,
+        json={"user_id": u, "work_date": "2043-02-10", "code": "B"},
+    )
+    assert res.status_code == 200, res.text
+    assert _actual(client, admin, u, "2043-02-10")["code"] == "T"
+
+
+def test_admin_deleting_own_account_hands_recorded_actuals_to_another_admin(
+    client: TestClient,
+) -> None:
+    admin = _admin_headers(client)
+    leaving = _make_user(client, admin, "f4_admin3", "M")["id"]
+    u = _make_user(client, admin, "f4_self_t1", "T")["id"]
+    own = _login(client, "f4_admin3")
+    put = client.put(
+        f"{V}/attendance", headers=own,
+        json={"user_id": u, "work_date": "2043-04-07", "code": "B"},
+    )
+    assert put.status_code == 200, put.text
+
+    assert client.delete(f"{V}/users/{leaving}", headers=own).status_code == 204
+
+    recorder = _actual(client, admin, u, "2043-04-07")["recorded_by"]
+    assert recorder is not None and recorder != leaving
+    users = {row["id"]: row for row in client.get(f"{V}/users", headers=admin).json()}
+    assert users[recorder]["role"] == "M" and users[recorder]["status"] == "active"
+
+
+def test_republish_never_overwrites_a_sick_actual(client: TestClient) -> None:
+    """An S row with no recorder (e.g. left by the old admin delete) stays S."""
+    from app.core.database import SessionLocal
+    from app.models.attendance import AttendanceRecord
+    from app.models.enums import AttendanceCode
+
+    admin = _admin_headers(client)
+    users = [_make_user(client, admin, f"f4_sick_a{i}", "A") for i in (1, 2, 3, 4)]
+    u = users[0]["id"]
+    schedule = _generate_and_publish(client, admin, 2043, 3)
+
+    db = SessionLocal()
+    try:
+        row = (
+            db.query(AttendanceRecord)
+            .filter(
+                AttendanceRecord.user_id == u,
+                AttendanceRecord.work_date == date(2043, 3, 10),
+            )
+            .one()
+        )
+        row.code = AttendanceCode.S
+        row.recorded_by = None
+        db.commit()
+    finally:
+        db.close()
+
+    pub = client.post(f"{V}/schedules/{schedule['id']}/publish", headers=admin)
+    assert pub.status_code == 200, pub.text
+    assert _actual(client, admin, u, "2043-03-10")["code"] == "S"
+
+    res = client.post(
+        f"{V}/schedules/{schedule['id']}/override", headers=admin,
+        json={"user_id": u, "work_date": "2043-03-10", "code": "B"},
+    )
+    assert res.status_code == 200, res.text
+    assert _actual(client, admin, u, "2043-03-10")["code"] == "S"
