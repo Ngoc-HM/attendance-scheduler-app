@@ -2,9 +2,13 @@
 
 A break of MORE than 5 consecutive off days is, by policy, annual leave (it
 must be registered the prior year). So the scheduler keeps ordinary off-runs
-(weekly X + monthly leave / CD, all rendered as ``X`` in the decision layer)
 to at most 5 in a row: every window of 6 consecutive days must contain at
 least one working day.
+
+Every rest code in the person's domain counts as OFF (``OFF_CODES`` ∩
+``codes_for(role)``): weekly X, approved leave (pinned as ``X`` in the
+decision layer) AND the comp days (CD) the solver places itself — matching
+the post-edit recheck in ``schedule_violation_checker.check_off_chain``.
 
 Approved ANNUAL leave (``inp.long_leave_off``) is the sanctioned long break —
 any 6-day window touching it is EXEMPT, so a legitimately-registered 7-day
@@ -22,6 +26,7 @@ from ortools.sat.python import cp_model
 
 from app.models.enums import AttendanceCode
 from app.scheduler.domain import SolverInput
+from app.scheduler.role_codes import OFF_CODES, codes_for
 from app.scheduler.slack_registry import SlackRegistry
 
 WINDOW = 6  # a 6-day all-off window is the smallest violation (> 5 off)
@@ -39,6 +44,7 @@ def add(
         # Role F is T-like (owner 2026-07-22): the max-5-consecutive-OFF rule
         # applies to F exactly as it does to T.
         annual = inp.long_leave_off.get(p.user_id, set())
+        off_codes = [c for c in codes_for(p.role) if c in OFF_CODES]
         for i in range(len(days) - WINDOW + 1):
             window = days[i : i + WINDOW]
             # Exempt windows overlapping a sanctioned annual-leave block.
@@ -47,9 +53,9 @@ def add(
             slack = model.new_int_var(
                 0, 1, f"offchain_{p.user_id}_{window[0].isoformat()}"
             )
-            # At most 5 of the 6 days may be OFF (X) → at least one working day.
+            # At most 5 of the 6 days may be OFF (X/CD) → at least one working day.
             model.add(
-                sum(x[(p.user_id, d, AttendanceCode.X)] for d in window)
+                sum(x[(p.user_id, d, c)] for d in window for c in off_codes)
                 <= WINDOW - 1 + slack
             )
             registry.register(

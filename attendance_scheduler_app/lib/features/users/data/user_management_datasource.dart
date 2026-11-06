@@ -58,9 +58,13 @@ class UserManagementDataSource {
     return UserModel.fromJson(response.data as Map<String, dynamic>);
   }
 
-  /// POST /auth/users/{id}/approve — activate a pending account.
-  Future<UserModel> approve(int id) async {
-    final response = await _dio.post(ApiEndpoints.approveUser(id));
+  /// POST /auth/users/{id}/approve — activate a pending account with the
+  /// role the admin assigns (F-03); the backend requires the role.
+  Future<UserModel> approve(int id, {required String role}) async {
+    final response = await _dio.post(
+      ApiEndpoints.approveUser(id),
+      data: {'role': role},
+    );
     return UserModel.fromJson(response.data as Map<String, dynamic>);
   }
 

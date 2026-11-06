@@ -118,3 +118,30 @@ def test_sick_cover_rejects_non_sick_code(client: TestClient) -> None:
     res = client.post("/api/v1/attendance/sick-cover", headers=admin,
                       json={"user_id": uid, "work_date": "2027-08-11", "code": "A"})
     assert res.status_code == 400
+
+
+def test_recently_sick_rule_spans_month_boundary(client: TestClient) -> None:
+    """An S on the last days of November still forces A/D cover in early
+    December — the recently-sick memory is 30 days, not "this month" (§6)."""
+    admin = _admin(client)
+    # Created first → lowest id → the fairness pick if the S were forgotten.
+    helper = _mk(client, admin, "boundary_helper", "A")
+    was_sick = _mk(client, admin, "boundary_was_sick", "A")
+    sick = _mk(client, admin, "boundary_sick", "A")
+
+    res = client.put("/api/v1/attendance", headers=admin,
+                     json={"user_id": was_sick, "work_date": "2028-11-28", "code": "S"})
+    assert res.status_code == 200, res.text
+    day = "2028-12-02"
+    for uid, code in ((sick, "A"), (helper, "D"), (was_sick, "D")):
+        res = client.put("/api/v1/attendance", headers=admin,
+                         json={"user_id": uid, "work_date": day, "code": code})
+        assert res.status_code == 200, res.text
+
+    res = client.post("/api/v1/attendance/sick-cover", headers=admin,
+                      json={"user_id": sick, "work_date": day, "code": "S"})
+    assert res.status_code == 200, res.text
+    body = res.json()
+    assert body["cover"] is not None
+    assert body["cover"]["user_id"] == was_sick and body["cover"]["code"] == "A/D"
+    assert body["forced"] is True

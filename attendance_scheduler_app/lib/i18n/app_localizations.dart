@@ -52,6 +52,9 @@ class AppLocalizations {
       'status': 'Status',
       'actions': 'Actions',
       'approve': 'Approve',
+      'approveRoleMessage':
+          'Choose the role for this account before activating it. '
+          'The account code follows the chosen role.',
       'disable': 'Disable',
       'enable': 'Enable',
       'changeRole': 'Change role',
@@ -126,9 +129,11 @@ class AppLocalizations {
       'compDays': 'Comp days',
       'registrationOpen': 'Registration open',
       'shortLeaveMessage':
-          'Monthly leave is under 5 consecutive days. Longer leave uses the annual request.',
-      'monthlyLeaveHint': 'Monthly leave is under 5 consecutive days.',
-      'annualLeaveHint': 'Annual leave is 5 or more consecutive days, limited to the next year (Y+1).',
+          'Monthly leave is 5 consecutive days or fewer. Longer leave uses the annual request.',
+      'monthlyLeaveHint': 'Monthly leave is 5 consecutive days or fewer.',
+      'annualLeaveHint': 'Annual leave is more than 5 consecutive days, limited to the next year (Y+1).',
+      'leaveTypeSpanMismatch':
+          'Leave of 5 days or less is monthly leave; more than 5 consecutive days must be registered as annual leave.',
 
       'leaveWindowHint':
           'Development mode: leave dates are not restricted by registration windows.',
@@ -325,6 +330,10 @@ class AppLocalizations {
           'roster will contain no flight duties (A/D) and may be wrong. '
           'Enter flights first, or generate anyway?',
       'generateAnyway': 'Generate anyway',
+      'regenerateConfirmTitle': 'Regenerate schedule?',
+      'regenerateConfirmBody':
+          'This schedule is published or has manual edits. Regenerating will '
+          'discard the manual edits and return the schedule to draft.',
       // --- Admin cell edit (F-09 UI, owner 2026-07-17) ---
       'editCell': 'Edit cell',
       'cellSaved': 'Cell saved.',
@@ -335,7 +344,7 @@ class AppLocalizations {
       'registrationClosed': 'Monthly registration closed',
       'registrationClosedMessage':
           'Monthly-leave registration is open from day 1 to day 20 (for the '
-          'next month). Annual leave (5+ days) is registered during the '
+          'next month). Annual leave (more than 5 days) is registered during the '
           'previous year.',
       // --- Revoke approval (owner 2026-07-17) ---
       'revokeApproval': 'Revoke approval',
@@ -417,6 +426,9 @@ class AppLocalizations {
       'status': 'Trạng thái',
       'actions': 'Thao tác',
       'approve': 'Phê duyệt',
+      'approveRoleMessage':
+          'Chọn vai trò cho tài khoản trước khi kích hoạt. '
+          'Mã tài khoản sẽ theo vai trò được chọn.',
       'disable': 'Vô hiệu hóa',
       'enable': 'Kích hoạt',
       'changeRole': 'Đổi vai trò',
@@ -491,9 +503,11 @@ class AppLocalizations {
       'compDays': 'Ngày nghỉ bù',
       'registrationOpen': 'Đang mở đăng ký',
       'shortLeaveMessage':
-          'Nghỉ hàng tháng dưới 5 ngày liên tục. Nghỉ dài hơn dùng đăng ký phép năm.',
-      'monthlyLeaveHint': 'Nghỉ hàng tháng dưới 5 ngày liên tục.',
-      'annualLeaveHint': 'Nghỉ phép năm từ 5 ngày liên tục trở lên, chỉ được đăng ký năm sau (Y+1).',
+          'Nghỉ hàng tháng từ 5 ngày liên tục trở xuống. Nghỉ dài hơn dùng đăng ký phép năm.',
+      'monthlyLeaveHint': 'Nghỉ hàng tháng từ 5 ngày liên tục trở xuống.',
+      'annualLeaveHint': 'Nghỉ phép năm trên 5 ngày liên tục, chỉ được đăng ký năm sau (Y+1).',
+      'leaveTypeSpanMismatch':
+          'Nghỉ từ 5 ngày trở xuống là nghỉ tháng; trên 5 ngày liên tục phải đăng ký nghỉ phép năm.',
 
       'leaveWindowHint':
           'Môi trường dev: không giới hạn ngày đăng ký nghỉ.',
@@ -689,6 +703,10 @@ class AppLocalizations {
           'không có ca bay (A/D) và có thể sai sót. Nên nhập lịch bay '
           'trước, hoặc vẫn tạo lịch?',
       'generateAnyway': 'Vẫn tạo lịch',
+      'regenerateConfirmTitle': 'Tạo lại lịch?',
+      'regenerateConfirmBody':
+          'Lịch đã publish hoặc đã chỉnh tay. Tạo lại sẽ xoá chỉnh tay và '
+          'đưa lịch về nháp.',
       // --- Admin cell edit (F-09 UI, owner 2026-07-17) ---
       'editCell': 'Sửa ô lịch',
       'cellSaved': 'Đã lưu ô lịch.',
@@ -699,7 +717,7 @@ class AppLocalizations {
       'registrationClosed': 'Đã đóng đăng ký nghỉ tháng',
       'registrationClosedMessage':
           'Đăng ký nghỉ tháng mở từ ngày 1 đến ngày 20 (cho tháng kế tiếp). '
-          'Nghỉ phép năm (từ 5 ngày) đăng ký trong năm trước.',
+          'Nghỉ phép năm (trên 5 ngày) đăng ký trong năm trước.',
       // --- Revoke approval (owner 2026-07-17) ---
       'revokeApproval': 'Hủy duyệt',
       'revokeConfirmMessage':

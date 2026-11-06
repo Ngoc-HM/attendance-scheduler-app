@@ -4,7 +4,8 @@ When multiple users request off on the same day the admin must decide who is
 approved. This module provides a *pure, DB-free* ranking that applies the
 three agreed criteria in order:
 
-1. **Outstanding comp days** — higher ``carry_comp`` first.
+1. **Outstanding comp days** — higher ``carry_comp`` first (the caller passes
+   the values ``schedule_history`` derives, never the stored column).
 2. **Weekly rest entitlement** — whoever already holds FEWER approved off days
    in the 7-day block(s) the request touches ranks higher (everyone is owed
    2 days per block; the person with less of it has the stronger claim).
@@ -22,7 +23,6 @@ from collections.abc import Iterable
 from datetime import date, timedelta
 
 from app.models.leave import LeaveRequest
-from app.models.user import User
 
 FRIDAY, SATURDAY, SUNDAY, MONDAY = 4, 5, 6, 0
 
@@ -70,7 +70,7 @@ def weekend_pair_score(start: date, end: date) -> int:
 
 def rank(
     requests: list[LeaveRequest],
-    users_by_id: dict[int, User],
+    carry_comp_by_user: dict[int, int],
     approved_off_by_user: dict[int, set[date]] | None = None,
 ) -> list[LeaveRequest]:
     """Return *requests* sorted by conflict-resolution priority (highest first).
@@ -79,17 +79,17 @@ def rank(
     ----------
     requests:
         All leave requests that overlap the contested date (any status).
-    users_by_id:
-        Mapping of user_id → User for carry_comp look-up.  Unknown users
-        are treated as carry_comp=0 so the sort never crashes.
+    carry_comp_by_user:
+        Outstanding comp days per user_id, as derived by ``schedule_history``
+        (the same values the scheduler uses). Unknown users are treated as
+        carry_comp=0 so the sort never crashes.
     approved_off_by_user:
         Already-approved off days per user (criterion 2). Missing → 0.
     """
     approved = approved_off_by_user or {}
 
     def sort_key(req: LeaveRequest) -> tuple:
-        user = users_by_id.get(req.user_id)
-        carry = user.carry_comp if user is not None else 0
+        carry = carry_comp_by_user.get(req.user_id, 0)
         held = offs_already_in_blocks(
             req.start_date, req.end_date, approved.get(req.user_id, set())
         )

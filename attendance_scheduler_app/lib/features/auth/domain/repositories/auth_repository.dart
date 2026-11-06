@@ -6,12 +6,11 @@ abstract interface class AuthRepository {
   Future<User> login(String username, String password);
 
   /// Self-registers a new account (F-01). The returned user is `pending`
-  /// until an admin approves it.
+  /// until an admin approves it and assigns its role (F-03).
   Future<User> register({
     required String username,
     required String fullName,
     required String password,
-    required UserRole role,
   });
 
   /// Fetches the current user from the stored token.

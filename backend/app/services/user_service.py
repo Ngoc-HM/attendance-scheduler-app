@@ -26,7 +26,7 @@ from app.models.self_arrange_request import SelfArrangeRequest
 from app.models.shift_change_request import ShiftChangeRequest
 from app.models.time_clock import TimeClockEntry
 from app.models.user import User
-from app.schemas.user import UserCreate, UserUpdate
+from app.schemas.user import RegisterRequest, UserCreate, UserUpdate
 
 
 def next_user_code(db: Session, role: Role) -> str:
@@ -96,9 +96,12 @@ def _persist_new(db: Session, payload: UserCreate, status_: UserStatus) -> User:
     return user
 
 
-def register(db: Session, payload: UserCreate) -> User:
-    """F-01 — self-registration; created ``pending`` until an admin approves."""
-    return _persist_new(db, payload, UserStatus.pending)
+def register(db: Session, payload: RegisterRequest) -> User:
+    """F-01 — self-registration; created ``pending`` with role ``T`` until an
+    admin approves it and assigns the real role (F-03)."""
+    return _persist_new(
+        db, UserCreate(**payload.model_dump(), role=Role.T), UserStatus.pending
+    )
 
 
 def create(db: Session, payload: UserCreate) -> User:
@@ -106,9 +109,20 @@ def create(db: Session, payload: UserCreate) -> User:
     return _persist_new(db, payload, UserStatus.active)
 
 
-def approve(db: Session, user_id: int) -> User:
-    """F-01 — activate a pending account."""
+def approve(db: Session, user_id: int, role: Role) -> User:
+    """F-01/F-03 — activate a pending account with the role the admin assigns.
+
+    Only ``pending`` accounts qualify (409 otherwise), so approval is never a
+    second role-change path: active/disabled users change role via
+    :func:`update`, which carries the admin and fixed-team guards. A role
+    change reallocates the code for the new role (the old one is never reused).
+    """
     user = _get_or_404(db, user_id)
+    if user.status is not UserStatus.pending:
+        raise HTTPException(status.HTTP_409_CONFLICT, detail=t("user.not_pending"))
+    if role != user.role:
+        user.role = role
+        user.code = next_user_code(db, role)
     user.status = UserStatus.active
     db.commit()
     db.refresh(user)

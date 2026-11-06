@@ -16,14 +16,20 @@ from datetime import date, timedelta
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.core.business_time import business_today
 from app.core.config import settings
 from app.core.i18n import t
 from app.models.enums import AttendanceCode, LeaveStatus, LeaveType, UserStatus
 from app.models.leave import LeaveRequest
 from app.models.user import User
 from app.schemas.leave import LeaveCreate, LeaveWindowRead
-from app.services import leave_conflict_resolver
-from app.services.leave_windows import classify, is_annual_window_open, is_monthly_window_open
+from app.services import leave_conflict_resolver, schedule_history
+from app.services.leave_windows import (
+    classify,
+    is_annual_window_open,
+    is_monthly_window_open,
+    registration_last_day,
+)
 
 # ---------------------------------------------------------------------------
 # Internal helpers
@@ -75,10 +81,11 @@ def create_request(
     Parameters
     ----------
     today:
-        Injection point for tests; defaults to date.today().
+        Injection point for tests; defaults to the business date in
+        ``settings.TIMEZONE`` (the same clock the autorun uses).
     """
     if today is None:
-        today = date.today()
+        today = business_today()
     if enforce_window is None:
         # Development must allow rapid end-to-end testing without waiting for a
         # calendar window. Staging/production keep the business cutoff.
@@ -91,9 +98,15 @@ def create_request(
     if end < start:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=t("leave.invalid_range"))
 
-    # 2. Honor caller-supplied leave_type when provided (two distinct UI flows);
-    # fall back to span-based classification otherwise.
-    leave_type = payload.leave_type or classify(start, end)
+    # 2. The span decides the bucket (> 5 consecutive days is annual). A
+    # caller-supplied leave_type (two distinct UI flows) must agree with it,
+    # otherwise a long leave labelled monthly would dodge the annual rule.
+    leave_type = classify(start, end)
+    if payload.leave_type is not None and payload.leave_type is not leave_type:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=t("leave.type_span_mismatch"),
+        )
 
     # 3. Window enforcement.
     if enforce_window:
@@ -101,7 +114,9 @@ def create_request(
             if not is_monthly_window_open(today, start.month, start.year):
                 raise HTTPException(
                     status.HTTP_400_BAD_REQUEST,
-                    detail=t("leave.window_closed_monthly"),
+                    detail=t("leave.window_closed_monthly").format(
+                        day=registration_last_day()
+                    ),
                 )
         else:
             # Annual: submission must be in the calendar year before the leave's start year.
@@ -405,7 +420,9 @@ def conflicts_for_date(
 ) -> list[LeaveRequest]:
     """Return ranked competing requests (pending + approved) for a given date.
 
-    Uses leave_conflict_resolver.rank with carry_comp look-up.
+    Uses leave_conflict_resolver.rank with carry_comp derived by
+    schedule_history for the contested month — the same values the scheduler
+    uses, so no month-close is needed for the ranking to be current.
     """
     requests = (
         db.query(LeaveRequest)
@@ -421,7 +438,12 @@ def conflicts_for_date(
 
     user_ids = {r.user_id for r in requests}
     users = db.query(User).filter(User.id.in_(user_ids)).all()
-    users_by_id = {u.id: u for u in users}
+    carry = {
+        uid: s.carry_comp
+        for uid, s in schedule_history.build_boundary_states(
+            db, users, target_date.year, target_date.month
+        ).items()
+    }
 
     # Criterion 2 input: off days these users ALREADY hold (approved) around
     # the contested date — one month either side covers every 7-day block a
@@ -445,4 +467,4 @@ def conflicts_for_date(
             approved_off_by_user.setdefault(req.user_id, set()).add(day)
             day += timedelta(days=1)
 
-    return leave_conflict_resolver.rank(requests, users_by_id, approved_off_by_user)
+    return leave_conflict_resolver.rank(requests, carry, approved_off_by_user)
