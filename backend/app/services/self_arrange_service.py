@@ -71,7 +71,10 @@ def _validate(
         for a in schedule.assignments
         if a.user_id == requester.id
     }
-    allowed = set(codes_for(requester.role))
+    # CD is in every role's solver domain (holiday work earns it), but it is
+    # granted only against comp debt — never something the employee picks or
+    # rearranges. Leaving it out also keeps an owed CD cell locked below.
+    allowed = set(codes_for(requester.role)) - {AttendanceCode.CD}
     for c in changes:
         if (c.work_date.year, c.work_date.month) != (year, month):
             raise HTTPException(

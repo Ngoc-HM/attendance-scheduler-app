@@ -1,13 +1,15 @@
-"""End-to-end boundary state: previous A/D earns next-month CD."""
+"""End-to-end boundary state: previous A/D (or holiday work) earns next-month CD."""
 
 from __future__ import annotations
 
 from datetime import date
 
+from app.core.config import settings
 from app.core.database import SessionLocal
 from app.core.security import get_password_hash
 from app.models.attendance import AttendanceRecord
 from app.models.enums import AttendanceCode, Role, ScheduleStatus, UserStatus
+from app.models.holiday import Holiday
 from app.models.schedule import MonthlySchedule, ShiftAssignment
 from app.models.user import User
 from app.scheduler import PersonInput, SchedulerEngine, SolverInput
@@ -92,5 +94,139 @@ def test_planned_ad_becomes_cd_and_actual_overrides_plan(client) -> None:
         )
         assert out.feasible and not out.violations
         assert sum(item.code is AttendanceCode.CD for item in out.assignments) == 1
+    finally:
+        db.close()
+
+
+def test_role_t_holiday_work_carries_one_comp_day(client) -> None:
+    """Owner D1 (2026-11-06): a role-T person who worked a public holiday owes
+    one CD the next month; an OFF holiday earns nothing."""
+    db = SessionLocal()
+    try:
+        user = User(
+            username="history_holiday_t",
+            code=next_user_code(db, Role.T),
+            full_name="History Holiday T",
+            hashed_password=get_password_hash("pass123"),
+            role=Role.T,
+            status=UserStatus.active,
+        )
+        db.add(user)
+        db.add(Holiday(day=date(2036, 9, 2), name="Worked holiday"))
+        db.add(Holiday(day=date(2036, 9, 3), name="Off holiday"))
+        db.flush()
+
+        schedule = MonthlySchedule(
+            year=2036, month=9, status=ScheduleStatus.published
+        )
+        db.add(schedule)
+        db.flush()
+        for day, code in ((2, AttendanceCode.AD), (3, AttendanceCode.X)):
+            db.add(
+                ShiftAssignment(
+                    schedule_id=schedule.id,
+                    user_id=user.id,
+                    work_date=date(2036, 9, day),
+                    code=code,
+                )
+            )
+        db.commit()
+
+        state = build_boundary_states(db, [user], 2036, 10)[user.id]
+        assert state.carry_comp == 1
+    finally:
+        db.close()
+
+
+def test_holiday_comp_respects_effective_date(client, monkeypatch) -> None:
+    """Holidays worked before HOLIDAY_COMP_EFFECTIVE_FROM earn nothing, so a
+    live database does not get a lump of back-owed CDs on the next draft."""
+    db = SessionLocal()
+    try:
+        user = User(
+            username="history_holiday_effective",
+            code=next_user_code(db, Role.T),
+            full_name="History Holiday Effective",
+            hashed_password=get_password_hash("pass123"),
+            role=Role.T,
+            status=UserStatus.active,
+        )
+        db.add(user)
+        db.add(Holiday(day=date(2038, 3, 2), name="Worked holiday"))
+        db.flush()
+        schedule = MonthlySchedule(
+            year=2038, month=3, status=ScheduleStatus.published
+        )
+        db.add(schedule)
+        db.flush()
+        db.add(
+            ShiftAssignment(
+                schedule_id=schedule.id,
+                user_id=user.id,
+                work_date=date(2038, 3, 2),
+                code=AttendanceCode.AD,
+            )
+        )
+        db.commit()
+
+        monkeypatch.setattr(settings, "HOLIDAY_COMP_EFFECTIVE_FROM", date(2038, 3, 3))
+        assert build_boundary_states(db, [user], 2038, 4)[user.id].carry_comp == 0
+
+        monkeypatch.setattr(settings, "HOLIDAY_COMP_EFFECTIVE_FROM", date(2038, 3, 2))
+        assert build_boundary_states(db, [user], 2038, 4)[user.id].carry_comp == 1
+    finally:
+        db.close()
+
+
+def test_stored_streak_fallback_only_without_any_history(client) -> None:
+    """A user WITH history but no cell on the cutoff day has a broken run
+    (unknown day = rest) → streak 0, never the stored value read back; only a
+    user with no history at all falls back to the stored ``carry_streak``."""
+    db = SessionLocal()
+    try:
+        users = []
+        for username in ("history_streak_gap", "history_streak_none"):
+            user = User(
+                username=username,
+                code=next_user_code(db, Role.T),
+                full_name=username,
+                hashed_password=get_password_hash("pass123"),
+                role=Role.T,
+                status=UserStatus.active,
+                carry_streak=4,
+            )
+            db.add(user)
+            db.flush()
+            users.append(user)
+        gap_user, no_history_user = users
+
+        schedule = MonthlySchedule(
+            year=2037, month=5, status=ScheduleStatus.published
+        )
+        db.add(schedule)
+        db.flush()
+        # Worked mid-month, but nothing on 31 May (deactivated / not scheduled).
+        for day in (10, 11, 12):
+            db.add(
+                ShiftAssignment(
+                    schedule_id=schedule.id,
+                    user_id=gap_user.id,
+                    work_date=date(2037, 5, day),
+                    code=AttendanceCode.AD,
+                )
+            )
+        db.commit()
+
+        states = build_boundary_states(db, users, 2037, 6)
+
+        gap = states[gap_user.id]
+        assert gap.carry_streak == 0
+        assert not any(gap.previous_working.values())
+
+        none = states[no_history_user.id]
+        assert none.carry_streak == 4
+        assert [none.previous_working[date(2037, 5, d)] for d in range(26, 32)] == [
+            False, False, True, True, True, True,
+        ]
     finally:
         db.close()

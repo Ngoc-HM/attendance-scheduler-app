@@ -194,21 +194,15 @@ def check_min_a_days(grid, roles, weeks) -> list[str]:
 def check_comp_days(grid, roles, weeks, carry_comps) -> list[str]:
     """§5.3 #6 / decision #13 — owed comp days are granted, none invented.
 
-    Mirrors ``constraints_comp_days``: for each role-A person the month's CD
-    count must equal the comp debt carried in; fewer is a shortfall, more is
-    an unearned rest day. Other roles never carry CD.
+    Mirrors ``constraints_comp_days``: for every person, whatever the role
+    (holiday work earns CD for all roles — owner D1 2026-11-06), the month's
+    CD count must equal the comp debt carried in; fewer is a shortfall, more
+    is an unearned rest day.
     """
     days = _days(weeks)
     warnings: list[str] = []
-    for uid, role in roles.items():
+    for uid in roles:
         cd = sum(1 for d in days if grid.get((uid, d)) is AttendanceCode.CD)
-        if role is not Role.A:
-            if cd:
-                warnings.append(
-                    f"User {uid}: {cd} comp day(s) scheduled but role "
-                    f"{role.value} never earns compensation"
-                )
-            continue
         owed = carry_comps.get(uid, 0)
         if cd < owed:
             warnings.append(
