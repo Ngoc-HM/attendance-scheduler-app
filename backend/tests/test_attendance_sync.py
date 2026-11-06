@@ -107,11 +107,13 @@ def test_approved_shift_change_updates_seeded_actual(client: TestClient) -> None
     users = [_make_user(client, admin, f"sync_sc_a{i}", "A") for i in (1, 2, 3, 4)]
     u = users[0]["id"]
     _generate_and_publish(client, admin, 2028, 4)
-    assert _actual(client, admin, u, "2028-04-10")["code"] != "T"
+    seeded = _actual(client, admin, u, "2028-04-10")["code"]
+    # A code role A may request (A, D, X) that differs from the seeded one.
+    wanted = "D" if seeded == "A" else "A"
 
     req = client.post(
         f"{V}/shift-changes", headers=_login(client, "sync_sc_a1"),
-        json={"work_date": "2028-04-10", "kind": "change_code", "requested_code": "T"},
+        json={"work_date": "2028-04-10", "kind": "change_code", "requested_code": wanted},
     )
     assert req.status_code == 201, req.text
     dec = client.post(
@@ -120,7 +122,7 @@ def test_approved_shift_change_updates_seeded_actual(client: TestClient) -> None
     )
     assert dec.status_code == 200, dec.text
 
-    assert _actual(client, admin, u, "2028-04-10")["code"] == "T"
+    assert _actual(client, admin, u, "2028-04-10")["code"] == wanted
 
 
 def test_approved_self_arrange_updates_seeded_actuals(client: TestClient) -> None:

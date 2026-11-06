@@ -229,7 +229,9 @@ def apply_shift_change(db: Session, req: ShiftChangeRequest) -> list[str]:
                 status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="A requested code is required for a code change.",
             )
-        role_code_validation.validate_planned(requester.role, req.requested_code)
+        # Re-checked here too: a request filed before the rule existed must
+        # not slip an AL/CD/admin code through approval.
+        role_code_validation.validate_requestable(requester.role, req.requested_code)
         mine.code = req.requested_code
         mine.is_manual_override = True
     else:  # swap_with — exchange the two users' codes for that date
@@ -244,8 +246,10 @@ def apply_shift_change(db: Session, req: ShiftChangeRequest) -> list[str]:
         counterpart = db.get(User, req.counterpart_user_id)
         if requester is None or counterpart is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail=t("user.not_found"))
-        role_code_validation.validate_planned(requester.role, theirs.code)
-        role_code_validation.validate_planned(counterpart.role, mine.code)
+        # Each person's resulting code must be one they could request: a swap
+        # must not hand over leave (AL), a comp day (CD) or an admin code.
+        role_code_validation.validate_requestable(requester.role, theirs.code)
+        role_code_validation.validate_requestable(counterpart.role, mine.code)
         mine.code, theirs.code = theirs.code, mine.code
         mine.is_manual_override = theirs.is_manual_override = True
         changed.append(theirs)

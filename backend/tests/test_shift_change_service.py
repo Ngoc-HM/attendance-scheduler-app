@@ -252,3 +252,81 @@ class TestShiftChangeService:
             assert exc_info.value.status_code == 409
         finally:
             db.close()
+
+
+# ---------------------------------------------------------------------------
+# Requestable codes: employees ask only for their regular working / off codes
+# (the role's solver domain minus CD). Leave and comp days have their own flows.
+# ---------------------------------------------------------------------------
+
+_NOT_REQUESTABLE = "Employees may only request their regular working or off codes."
+
+
+def _request(client, username, body):
+    headers = _bearer(_token(client, username, "secret1"))
+    return client.post(f"{V}/shift-changes", headers=headers, json=body)
+
+
+@pytest.mark.parametrize("code", ["AL", "CD"])
+def test_requesting_leave_or_comp_code_is_refused(client: TestClient, code: str):
+    admin = _bearer(_token(client, "admin", "admin123"))
+    _create_user(client, admin, f"f2_req_{code.lower()}", role="A")
+
+    res = _request(
+        client, f"f2_req_{code.lower()}",
+        {"work_date": "2042-04-10", "kind": "change_code", "requested_code": code},
+    )
+
+    assert res.status_code == 422, res.text
+    assert res.json()["detail"] == _NOT_REQUESTABLE
+
+
+@pytest.mark.parametrize(("role", "code"), [("T", "AD"), ("A", "A")])
+def test_requesting_a_regular_code_is_accepted(client: TestClient, role: str, code: str):
+    admin = _bearer(_token(client, "admin", "admin123"))
+    username = f"f2_ok_{role.lower()}"
+    _create_user(client, admin, username, role=role)
+
+    res = _request(
+        client, username,
+        {"work_date": "2042-04-11", "kind": "change_code", "requested_code": code},
+    )
+
+    assert res.status_code == 201, res.text
+    assert res.json()["requested_code"] == code
+
+
+def test_swap_that_hands_leave_to_the_counterpart_is_refused(client: TestClient):
+    admin = _bearer(_token(client, "admin", "admin123"))
+    ids = [_create_user(client, admin, f"f2_swap_a{i}", role="A")["id"] for i in (1, 2, 3, 4)]
+    gen = client.post(
+        f"{V}/schedules/generate", headers=admin, json={"year": 2042, "month": 5}
+    )
+    assert gen.status_code == 200 and gen.json()["feasible"] is True, gen.text
+    schedule_id = gen.json()["schedule"]["id"]
+    day = "2042-05-12"
+    res = client.post(
+        f"{V}/schedules/{schedule_id}/override", headers=admin,
+        json={"user_id": ids[0], "work_date": day, "code": "AL"},
+    )
+    assert res.status_code == 200, res.text
+
+    def cells() -> dict[int, str]:
+        grid = client.get(f"{V}/schedules/2042/5", headers=admin).json()["assignments"]
+        return {a["user_id"]: a["code"] for a in grid if a["work_date"] == day}
+
+    before = cells()
+    req = _request(
+        client, "f2_swap_a1",
+        {"work_date": day, "kind": "swap_with", "counterpart_user_id": ids[1]},
+    )
+    assert req.status_code == 201, req.text
+
+    dec = client.post(
+        f"{V}/shift-changes/{req.json()['id']}/decide", headers=admin,
+        json={"status": "approved"},
+    )
+
+    assert dec.status_code == 422, dec.text
+    assert dec.json()["detail"] == _NOT_REQUESTABLE
+    assert cells() == before

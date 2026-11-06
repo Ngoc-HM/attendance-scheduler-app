@@ -318,6 +318,28 @@ void main() {
     });
   });
 
+  group('ShiftCodeX.requestableCodesFor', () {
+    test('is the role solver domain without CD (backend requestable set)', () {
+      expect(ShiftCodeX.requestableCodesFor(UserRole.a), [
+        ShiftCode.a,
+        ShiftCode.d,
+        ShiftCode.x,
+      ]);
+      expect(ShiftCodeX.requestableCodesFor(UserRole.t), [
+        ShiftCode.ad,
+        ShiftCode.x,
+      ]);
+      expect(ShiftCodeX.requestableCodesFor(UserRole.f), [
+        ShiftCode.ad,
+        ShiftCode.x,
+      ]);
+      expect(ShiftCodeX.requestableCodesFor(UserRole.m), [
+        ShiftCode.oD,
+        ShiftCode.x,
+      ]);
+    });
+  });
+
   testWidgets('employee sees no generate/publish and cannot pick S', (
     tester,
   ) async {
@@ -333,8 +355,8 @@ void main() {
 
     await _tapCell(tester, 3, _t1Column);
     expect(find.text('Request shift change'), findsOneWidget);
-    expect(_offeredCodes(tester), ShiftCodeX.plannedCodesFor(UserRole.t));
-    expect(_offeredCodes(tester), isNot(contains(ShiftCode.s)));
+    // Only the regular working / off codes: no AL, CD, T, B (or S).
+    expect(_offeredCodes(tester), [ShiftCode.ad, ShiftCode.x]);
   });
 
   testWidgets('admin cell editor offers only the row role planned codes', (

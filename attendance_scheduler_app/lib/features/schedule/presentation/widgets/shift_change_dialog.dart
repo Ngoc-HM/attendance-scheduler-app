@@ -11,7 +11,8 @@ import '../providers/shift_change_provider.dart';
 
 /// Dialog for a user to request a shift-change on their own cell.
 /// [workDate] is the day tapped; [role] (the requester's) limits the codes
-/// offered to the planned-grid set. [people] is the code directory for
+/// offered to the requestable set (regular working or off codes, no AL / CD).
+/// [people] is the code directory for
 /// swap_with; [currentUserId] is excluded from the counterpart picker.
 class ShiftChangeRequestDialog extends ConsumerStatefulWidget {
   const ShiftChangeRequestDialog({
@@ -35,7 +36,7 @@ class ShiftChangeRequestDialog extends ConsumerStatefulWidget {
 class _ShiftChangeRequestDialogState
     extends ConsumerState<ShiftChangeRequestDialog> {
   String _kind = 'change_code';
-  ShiftCode _selectedCode = ShiftCode.x; // planned for every role
+  ShiftCode _selectedCode = ShiftCode.x; // requestable for every role
   int? _counterpartUserId;
   final _noteCtrl = TextEditingController();
 
@@ -101,7 +102,7 @@ class _ShiftChangeRequestDialogState
             DropdownButton<ShiftCode>(
               value: _selectedCode,
               isExpanded: true,
-              items: ShiftCodeX.plannedCodesFor(widget.role)
+              items: ShiftCodeX.requestableCodesFor(widget.role)
                   .map(
                     (c) => DropdownMenuItem(
                       value: c,
