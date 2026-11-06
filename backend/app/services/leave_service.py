@@ -25,9 +25,11 @@ from app.models.user import User
 from app.schemas.leave import LeaveCreate, LeaveWindowRead
 from app.services import leave_conflict_resolver, schedule_history
 from app.services.leave_windows import (
+    annual_target_year,
     classify,
     is_annual_window_open,
     is_monthly_window_open,
+    monthly_target,
     registration_last_day,
 )
 
@@ -173,16 +175,13 @@ def list_pending(db: Session) -> list[LeaveRequest]:
 def window_status(today: date | None = None) -> LeaveWindowRead:
     """Registration-window state the client shows on the leave page.
 
-    The monthly target is always next month, filed on days 1–AUTORUN_DAY of
-    the current month; annual leave targets next year. Mirrors the
-    enforcement in ``create_request``: dev never closes the window.
+    The rules live in ``leave_windows``; this only assembles them. Mirrors
+    ``create_request``: judged on the business date, and dev never closes
+    the window.
     """
     if today is None:
-        today = date.today()
-    if today.month == 12:
-        target_year, target_month = today.year + 1, 1
-    else:
-        target_year, target_month = today.year, today.month + 1
+        today = business_today()
+    target_year, target_month = monthly_target(today)
     enforced = settings.ENVIRONMENT != "dev"
     return LeaveWindowRead(
         monthly_open=(
@@ -190,8 +189,8 @@ def window_status(today: date | None = None) -> LeaveWindowRead:
         ),
         monthly_target_year=target_year,
         monthly_target_month=target_month,
-        annual_target_year=today.year + 1,
-        closes_on_day=settings.AUTORUN_DAY,
+        annual_target_year=annual_target_year(today),
+        closes_on_day=registration_last_day(),
         enforced=enforced,
     )
 

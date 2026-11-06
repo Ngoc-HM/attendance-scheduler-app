@@ -172,7 +172,9 @@ def test_directory_lists_active_codes_only(client: TestClient) -> None:
         assert r.status_code == 201
         return r.json()
 
+    # Created T first, then A: id order differs from code order (A… < T…).
     active = _create("dir_active", "T")
+    active_a = _create("dir_active_a", "A")
     disabled = _create("dir_disabled", "A")
     assert client.patch(
         f"{V}/users/{disabled['id']}", headers=admin, json={"status": "disabled"}
@@ -198,6 +200,9 @@ def test_directory_lists_active_codes_only(client: TestClient) -> None:
     assert all(set(e) == {"id", "code", "role"} for e in entries)
     assert "Secret Name" not in r.text
     assert {"id": active["id"], "code": active["code"], "role": "T"} in entries
+    # Ordered by code, not by creation: the later A user comes first.
+    order = [e["id"] for e in entries]
+    assert order.index(active_a["id"]) < order.index(active["id"])
     codes = [e["code"] for e in entries]
     assert codes == sorted(codes)
 
