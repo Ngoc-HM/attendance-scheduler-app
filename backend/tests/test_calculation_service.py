@@ -38,6 +38,23 @@ def test_working_on_holiday_earns_comp_day() -> None:
     ) == 0
 
 
+def test_holiday_comp_only_from_effective_date() -> None:
+    """Holiday work earns CD only from ``effective_from`` on (no retroactive
+    lump of back-owed CDs); A/D earning is never date-gated."""
+    h = {date(2026, 10, 25), date(2026, 12, 25)}
+    before = [(date(2026, 10, 25), AttendanceCode.A)]
+    after = [(date(2026, 12, 25), AttendanceCode.A)]
+    effective = date(2026, 11, 6)
+    assert carry_over_math.comp_balance(before, h, effective) == 0
+    assert carry_over_math.comp_balance(after, h, effective) == 1
+    assert carry_over_math.comp_balance(before, h, None) == 1
+    assert carry_over_math.comp_balance(after, h, None) == 1
+    # A/D before the effective date still earns its own CD (holiday part not).
+    assert carry_over_math.comp_balance(
+        [(date(2026, 10, 25), AttendanceCode.A_D)], h, effective
+    ) == 1
+
+
 def test_premium_off_counts_weekend_and_holiday_x() -> None:
     recs = [
         (date(2027, 9, 4), AttendanceCode.X),   # Sat → premium

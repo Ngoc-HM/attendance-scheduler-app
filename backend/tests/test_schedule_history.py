@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import date
 
+from app.core.config import settings
 from app.core.database import SessionLocal
 from app.core.security import get_password_hash
 from app.models.attendance import AttendanceRecord
@@ -133,6 +134,46 @@ def test_role_t_holiday_work_carries_one_comp_day(client) -> None:
 
         state = build_boundary_states(db, [user], 2036, 10)[user.id]
         assert state.carry_comp == 1
+    finally:
+        db.close()
+
+
+def test_holiday_comp_respects_effective_date(client, monkeypatch) -> None:
+    """Holidays worked before HOLIDAY_COMP_EFFECTIVE_FROM earn nothing, so a
+    live database does not get a lump of back-owed CDs on the next draft."""
+    db = SessionLocal()
+    try:
+        user = User(
+            username="history_holiday_effective",
+            code=next_user_code(db, Role.T),
+            full_name="History Holiday Effective",
+            hashed_password=get_password_hash("pass123"),
+            role=Role.T,
+            status=UserStatus.active,
+        )
+        db.add(user)
+        db.add(Holiday(day=date(2038, 3, 2), name="Worked holiday"))
+        db.flush()
+        schedule = MonthlySchedule(
+            year=2038, month=3, status=ScheduleStatus.published
+        )
+        db.add(schedule)
+        db.flush()
+        db.add(
+            ShiftAssignment(
+                schedule_id=schedule.id,
+                user_id=user.id,
+                work_date=date(2038, 3, 2),
+                code=AttendanceCode.AD,
+            )
+        )
+        db.commit()
+
+        monkeypatch.setattr(settings, "HOLIDAY_COMP_EFFECTIVE_FROM", date(2038, 3, 3))
+        assert build_boundary_states(db, [user], 2038, 4)[user.id].carry_comp == 0
+
+        monkeypatch.setattr(settings, "HOLIDAY_COMP_EFFECTIVE_FROM", date(2038, 3, 2))
+        assert build_boundary_states(db, [user], 2038, 4)[user.id].carry_comp == 1
     finally:
         db.close()
 

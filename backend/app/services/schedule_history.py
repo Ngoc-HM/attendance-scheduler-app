@@ -15,6 +15,7 @@ from datetime import date, timedelta
 
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.models.attendance import AttendanceRecord
 from app.models.enums import AttendanceCode
 from app.models.holiday import Holiday
@@ -95,10 +96,14 @@ def build_boundary_states(
             if uid == user.id
         )
 
-        # Every role earns compensation (A/D, or working a public holiday) and
-        # consumes it with CD.  Stored carry is a fallback for legacy databases
-        # where old schedule/actual rows are absent.
-        carry_comp = comp_balance(records, holidays) if records else user.carry_comp
+        # Every role earns compensation (A/D, or working a public holiday from
+        # HOLIDAY_COMP_EFFECTIVE_FROM on) and consumes it with CD.  Stored carry
+        # is a fallback for legacy databases where old rows are absent.
+        carry_comp = (
+            comp_balance(records, holidays, settings.HOLIDAY_COMP_EFFECTIVE_FROM)
+            if records
+            else user.carry_comp
+        )
 
         # Premium-off fairness input (decision #6), same history-first rule.
         carry_premium_off = (
