@@ -11,7 +11,9 @@ class RetentionPurgeRequest(BaseModel):
     """Delete personnel records strictly BEFORE ``before``.
 
     ``None`` → today minus ``DATA_RETENTION_MONTHS``. The cutoff can never be
-    more recent than ``DATA_RETENTION_MIN_MONTHS`` ago (ArbZG §16).
+    more recent than ``settings.retention_floor_months`` ago — the configured
+    ``DATA_RETENTION_MIN_MONTHS`` but never less than the legal 24 months
+    (ArbZG §16).
     """
 
     before: date | None = None

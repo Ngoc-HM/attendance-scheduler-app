@@ -9,6 +9,7 @@ from __future__ import annotations
 from fastapi import APIRouter, status
 
 from app.api.deps import ActiveUser, DbSession
+from app.api.params import MonthQuery, YearQuery
 from app.schemas.time_clock import TimeClockRead
 from app.services import audit_service, time_clock_service
 
@@ -38,6 +39,6 @@ def clock_today(db: DbSession, current_user: ActiveUser):
 
 
 @router.get("/me", response_model=list[TimeClockRead])
-def clock_month_me(db: DbSession, year: int, month: int, current_user: ActiveUser):
+def clock_month_me(db: DbSession, year: YearQuery, month: MonthQuery, current_user: ActiveUser):
     """Own check-in/out history for the given month."""
     return time_clock_service.list_month_for_user(db, current_user.id, year, month)

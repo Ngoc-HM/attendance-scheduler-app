@@ -9,6 +9,7 @@ from __future__ import annotations
 from fastapi import APIRouter, status
 
 from app.api.deps import ActiveUser, AdminUser, DbSession
+from app.api.params import YearQuery
 from app.schemas.attendance import HolidayRead, HolidayUpsert
 from app.services import audit_service, holiday_service
 
@@ -16,7 +17,7 @@ router = APIRouter()
 
 
 @router.get("", response_model=list[HolidayRead])
-def list_holidays(db: DbSession, year: int, _user: ActiveUser):
+def list_holidays(db: DbSession, year: YearQuery, _user: ActiveUser):
     return holiday_service.list_year(db, year)
 
 

@@ -20,6 +20,11 @@ def _utcnow() -> datetime:
     return datetime.now(UTC)
 
 
+def business_now() -> datetime:
+    """The current moment in ``settings.TIMEZONE`` (tz-aware, freezable)."""
+    return _utcnow().astimezone(ZoneInfo(settings.TIMEZONE))
+
+
 def business_today() -> date:
     """Today's date in ``settings.TIMEZONE`` (not the host's local zone)."""
-    return _utcnow().astimezone(ZoneInfo(settings.TIMEZONE)).date()
+    return business_now().date()
