@@ -503,6 +503,63 @@ def test_force_regenerate_published_resyncs_seeded_actuals(
     assert state.carry_streak == expected_streak
 
 
+def test_force_regenerate_hides_draft_seeded_actuals_from_employee(
+    client: TestClient, monkeypatch
+) -> None:
+    """Draft leak — after a forced regenerate the seeded actuals follow the
+    DRAFT plan, so ``/attendance/me`` hides them until the month is published
+    again; the admin-recorded row stays visible throughout."""
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "SOLVER_MAX_TIME_SECONDS", 5.0)
+    yr, mo = 2052, 5
+    admin = _admin_headers(client)
+    users = [_make_user(client, admin, f"draftleak_a{i}", "A") for i in (1, 2, 3, 4)]
+    me = users[0]["id"]
+    recorded_day = f"{yr}-{mo:02d}-10"
+
+    gen = _generate(client, admin, yr, mo)
+    assert gen.status_code == 200 and gen.json()["feasible"] is True, gen.text
+    schedule_id = gen.json()["schedule"]["id"]
+    pub = client.post(f"{V}/schedules/{schedule_id}/publish", headers=admin)
+    assert pub.status_code == 200, pub.text
+    put = client.put(
+        f"{V}/attendance", headers=admin,
+        json={"user_id": me, "work_date": recorded_day, "code": "B"},
+    )
+    assert put.status_code == 200, put.text
+
+    employee = _login(client, "draftleak_a1")
+
+    def _mine() -> list[dict]:
+        r = client.get(
+            f"{V}/attendance/me", params={"year": yr, "month": mo}, headers=employee
+        )
+        assert r.status_code == 200, r.text
+        return r.json()
+
+    assert len(_mine()) == 31  # published: the whole seeded month is visible
+
+    regen = _generate(client, admin, yr, mo, force=True)
+    assert regen.status_code == 200 and regen.json()["feasible"] is True, regen.text
+    assert regen.json()["schedule"]["status"] == "draft"
+    # Draft: no seeded (plan-copy) row, only what the admin recorded.
+    assert [(r["work_date"], r["code"]) for r in _mine()] == [(recorded_day, "B")]
+
+    pub = client.post(f"{V}/schedules/{schedule_id}/publish", headers=admin)
+    assert pub.status_code == 200, pub.text
+    plan = {
+        a["work_date"]: a["code"]
+        for a in regen.json()["schedule"]["assignments"]
+        if a["user_id"] == me
+    }
+    rows = _mine()
+    assert len(rows) == 31
+    for row in rows:
+        expected = "B" if row["work_date"] == recorded_day else plan[row["work_date"]]
+        assert row["code"] == expected, row
+
+
 def test_override_creates_missing_cell_for_active_user(client: TestClient) -> None:
     """F13 / R4 — a user approved after the month was generated has no row;
     the admin's override creates the cell (and, on a published month, its
@@ -617,3 +674,11 @@ def test_recheck_flags_disabled_user_ad_cells(client: TestClient) -> None:
     assert _short_on_duty_day(after)
     # Per-person rules no longer report the disabled user.
     assert not any(f"User {a1['id']}:" in v["message"] for v in after)
+
+    # Text-only callers (shift change, leave, self-arrange) lead with the day.
+    from app.schemas.schedule import ConstraintViolation
+    from app.services.schedule_service import violation_text
+
+    line = violation_text(ConstraintViolation(**flagged[0]))
+    assert line == f"{duty_day}: {flagged[0]['message']}"
+    assert violation_text(ConstraintViolation(rule="r", message="m")) == "m"

@@ -304,7 +304,7 @@ def apply_shift_change(db: Session, req: ShiftChangeRequest) -> list[str]:
     # No commit: the caller commits the cells together with the request's
     # status (one transaction under the request's row lock).
     db.flush()
-    return [f"{v.rule}: {v.message}" for v in _recheck_violations(db, schedule)]
+    return [f"{v.rule}: {violation_text(v)}" for v in _recheck_violations(db, schedule)]
 
 
 def apply_leave_span(
@@ -366,10 +366,18 @@ def apply_leave_span(
     warnings = [t("leave.schedule_applied"), *not_generated]
     for schedule in updated:
         warnings += [
-            f"{schedule.year}-{schedule.month:02d}: {v.message}"
+            # A violation tied to a day already names its month.
+            violation_text(v) if v.day else f"{schedule.year}-{schedule.month:02d}: {v.message}"
             for v in _recheck_violations(db, schedule)
         ]
     return warnings
+
+
+def violation_text(v: ConstraintViolation) -> str:
+    """One-line form for text-only callers: the day (when the violation has
+    one in its structured field, e.g. ``disabled_user_duty``) leads, like the
+    checker's own ``"{day}: ..."`` lines."""
+    return f"{v.day}: {v.message}" if v.day is not None else v.message
 
 
 # --- internals -------------------------------------------------------------
@@ -394,8 +402,10 @@ def _resync_seeded_actuals(
     """F11 — move still-seeded actuals of the month onto a regenerated plan.
 
     ``sync_planned_cell`` keeps the seed rule in one place: only an actual
-    nobody recorded by hand (and never a sick day) follows the plan. Does not
-    commit.
+    nobody recorded by hand (and never a sick day) follows the plan. A seeded
+    actual of a user the new plan no longer has (disabled since) keeps its old
+    code — harmless: the boundary state and reports read active users only.
+    Does not commit.
     """
     for record in attendance_service.list_month(db, year, month):
         code = plan.get((record.user_id, record.work_date))

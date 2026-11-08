@@ -42,6 +42,44 @@ def list_month(db: Session, year: int, month: int) -> list[AttendanceRecord]:
     )
 
 
+def list_own_month(
+    db: Session, user_id: int, year: int, month: int
+) -> list[AttendanceRecord]:
+    """One user's actuals for ``/attendance/me``.
+
+    A seeded row (``recorded_by`` NULL) is a copy of the plan, so it is only
+    shown while the month's schedule is PUBLISHED: after a forced regenerate
+    the seeded rows follow the draft and must not leak unpublished codes.
+    Admin-recorded rows and sick days (always a real record) stay visible.
+    """
+    published = (
+        db.query(MonthlySchedule.id)
+        .filter(
+            MonthlySchedule.year == year,
+            MonthlySchedule.month == month,
+            MonthlySchedule.status == ScheduleStatus.published,
+        )
+        .first()
+        is not None
+    )
+    first, last = _month_bounds(year, month)
+    rows = (
+        db.query(AttendanceRecord)
+        .filter(
+            AttendanceRecord.user_id == user_id,
+            AttendanceRecord.work_date >= first,
+            AttendanceRecord.work_date <= last,
+        )
+        .order_by(AttendanceRecord.work_date)
+        .all()
+    )
+    return [
+        r
+        for r in rows
+        if published or r.recorded_by is not None or r.code is AttendanceCode.S
+    ]
+
+
 def _get_cell(db: Session, user_id: int, day: date) -> AttendanceRecord | None:
     return (
         db.query(AttendanceRecord)

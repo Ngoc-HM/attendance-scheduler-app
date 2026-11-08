@@ -96,14 +96,10 @@ def test_self_arrange_body_year_month_bounded(
 
 APP_DIR = Path(__file__).resolve().parents[1] / "app"
 
-# Literal details still owned by ANOTHER fix task of the 2026-11-08 review
-# (Task 7: schedule_service manual override). Listed by (file, exact text), not
-# by file, so any NEW literal in the same file still fails. The coordinator
-# empties this set once Task 7 is merged — do not add entries.
-KNOWN_LITERAL_OFFENDERS: set[tuple[str, str]] = {
-    ("services/schedule_service.py", "Override date must belong to the schedule month."),
-    ("services/schedule_service.py", "Schedule cell not found."),
-}
+# Literal details allowed by (file, exact text) while another fix task still
+# owns them. Empty since Task 7 moved the last ones (schedule_service manual
+# override) to catalog keys — do not add entries.
+KNOWN_LITERAL_OFFENDERS: set[tuple[str, str]] = set()
 
 
 def _single_assignment(scope: ast.AST | None, name: str) -> ast.AST | None:

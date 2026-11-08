@@ -188,6 +188,13 @@ def test_republish_resyncs_untouched_seeded_actuals(client: TestClient) -> None:
     )
     assert gen.status_code == 200 and gen.json()["feasible"] is True, gen.text
     sid = gen.json()["schedule"]["id"]
+    regenerated = next(
+        a["code"] for a in gen.json()["schedule"]["assignments"]
+        if a["user_id"] == u and a["work_date"] == "2028-10-15"
+    )
+    # F11 — the forced regenerate already moved the seeded actual onto the
+    # new plan (hidden from the employee until re-published).
+    assert _actual(client, admin, u, "2028-10-15")["code"] == regenerated
     for day in ("2028-10-15", "2028-10-16"):
         res = client.post(
             f"{V}/schedules/{sid}/override", headers=admin,
@@ -195,7 +202,7 @@ def test_republish_resyncs_untouched_seeded_actuals(client: TestClient) -> None:
         )
         assert res.status_code == 200, res.text
     # Draft edits stay out of the actuals until the month is published again.
-    assert _actual(client, admin, u, "2028-10-15")["code"] == seeded_before
+    assert _actual(client, admin, u, "2028-10-15")["code"] == regenerated
 
     pub = client.post(f"{V}/schedules/{sid}/publish", headers=admin)
     assert pub.status_code == 200, pub.text
