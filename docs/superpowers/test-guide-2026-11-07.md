@@ -1,6 +1,6 @@
-# Hướng dẫn test sau đợt sửa 2026-11 (nhánh `fix/2026-11-remediation`)
+# Hướng dẫn test sau đợt sửa 2026-11
 
-Checkout hiện đang ở nhánh `fix/2026-11-remediation`. Chưa gộp vào `main`, chưa push.
+Đợt sửa đã được gộp vào `main` ngày 2026-11-08 (merge commit `4ded62e`, nhánh `fix/2026-11-remediation` đã xoá). `main` cục bộ đi trước `origin/main`; chưa push.
 
 ## 1. Chạy
 
