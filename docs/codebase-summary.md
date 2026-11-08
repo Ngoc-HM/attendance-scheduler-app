@@ -13,7 +13,8 @@ models/      User, RoleCodeCounter, Flight/FlightDay/FlightPreset, LeaveRequest,
 schemas/     Pydantic DTOs per domain (the API contract)
 api/v1/      endpoints/ (auth, users, flights, leaves, shift_changes, self_arrange,
              schedules, attendance, time_clock, holidays, calculations, reports,
-             compliance) + router + deps
+             compliance) + router + deps; api/params.py (bounded year/month
+             parameters → 422)
 services/    auth, user, flight (+flight_pair_derivation, flight_excel_parser),
              leave (+leave_windows, leave_balance, leave_conflict_resolver),
              shift_change, self_arrange, schedule (+schedule_input_builder,
@@ -26,20 +27,30 @@ scheduler/   domain (SolverInput/Output), engine (CP-SAT), role_codes (per-role
              _consecutive / _off_chain / _staffing / _comp_days /
              _role_a_distribution, objectives + objective_balance /
              _premium_off / _off_pairing, slack_registry, calendar_utils
-alembic/     0001 baseline … 0008 annual_leave_quota (head; see design-decisions
-             "Migration strategy")
+alembic/     0001 baseline … 0009 flight_unique_day_number (head; see
+             design-decisions "Migration strategy")
 scripts/     seed_demo_users.py, reset_all_passwords.py (both refuse unless
              ENVIRONMENT=dev and the database is local, app/core/script_guard.py;
-             --allow-non-dev overrides)
-tests/       291 tests (pytest on SQLite) — engine rules (bind + slack
-             violation), roles, cross-month rules, services, endpoints, RBAC/audit,
-             sick privacy, production guard, compliance, attendance sync, health
+             --allow-non-dev overrides; hidden password prompt)
+tests/       463 tests (pytest on SQLite, foreign keys on) — engine rules
+             (bind + slack violation), solve phases, engine/checker agreement,
+             roles, cross-month rules, services, endpoints, input bounds,
+             RBAC/audit, user delete, sick privacy, production guard, bootstrap,
+             compliance, attendance sync, health
+requirements.lock  every package pinned (CI and Docker install with -c)
 ```
 
 New in the 2026-11 remediation: `core/business_time.py`,
 `services/leave_balance.py` (quota / used / pending / remaining),
 `schedule_service.apply_leave_span` (leave decisions into generated months),
 `attendance_service.sync_planned_cell` (published edits → seeded actuals).
+
+New in the 2026-11-08 review fixes: `api/params.py`,
+`schedule_service.violations_for` + `GET /schedules/{id}/violations`,
+`carry_over_math.comp_balance_from_counts` (R3), `schedule_history.BoundaryState.prev_codes`
+/ `scheduler.domain.PersonInput.prev_codes` (off-runs across the month start),
+`SolverOutput.status` / `slack_proven_minimal`, `SOLVER_NUM_WORKERS`,
+migration `0009`, `backend/.dockerignore`.
 
 ### Feature → code map (spec §4)
 | Module | Features | Backend |
@@ -70,10 +81,16 @@ i18n/         custom AppLocalizations (en/vi, graceful text(key) fallback)
 ```
 `auth` is the canonical clean-architecture template; the business features
 mirror it, feeding live provider state into the `design_system` views.
-Tests: `test/` — 65 tests including 3 goldens (`test/goldens/`).
+Tests: `test/` — 119 tests including 3 goldens (`test/goldens/`, tagged
+`golden` in `dart_test.yaml`; run them on macOS with `flutter test --tags
+golden`, everything else with `--exclude-tags golden`); among them
+`i18n_keys_used_exist_test.dart` (every key used in `lib/` exists).
+`pubspec.lock` is tracked.
 
 ## Entry points
-- Backend: `uvicorn app.main:app` (lifespan: bootstrap + monthly autorun at
-  00:05 on day `AUTORUN_DAY + 1`).
-- Frontend: `flutter run -d macos|windows|linux` (`API_BASE_URL` from `.env`).
+- Backend: `alembic upgrade head`, then `uvicorn app.main:app` (lifespan:
+  environment guard → bootstrap → monthly autorun at 00:05 from day
+  `AUTORUN_DAY + 1`, plus one catch-up check at startup).
+- Frontend: `flutter run -d macos|windows|linux` (`API_BASE_URL` from
+  `--dart-define`, else `.env`).
 - `make dev` runs both.

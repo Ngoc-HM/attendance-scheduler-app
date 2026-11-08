@@ -1,8 +1,10 @@
 """baseline — schema as it existed before this plan (pre carry_premium_off /
 shift_change_requests; those land in 0002).
 
-Existing dev databases created via ``create_all`` should be stamped at this
-revision (``alembic stamp 0001``); fresh databases run it normally.
+Fresh databases run it normally. A database created via ``create_all`` holds
+the schema of the code that created it, not this baseline: stamp that code's
+head (``alembic stamp head`` for the current code), never ``0001`` — the later
+migrations would then fail with DuplicateTable.
 
 Revision ID: 0001
 Revises:

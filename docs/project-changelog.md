@@ -1,5 +1,103 @@
 # Project Changelog
 
+## 2026-11-08 — Review-2 fixes
+
+Fixes every finding of the 2026-11-08 whole-system review
+(`docs/superpowers/reviews/2026-11-08-system-review.md`) except A1: the
+dev-mode seed-admin password reset stays on purpose (owner). Plan:
+`docs/superpowers/plans/2026-11-08-review-2-fixes.md`. Rulings R1–R8 and the
+rulings taken during the work are design decisions #41–#59; the provisional
+ones and the customer notes are under "Open questions".
+
+### Scheduling engine
+- Two-phase solve: rule slack first, then the objectives within that slack;
+  fixed `SOLVER_NUM_WORKERS` (default 8) and seed 42; phase-1 failure falls
+  back to one combined solve; the output reports `status` and
+  `slack_proven_minimal` (#45). A 1-CPU machine no longer invents violations.
+- An off-run that holds approved leave is exempt from the >5-off-days rule;
+  off-runs reach into the previous month (R1, #41, provisional). Premium offs
+  count only engine-chosen X (R2, #42). Comp consumption counts from
+  `HOLIDAY_COMP_EFFECTIVE_FROM` (R3, #43, provisional). Engine, re-check and
+  month-close now agree at the month boundary; `carry_streak` is stored
+  capped at 6 (#58).
+- Staffing: a day where the only role-A person is on leave returns a plan
+  with a staffing violation instead of failing; no role-A users at all is
+  reported as a shortfall.
+
+### Schedules
+- `GET /schedules/{id}/violations` (admin) re-checks a month on demand; the
+  client shows the violations and asks before publishing (#46).
+- Admin override can create the missing cell of an active user; the re-check
+  flags working cells of disabled users and does not count them as cover
+  (R4, #44).
+- Force-regenerating a published month moves still-seeded actuals onto the
+  new plan; `GET /attendance/me` hides seeded rows of unpublished months, and
+  `POST /attendance/seed` refuses a draft (#52).
+
+### Requests, users, reports, flights
+- Shift changes: a code change on an AL/CD/S/A-D/T/B cell is refused (422
+  `swap.cell_locked`); creation validates the counterpart; decisions lock the
+  row, so a double approval is 409 (#51). Leave decisions lock the row too.
+- Deleting a user keeps other people's requests they decided or joined
+  (R8); the delete and its audit row commit together; self-delete works on
+  PostgreSQL; SQLite enforces foreign keys (#50).
+- Reports exclude pending users, include disabled users only with actuals in
+  the period, and escape formula-like text cells (R7 revised, #48).
+- Flights: one leg per day + FLT number (migration `0009`, lowest id kept);
+  an import repeating a row keeps the last one with a server-log warning
+  (#49); parser errors are translated.
+- Sick cover never picks disabled users and its row carries no note (#53).
+
+### Input, i18n, time
+- Year (2000–2100) and month (1–12) parameters answer 422 instead of 500;
+  text fields have column-length limits; every error detail is an i18n key;
+  business dates come from `business_today()` / `business_now()` and the
+  time clock uses `TIMEZONE` (#54).
+
+### Runtime and operations
+- Seed admin created only while no active admin exists; `create_all`
+  skipped once `alembic_version` exists; `CREATE DATABASE` in dev only;
+  `app.*` logs at INFO; autorun catches up on any later day of the month and
+  at startup, logs failures, warns without flight data (#55).
+- Staging/prod refuse SQLite or the default `DATABASE_URL`, CORS `*`,
+  `AUTO_CREATE_TABLES=true` and a retention below 24 months; `TIMEZONE` is
+  validated everywhere; `/docs` only in dev (#21, #55).
+- Alembic accepts `%` in the password; migrations use `sa.func.now()`;
+  scripts load `backend/.env` by absolute path, reject URL host overrides and
+  prompt for the password; tests refuse a non-local `DATABASE_URL`.
+- `backend/.dockerignore` keeps `.env` and local databases out of the image;
+  compose waits for a healthy PostgreSQL; backup/restore pass the password
+  via `PGPASSWORD`, mask the URL and can encrypt with `age` or `gpg`.
+- Dependencies locked: `backend/requirements.lock`, tracked `pubspec.lock`.
+- CI: Ubuntu 24.04, Flutter 3.47.7, actions pinned to commit SHAs, goldens
+  on macOS 15 only, Windows build no longer waits for the goldens,
+  `alembic check` on PostgreSQL (#47).
+
+### Flutter
+- Switching to a month without a schedule clears the grid; Publish and
+  override act on the month on screen; the shift-change panel shows requester
+  and counterpart codes, the approval warnings, and reloads the grid; the
+  swap picker lists active colleagues of the same role only.
+- Logout and session expiry reset every user-scoped screen; a confirmed 403
+  ends the session ("account no longer active"); user-management errors show
+  the backend message; `--dart-define=API_BASE_URL` wins over the bundled
+  `.env` (#56).
+- Sick cover sends the required `code` (it always failed with 422 before);
+  the attendance dialog offers the person's role codes plus S, active users
+  only; Leaves reloads on every visit and has a refresh button; the end date
+  resets when the start moves past it; Reports has year / month or "Full
+  year" / format selectors on the page (#57); a failed flights batch keeps the
+  previous month; error toasts show the backend message.
+
+### Docs
+- README, backend README, deployment guide (the real workstation +
+  Tailscale setup, migrate before start, `alembic stamp head`), system
+  architecture (violations not stored, determinism only with 1 worker),
+  codebase summary, roadmap, code standards, `.env.example` (every setting),
+  test guide additions.
+- Gates: 463 backend tests collected (pytest), `ruff`/`mypy` clean; Flutter
+  `analyze` clean, 119 tests pass including the 3 goldens on macOS.
+
 ## 2026-11-07 — Final-review fixes
 
 - Approving leave after generation keeps the person's weekly X days as X; only
