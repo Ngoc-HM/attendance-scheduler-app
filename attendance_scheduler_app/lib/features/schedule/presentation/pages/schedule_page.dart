@@ -15,6 +15,7 @@ import '../providers/self_arrange_provider.dart';
 import '../providers/shift_change_provider.dart';
 import '../widgets/self_arrange_pending_panel.dart';
 import '../widgets/shift_change_dialog.dart';
+import '../widgets/violation_line.dart';
 
 class SchedulePage extends ConsumerStatefulWidget {
   const SchedulePage({super.key, this.initialMonth});
@@ -227,23 +228,21 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
   }
 
   /// "2026-06-03 · A1 — message"; the date and code parts are left out when
-  /// the violation is not tied to a day or a person.
+  /// the violation is not tied to a day or a person, and the date part when
+  /// the message already starts with it ([violationLine]).
   String _violationLine(
     AppLocalizations l,
     ConstraintViolation v,
     ScheduleState state,
   ) {
-    final day = v.day;
     final userId = v.userId;
-    final parts = [
-      if (day != null)
-        '${day.year}-${day.month.toString().padLeft(2, '0')}-'
-            '${day.day.toString().padLeft(2, '0')}',
-      if (userId != null)
-        state.people.where((p) => p.id == userId).firstOrNull?.code ??
-            l.userFallback(userId),
-    ];
-    return parts.isEmpty ? v.message : '${parts.join(' · ')} — ${v.message}';
+    return violationLine(
+      v,
+      userLabel: userId == null
+          ? null
+          : state.people.where((p) => p.id == userId).firstOrNull?.code ??
+              l.userFallback(userId),
+    );
   }
 
   List<DsRosterRowData> _buildRows(ScheduleState state) {
