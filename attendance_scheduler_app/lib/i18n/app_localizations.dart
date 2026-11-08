@@ -167,8 +167,6 @@ class AppLocalizations {
       'absent': 'Absent',
       'reportsTitle': 'Reports',
       'reportsSubtitle': 'Attendance exports by month and year',
-      'exportYear': 'Export year',
-      'exportMonth': 'Export month',
       'reports': 'Reports',
       'formats': 'Formats',
       'retention': 'Retention',
@@ -219,7 +217,6 @@ class AppLocalizations {
       'dayOfMonth': 'Day of month',
       'delete': 'Delete',
       'endDate': 'End date',
-      'exportOptions': 'Export options',
       'flightDaySaved': 'Flight day saved.',
       'flightPairsCount': 'Flight pairs (0 / 1 / 2)',
       'flightsImportSuccess': 'Flights imported successfully.',
@@ -432,6 +429,15 @@ class AppLocalizations {
       'publishAnyway': 'Publish anyway',
       'approvedWithWarnings': 'Request approved, with rule warnings',
       'swapPartner': 'Swap partner',
+      // --- Review 2 (Task 12): reports, leaves, attendance ---
+      'year': 'Year',
+      'month': 'Month',
+      'format': 'Format',
+      'exportReport': 'Export',
+      'reportSaveFailed': 'Could not save the report file.',
+      'reportExportFailed': 'Could not export the report.',
+      'requestLeave': 'Request leave',
+      'saveFailed': 'Could not save.',
     },
     'vi': {
       'appTitle': 'Xếp lịch & Chấm công',
@@ -584,8 +590,6 @@ class AppLocalizations {
       'absent': 'Vắng',
       'reportsTitle': 'Báo cáo',
       'reportsSubtitle': 'Xuất chấm công theo tháng và năm',
-      'exportYear': 'Xuất năm',
-      'exportMonth': 'Xuất tháng',
       'reports': 'Báo cáo',
       'formats': 'Định dạng',
       'retention': 'Lưu trữ',
@@ -636,7 +640,6 @@ class AppLocalizations {
       'dayOfMonth': 'Ngày trong tháng',
       'delete': 'Xóa',
       'endDate': 'Ngày kết thúc',
-      'exportOptions': 'Tùy chọn xuất',
       'flightDaySaved': 'Đã lưu ngày bay.',
       'flightPairsCount': 'Số cặp chuyến (0 / 1 / 2)',
       'flightsImportSuccess': 'Đã nhập chuyến bay thành công.',
@@ -843,6 +846,15 @@ class AppLocalizations {
       'publishAnyway': 'Vẫn công bố',
       'approvedWithWarnings': 'Đã duyệt yêu cầu, có cảnh báo quy tắc',
       'swapPartner': 'Người hoán đổi',
+      // --- Review 2 (Task 12): reports, leaves, attendance ---
+      'year': 'Năm',
+      'month': 'Tháng',
+      'format': 'Định dạng',
+      'exportReport': 'Xuất báo cáo',
+      'reportSaveFailed': 'Không thể lưu tệp báo cáo.',
+      'reportExportFailed': 'Không thể xuất báo cáo.',
+      'requestLeave': 'Đăng ký nghỉ',
+      'saveFailed': 'Không thể lưu.',
     },
   };
 
@@ -854,6 +866,10 @@ class AppLocalizations {
         englishKeys.containsAll(vietnameseKeys) &&
         vietnameseKeys.containsAll(englishKeys);
   }
+
+  /// Whether [key] is in the English map (the i18n "keys used exist" test).
+  @visibleForTesting
+  static bool hasKey(String key) => _values['en']!.containsKey(key);
 
   String text(String key) =>
       _values[locale.languageCode]?[key] ?? _values['en']![key] ?? key;

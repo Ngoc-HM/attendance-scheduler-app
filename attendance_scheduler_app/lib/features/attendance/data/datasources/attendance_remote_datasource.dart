@@ -82,18 +82,24 @@ class AttendanceRemoteDataSource {
     }
   }
 
-  /// POST /attendance/sick-cover — mark sick and auto-assign cover.
+  /// POST /attendance/sick-cover — mark sick and auto-assign cover. The body
+  /// is the backend `AttendanceUpsert`, whose `code` is required and must be
+  /// "S" here.
   Future<SickCoverResult> sickCover({
     required int userId,
     required DateTime workDate,
+    String? note,
   }) async {
     try {
+      final data = <String, dynamic>{
+        'user_id': userId,
+        'work_date': _formatDate(workDate),
+        'code': 'S',
+      };
+      if (note != null && note.isNotEmpty) data['note'] = note;
       final response = await _dio.post(
         ApiEndpoints.attendanceSickCover,
-        data: {
-          'user_id': userId,
-          'work_date': _formatDate(workDate),
-        },
+        data: data,
       );
       return SickCoverResultModel.fromJson(
           response.data as Map<String, dynamic>);

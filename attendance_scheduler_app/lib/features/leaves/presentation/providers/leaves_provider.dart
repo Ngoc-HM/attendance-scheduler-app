@@ -57,14 +57,20 @@ class LeavesState {
       entries.whenData((e) => e.map((x) => x.row).toList());
 }
 
+/// Starts in the loading state without fetching: [LeavesPage] calls [load]
+/// every time it is opened (and from its refresh button), so the list is
+/// never the one from the first visit of the session (D4).
 class LeavesController extends StateNotifier<LeavesState> {
   LeavesController(this._ds, this._ref)
-      : super(const LeavesState(entries: AsyncValue.loading())) {
-    load();
-  }
+      : super(const LeavesState(entries: AsyncValue.loading()));
 
   final LeavesRemoteDataSource _ds;
   final Ref _ref;
+
+  /// Bumped by every [load]; a load whose number is no longer the latest
+  /// drops its result, so an older, slower response never overwrites a
+  /// newer one (Refresh during a load, reload after a decision).
+  int _loadSeq = 0;
 
   bool get _isAdmin =>
       _ref.read(authControllerProvider).user?.isAdmin ?? false;
@@ -72,7 +78,12 @@ class LeavesController extends StateNotifier<LeavesState> {
   /// Load leaves — admin sees all (GET /leaves?all=true); others own only —
   /// together with today's registration window and, for employees, their
   /// remaining annual leave.
+  ///
+  /// Nothing is stored once the controller is disposed: logout invalidates
+  /// this provider, possibly mid-load.
   Future<void> load() async {
+    if (!mounted) return;
+    final seq = ++_loadSeq;
     state = state.copyWith(entries: const AsyncValue.loading());
     final window = _loadWindow();
     final balance = _loadBalance();
@@ -87,11 +98,14 @@ class LeavesController extends StateNotifier<LeavesState> {
           .map((l) => LeaveEntry(id: l.id, row: _toRow(l, userById)))
           .toList();
     });
+    final loadedWindow = await window;
+    final loadedBalance = await balance;
+    if (!mounted || seq != _loadSeq) return;
     state = state.copyWith(
       entries: entries,
-      window: await window,
+      window: loadedWindow,
       compDays: compDays,
-      balance: await balance,
+      balance: loadedBalance,
     );
   }
 
