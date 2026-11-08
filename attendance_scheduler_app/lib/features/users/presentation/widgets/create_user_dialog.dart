@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/network/api_error_message.dart';
 import '../../../../core/network/api_exception.dart';
 import '../../../../design_system/design_system.dart';
 import '../../../../i18n/app_localizations.dart';
 import '../../../auth/domain/entities/user.dart';
 import '../providers/users_provider.dart';
-import '../user_error_message.dart';
 
 class CreateUserDialog extends ConsumerStatefulWidget {
   const CreateUserDialog({super.key});
@@ -74,7 +74,7 @@ class _CreateUserDialogState extends ConsumerState<CreateUserDialog> {
       final status = e is ApiException ? e.statusCode : null;
       setState(
         () => _error = status != null && status < 500
-            ? userErrorMessage(l, e)
+            ? apiErrorMessage(l, e)
             : l.createUserFailed,
       );
     } finally {

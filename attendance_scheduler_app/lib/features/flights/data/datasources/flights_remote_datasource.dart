@@ -62,7 +62,8 @@ class FlightsRemoteDataSource {
     try {
       final bytes = file.bytes;
       if (bytes == null) {
-        throw const ApiException('File bytes unavailable — re-pick the file');
+        // Not an API error: the page shows its translated import failure.
+        throw StateError('file bytes unavailable');
       }
       final formData = FormData.fromMap({
         'file': MultipartFile.fromBytes(

@@ -31,13 +31,15 @@ class ScheduleState {
   final bool isLoading;
   final bool isMutating;
 
-  /// Failed generate / edit / publish: the backend `detail`, never
-  /// "ApiException(...)". Shown as a toast.
-  final String? error;
+  /// Failed generate / edit / publish: the caught error, which the page
+  /// turns into text with `apiErrorMessage` (backend detail, or a translated
+  /// "server unavailable" / "server error"). Shown as a toast.
+  final Object? error;
 
-  /// Failed [ScheduleController.load] only (backend detail), kept apart from
-  /// [error] so a failed generate never reads as "could not load".
-  final String? loadError;
+  /// Failed [ScheduleController.load] only (same kind of value as [error]),
+  /// kept apart from [error] so a failed generate never reads as "could not
+  /// load".
+  final Object? loadError;
 
   /// HTTP status of the failed load (404 = month not generated / not
   /// published); null when the load did not fail or never reached a server.
@@ -58,8 +60,8 @@ class ScheduleState {
     List<UserDirectoryEntry>? people,
     bool? isLoading,
     bool? isMutating,
-    String? error,
-    String? loadError,
+    Object? error,
+    Object? loadError,
     int? loadErrorStatus,
     ScheduleResult? lastResult,
     List<ConstraintViolation>? violations,
@@ -83,11 +85,6 @@ class ScheduleState {
         violations: clearViolations ? null : (violations ?? this.violations),
       );
 }
-
-/// The message to show for a failed call: the backend detail when there is
-/// one, never the exception's debug text ("ApiException(409): ...").
-String scheduleErrorMessage(Object e) =>
-    e is ApiException ? e.message : e.toString();
 
 // ── Controller ────────────────────────────────────────────────────────────────
 
@@ -123,7 +120,7 @@ class ScheduleController extends StateNotifier<ScheduleState> {
       ]);
       final schedule = results[0] as MonthlySchedule;
       final violations = isAdmin ? await _violationsOrNull(schedule.id) : null;
-      if (seq != _loadSeq) return;
+      if (!mounted || seq != _loadSeq) return;
       state = state.copyWith(
         schedule: schedule,
         people: results[1] as List<UserDirectoryEntry>,
@@ -131,11 +128,11 @@ class ScheduleController extends StateNotifier<ScheduleState> {
         isLoading: false,
       );
     } catch (e) {
-      if (seq != _loadSeq) return;
+      if (!mounted || seq != _loadSeq) return;
       state = state.copyWith(
         isLoading: false,
         clearSchedule: true,
-        loadError: scheduleErrorMessage(e),
+        loadError: e,
         loadErrorStatus: e is ApiException ? e.statusCode : null,
       );
     }
@@ -173,6 +170,7 @@ class ScheduleController extends StateNotifier<ScheduleState> {
     final scheduleId = state.schedule?.id;
     if (scheduleId == null) return null;
     final violations = await _violationsOrNull(scheduleId);
+    if (!mounted) return violations;
     if (state.schedule?.id == scheduleId) {
       state = violations == null
           ? state.copyWith(clearViolations: true)
@@ -188,6 +186,7 @@ class ScheduleController extends StateNotifier<ScheduleState> {
     state = state.copyWith(isMutating: true, clearError: true, clearResult: true);
     try {
       final result = await _ds.generate(year: year, month: month, force: force);
+      if (!mounted) return;
       final generated = result.schedule;
       state = generated != null
           ? state.copyWith(
@@ -199,14 +198,12 @@ class ScheduleController extends StateNotifier<ScheduleState> {
             )
           : state.copyWith(isMutating: false, lastResult: result);
     } catch (e) {
+      if (!mounted) return;
       if (e is ApiException && e.statusCode == 409) {
         state = state.copyWith(isMutating: false);
         rethrow;
       }
-      state = state.copyWith(
-        isMutating: false,
-        error: scheduleErrorMessage(e),
-      );
+      state = state.copyWith(isMutating: false, error: e);
     }
   }
 
@@ -230,6 +227,7 @@ class ScheduleController extends StateNotifier<ScheduleState> {
         code: code,
       );
       final warnings = result.violations.map((v) => v.message).toList();
+      if (!mounted) return warnings;
       if (state.schedule?.id != scheduleId) {
         state = state.copyWith(isMutating: false);
         return warnings;
@@ -241,10 +239,8 @@ class ScheduleController extends StateNotifier<ScheduleState> {
       await refreshViolations();
       return warnings;
     } catch (e) {
-      state = state.copyWith(
-        isMutating: false,
-        error: scheduleErrorMessage(e),
-      );
+      if (!mounted) return null;
+      state = state.copyWith(isMutating: false, error: e);
       return null;
     }
   }
@@ -262,13 +258,12 @@ class ScheduleController extends StateNotifier<ScheduleState> {
     state = state.copyWith(isMutating: true, clearError: true);
     try {
       final updated = await _ds.publish(scheduleId);
+      if (!mounted) return true;
       state = state.copyWith(isMutating: false, schedule: updated);
       return true;
     } catch (e) {
-      state = state.copyWith(
-        isMutating: false,
-        error: scheduleErrorMessage(e),
-      );
+      if (!mounted) return false;
+      state = state.copyWith(isMutating: false, error: e);
       return false;
     }
   }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/network/api_error_message.dart';
 import '../../../../core/network/api_exception.dart';
 import '../../../../design_system/design_system.dart';
 import '../../../../i18n/app_localizations.dart';
@@ -44,7 +45,7 @@ class _LeavesPageState extends ConsumerState<LeavesPage> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              err is ApiException ? err.message : l.text('leavesLoadFailed'),
+              apiErrorMessage(l, err, fallbackKey: 'leavesLoadFailed'),
               style: Theme.of(context).textTheme.bodyMedium,
             ),
             const SizedBox(height: DsSpacing.x3),
@@ -110,7 +111,7 @@ class _LeavesPageState extends ConsumerState<LeavesPage> {
       }
     } on ApiException catch (e) {
       if (context.mounted) {
-        DsFeedback.show(context, e.message, tone: DsTone.danger);
+        DsFeedback.show(context, apiErrorMessage(l, e), tone: DsTone.danger);
       }
     }
   }
@@ -155,7 +156,7 @@ class _LeavesPageState extends ConsumerState<LeavesPage> {
       }
     } on ApiException catch (e) {
       if (context.mounted) {
-        DsFeedback.show(context, e.message, tone: DsTone.danger);
+        DsFeedback.show(context, apiErrorMessage(l, e), tone: DsTone.danger);
       }
     }
   }
@@ -388,7 +389,7 @@ class _LeavesPageState extends ConsumerState<LeavesPage> {
                   }
                 } on ApiException catch (e) {
                   if (ctx.mounted) {
-                    DsFeedback.show(ctx, e.message, tone: DsTone.danger);
+                    DsFeedback.show(ctx, apiErrorMessage(l, e), tone: DsTone.danger);
                   }
                 }
               },

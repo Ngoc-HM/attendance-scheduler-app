@@ -71,9 +71,11 @@ class UsersController extends StateNotifier<AsyncValue<List<User>>> {
   }
 
   /// Hard delete with cascade (CSV TC-007). Throws on hard errors.
-  Future<void> delete(int id) async {
+  /// [reload] is false when admins delete their own account: the list call
+  /// would carry the deleted account's token and come back 401.
+  Future<void> delete(int id, {bool reload = true}) async {
     await _ds.delete(id);
-    await load();
+    if (reload) await load();
   }
 }
 

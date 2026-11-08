@@ -1,6 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../../core/network/api_exception.dart';
 import '../../../users/data/user_management_datasource.dart';
 import '../../../auth/domain/entities/user.dart';
 import '../../data/datasources/attendance_remote_datasource.dart';
@@ -24,7 +23,11 @@ class AttendanceState {
   final List<Holiday> holidays;
   final bool isLoading;
   final bool isMutating;
-  final String? error;
+
+  /// The caught error of the last failed call; the page and dialogs turn it
+  /// into text with `apiErrorMessage` (backend detail, or a translated
+  /// "server unavailable" / "server error"), never "ApiException(409): ...".
+  final Object? error;
   final SickCoverResult? lastSickCover;
 
   AttendanceState copyWith({
@@ -33,7 +36,7 @@ class AttendanceState {
     List<Holiday>? holidays,
     bool? isLoading,
     bool? isMutating,
-    String? error,
+    Object? error,
     SickCoverResult? lastSickCover,
     bool clearError = false,
     bool clearSickCover = false,
@@ -86,7 +89,7 @@ class AttendanceController extends StateNotifier<AttendanceState> {
       );
     } catch (e) {
       if (mounted) {
-        state = state.copyWith(isLoading: false, error: _message(e));
+        state = state.copyWith(isLoading: false, error: e);
       }
     }
   }
@@ -127,7 +130,7 @@ class AttendanceController extends StateNotifier<AttendanceState> {
       return true;
     } catch (e) {
       if (mounted) {
-        state = state.copyWith(isMutating: false, error: _message(e));
+        state = state.copyWith(isMutating: false, error: e);
       }
       return false;
     }
@@ -159,7 +162,7 @@ class AttendanceController extends StateNotifier<AttendanceState> {
       return true;
     } catch (e) {
       if (mounted) {
-        state = state.copyWith(isMutating: false, error: _message(e));
+        state = state.copyWith(isMutating: false, error: e);
       }
       return false;
     }
@@ -175,7 +178,7 @@ class AttendanceController extends StateNotifier<AttendanceState> {
       return true;
     } catch (e) {
       if (mounted) {
-        state = state.copyWith(isMutating: false, error: _message(e));
+        state = state.copyWith(isMutating: false, error: e);
       }
       return false;
     }
@@ -225,7 +228,7 @@ class AttendanceController extends StateNotifier<AttendanceState> {
       return true;
     } catch (e) {
       if (mounted) {
-        state = state.copyWith(isMutating: false, error: _message(e));
+        state = state.copyWith(isMutating: false, error: e);
       }
       return false;
     }
@@ -242,7 +245,7 @@ class AttendanceController extends StateNotifier<AttendanceState> {
       return true;
     } catch (e) {
       if (mounted) {
-        state = state.copyWith(isMutating: false, error: _message(e));
+        state = state.copyWith(isMutating: false, error: e);
       }
       return false;
     }
@@ -251,10 +254,6 @@ class AttendanceController extends StateNotifier<AttendanceState> {
   void clearSickCover() => state = state.copyWith(clearSickCover: true);
 
   // ── Private helpers ────────────────────────────────────────────────────────
-
-  /// What the page and dialogs show for a failure: the backend's detail for
-  /// an API error, never `ApiException(409): ...`.
-  static String _message(Object e) => e is ApiException ? e.message : '$e';
 
   void _upsertRecord(List<AttendanceRecord> list, AttendanceRecord record) {
     final idx = list.indexWhere((r) =>

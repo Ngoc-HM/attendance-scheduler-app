@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/network/api_error_message.dart';
 import '../../../../design_system/design_system.dart';
 import '../../../../i18n/app_localizations.dart';
 import '../../domain/entities/attendance_entities.dart';
@@ -102,7 +103,7 @@ class _HolidaysDialogState extends ConsumerState<HolidaysDialog> {
           if (state.error != null) ...[
             const SizedBox(height: DsSpacing.x2),
             Text(
-              state.error!,
+              apiErrorMessage(l, state.error),
               style: const TextStyle(color: DsColors.danger, fontSize: DsFontSize.caption),
             ),
           ],
@@ -148,7 +149,8 @@ class _HolidaysDialogState extends ConsumerState<HolidaysDialog> {
         });
         DsFeedback.show(context, l.text('holidayAdded'), tone: DsTone.success);
       } else {
-        final err = ref.read(attendanceControllerProvider).error ?? 'error';
+        final err =
+            apiErrorMessage(l, ref.read(attendanceControllerProvider).error);
         DsFeedback.show(context, err, tone: DsTone.danger);
       }
     }
@@ -191,7 +193,8 @@ class _HolidayTile extends ConsumerWidget {
         .read(attendanceControllerProvider.notifier)
         .deleteHoliday(holiday.id);
     if (context.mounted && !ok) {
-      final err = ref.read(attendanceControllerProvider).error ?? 'error';
+      final err =
+          apiErrorMessage(l, ref.read(attendanceControllerProvider).error);
       DsFeedback.show(context, err, tone: DsTone.danger);
     }
   }

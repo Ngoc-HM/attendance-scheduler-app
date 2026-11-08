@@ -56,6 +56,9 @@ const _t2 = 9;
 const _june = 6;
 const _july = 7;
 
+final _serverError =
+    const AppLocalizations(Locale('en')).text('requestServerError');
+
 const _generateHint =
     'No schedule for this month. Tap "Generate schedule" to build one.';
 
@@ -364,7 +367,9 @@ void main() {
     await _pump(tester, user: _admin, ds: ds);
 
     expect(find.text(_generateHint), findsNothing);
-    expect(find.textContaining('Database unavailable'), findsOneWidget);
+    // A 5xx reads as the translated server error, never its body.
+    expect(find.textContaining(_serverError), findsOneWidget);
+    expect(find.textContaining('Database unavailable'), findsNothing);
     expect(find.textContaining('ApiException'), findsNothing);
     expect(_publishEnabled(tester), isFalse);
   });
@@ -546,7 +551,8 @@ void main() {
     await tester.tap(find.text('Generate anyway')); // no flights this month
     await tester.pumpAndSettle();
 
-    expect(find.text('Solver crashed'), findsOneWidget, reason: 'toast');
+    expect(find.text(_serverError), findsOneWidget, reason: 'toast');
+    expect(find.text('Solver crashed'), findsNothing);
     expect(find.textContaining('Could not load the schedule'), findsNothing);
     expect(find.text(_generateHint), findsOneWidget);
     await _drainToast(tester);

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/constants/shift_codes.dart';
+import '../../../../core/network/api_error_message.dart';
 import '../../../../core/network/api_exception.dart';
 import '../../../../design_system/design_system.dart';
 import '../../../../i18n/app_localizations.dart';
@@ -63,7 +64,10 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
     }
 
     if (state.error != null && state.records.isEmpty) {
-      return _AttendanceError(message: state.error!, onRetry: _loadMonth);
+      return _AttendanceError(
+        message: apiErrorMessage(l, state.error),
+        onRetry: _loadMonth,
+      );
     }
 
     final me = ref.watch(authControllerProvider.select((auth) => auth.user));
@@ -114,7 +118,9 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
           .read(attendanceControllerProvider.notifier)
           .closeMonth(month.year, month.month);
     } on ApiException catch (e) {
-      if (mounted) DsFeedback.show(context, e.message, tone: DsTone.danger);
+      if (mounted) {
+        DsFeedback.show(context, apiErrorMessage(l, e), tone: DsTone.danger);
+      }
       return;
     } catch (_) {
       if (mounted) {

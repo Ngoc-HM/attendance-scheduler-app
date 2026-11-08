@@ -50,8 +50,10 @@ class _Repo implements AuthRepository {
     return me;
   }
 
+  bool loggedOut = false;
+
   @override
-  Future<void> logout() async {}
+  Future<void> logout() async => loggedOut = true;
 
   @override
   dynamic noSuchMethod(Invocation i) => super.noSuchMethod(i);
@@ -59,9 +61,22 @@ class _Repo implements AuthRepository {
 
 class _Users implements UserManagementDataSource {
   final updates = <(int, Map<String, dynamic>)>[];
+  final deleted = <int>[];
+  late final _Repo repo;
+
+  /// GET /users calls made after a delete while still signed in: with a
+  /// deleted account's token the real backend answers 401, which ends the
+  /// session as "expired".
+  int listsAfterDelete = 0;
 
   @override
-  Future<List<UserModel>> list() async => const [_admin, _other];
+  Future<List<UserModel>> list() async {
+    if (deleted.isNotEmpty && !repo.loggedOut) listsAfterDelete++;
+    return const [_admin, _other];
+  }
+
+  @override
+  Future<void> delete(int id) async => deleted.add(id);
 
   @override
   Future<UserUpdateResult> update(int id, Map<String, dynamic> changes) async {
@@ -87,7 +102,7 @@ Future<(ProviderContainer, _Repo, _Users)> _pump(WidgetTester tester) async {
   await tester.binding.setSurfaceSize(const Size(2000, 1200));
   addTearDown(() => tester.binding.setSurfaceSize(null));
   final repo = _Repo();
-  final users = _Users();
+  final users = _Users()..repo = repo;
   final c = ProviderContainer(overrides: [
     authRepositoryProvider.overrideWithValue(repo),
     tokenStorageProvider.overrideWithValue(_MemoryTokenStorage()),
@@ -162,6 +177,37 @@ void main() {
     final state = c.read(authControllerProvider);
     expect(state.user, isNull);
     expect(state.error, 'account_inactive');
+    await tester.pump(const Duration(seconds: 10));
+  });
+
+  testWidgets('deleting yourself logs out without a "session expired" banner', (tester) async {
+    final (c, repo, users) = await _pump(tester);
+
+    await tester.tap(find.text('Delete').first);
+    await tester.pumpAndSettle();
+    await tester.tap(_inDialog(find.text('Delete')));
+    await tester.pumpAndSettle();
+
+    expect(users.deleted, [1]);
+    final state = c.read(authControllerProvider);
+    expect(state.user, isNull, reason: 'the deleted admin is signed out');
+    expect(state.error, isNull, reason: 'a deliberate self-delete is no expired session');
+    expect(users.listsAfterDelete, 0, reason: 'no request with the dead token');
+    expect(repo.currentUserCalls, 0);
+    await tester.pump(const Duration(seconds: 10));
+  });
+
+  testWidgets('deleting someone else keeps the session and reloads the list', (tester) async {
+    final (c, _, users) = await _pump(tester);
+
+    await tester.tap(find.text('Delete').last);
+    await tester.pumpAndSettle();
+    await tester.tap(_inDialog(find.text('Delete')));
+    await tester.pumpAndSettle();
+
+    expect(users.deleted, [2]);
+    expect(users.listsAfterDelete, 1);
+    expect(c.read(authControllerProvider).user, isNotNull);
     await tester.pump(const Duration(seconds: 10));
   });
 }

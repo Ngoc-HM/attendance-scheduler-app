@@ -27,7 +27,10 @@ class SelfArrangeState {
   final List<SelfArrangeBatch> myRequests;
   final bool isLoading;
   final bool isSubmitting;
-  final String? error;
+
+  /// The caught error of the last failed call, turned into text by the page
+  /// with `apiErrorMessage` — never the exception's debug text.
+  final Object? error;
   final bool notPublished;
 
   /// Effective code for a day after applying the draft.
@@ -65,7 +68,7 @@ class SelfArrangeState {
     List<SelfArrangeBatch>? myRequests,
     bool? isLoading,
     bool? isSubmitting,
-    String? error,
+    Object? error,
     bool? notPublished,
     bool clearError = false,
   }) =>
@@ -107,7 +110,7 @@ class SelfArrangeController extends StateNotifier<SelfArrangeState> {
           .toList()
         ..sort((a, b) => a.workDate.compareTo(b.workDate));
       final requests = await _ds.list();
-      if (seq != _loadSeq) return; // superseded by a newer load
+      if (!mounted || seq != _loadSeq) return; // disposed or superseded
       state = state.copyWith(
         isLoading: false,
         myAssignments: mine,
@@ -116,17 +119,18 @@ class SelfArrangeController extends StateNotifier<SelfArrangeState> {
     } catch (e) {
       // Unpublished (404) / beyond T+2 (403) → friendly empty state; the
       // request history is still loaded so the tab is never dead.
+      if (!mounted) return;
       List<SelfArrangeBatch> requests = state.myRequests;
       try {
         requests = await _ds.list();
       } catch (_) {}
-      if (seq != _loadSeq) return; // superseded by a newer load
+      if (!mounted || seq != _loadSeq) return; // disposed or superseded
       state = state.copyWith(
         isLoading: false,
         myAssignments: const [],
         myRequests: requests,
         notPublished: true,
-        error: e.toString(),
+        error: e,
       );
     }
   }
@@ -165,7 +169,9 @@ class SelfArrangeController extends StateNotifier<SelfArrangeState> {
         ],
         note: note,
       );
+      if (!mounted) return true;
       final requests = await _ds.list();
+      if (!mounted) return true;
       state = state.copyWith(
         isSubmitting: false,
         draft: const {},
@@ -173,7 +179,8 @@ class SelfArrangeController extends StateNotifier<SelfArrangeState> {
       );
       return true;
     } catch (e) {
-      state = state.copyWith(isSubmitting: false, error: e.toString());
+      if (!mounted) return false;
+      state = state.copyWith(isSubmitting: false, error: e);
       return false;
     }
   }
@@ -200,13 +207,15 @@ class SelfArrangeAdminState {
   final List<SelfArrangeBatch> requests;
   final bool isLoading;
   final bool isMutating;
-  final String? error;
+
+  /// The caught error of the last failed call (see [SelfArrangeState.error]).
+  final Object? error;
 
   SelfArrangeAdminState copyWith({
     List<SelfArrangeBatch>? requests,
     bool? isLoading,
     bool? isMutating,
-    String? error,
+    Object? error,
     bool clearError = false,
   }) =>
       SelfArrangeAdminState(
@@ -226,9 +235,11 @@ class SelfArrangeAdminController extends StateNotifier<SelfArrangeAdminState> {
     state = state.copyWith(isLoading: true, clearError: true);
     try {
       final requests = await _ds.list(all: true);
+      if (!mounted) return;
       state = state.copyWith(isLoading: false, requests: requests);
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: e.toString());
+      if (!mounted) return;
+      state = state.copyWith(isLoading: false, error: e);
     }
   }
 
@@ -237,6 +248,7 @@ class SelfArrangeAdminController extends StateNotifier<SelfArrangeAdminState> {
     state = state.copyWith(isMutating: true, clearError: true);
     try {
       final updated = await _ds.decide(id: id, status: status);
+      if (!mounted) return updated;
       state = state.copyWith(
         isMutating: false,
         requests: [
@@ -246,7 +258,8 @@ class SelfArrangeAdminController extends StateNotifier<SelfArrangeAdminState> {
       );
       return updated;
     } catch (e) {
-      state = state.copyWith(isMutating: false, error: e.toString());
+      if (!mounted) return null;
+      state = state.copyWith(isMutating: false, error: e);
       return null;
     }
   }
