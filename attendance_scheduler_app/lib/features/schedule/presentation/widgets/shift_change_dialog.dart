@@ -12,8 +12,8 @@ import '../providers/shift_change_provider.dart';
 /// Dialog for a user to request a shift-change on their own cell.
 /// [workDate] is the day tapped; [role] (the requester's) limits the codes
 /// offered to the requestable set (regular working or off codes, no AL / CD).
-/// [people] is the code directory for
-/// swap_with; [currentUserId] is excluded from the counterpart picker.
+/// [people] is the code directory for swap_with (only same-role colleagues
+/// are offered); [currentUserId] is excluded from the counterpart picker.
 class ShiftChangeRequestDialog extends ConsumerStatefulWidget {
   const ShiftChangeRequestDialog({
     super.key,
@@ -46,9 +46,17 @@ class _ShiftChangeRequestDialogState
     super.dispose();
   }
 
-  /// Everyone but the requester, in natural code order (A2 before A10).
+  /// Swap partners: colleagues of the requester's role only, in natural code
+  /// order (T2 before T10). At approval the backend checks that each
+  /// person's resulting code is requestable for their own role
+  /// (`apply_shift_change`), so a cross-role swap usually fails late there;
+  /// offering the same role only avoids that.
+  /// [ShiftChangeRequestDialog.people] is GET /users/directory, which lists
+  /// active users only.
   List<UserDirectoryEntry> get _colleagues =>
-      widget.people.where((p) => p.id != widget.currentUserId).toList()
+      widget.people
+          .where((p) => p.id != widget.currentUserId && p.role == widget.role)
+          .toList()
         ..sort((a, b) => _compareCodes(a.code, b.code));
 
   static int _compareCodes(String a, String b) {
@@ -172,8 +180,24 @@ class _ShiftChangeRequestDialogState
 }
 
 /// Admin panel showing pending shift-change requests with approve/reject.
+/// Each row names the requester and, for a swap, the partner by code (D3).
+/// Approving shows the backend's rule warnings and calls [onApproved] so the
+/// page reloads the grid the approval changed.
 class ShiftChangePendingPanel extends ConsumerWidget {
-  const ShiftChangePendingPanel({super.key});
+  const ShiftChangePendingPanel({
+    super.key,
+    this.codeById = const {},
+    this.onApproved,
+  });
+
+  /// Person id → code (e.g. "A3").
+  final Map<int, String> codeById;
+
+  /// Called after a successful approval (e.g. to reload the schedule grid).
+  final VoidCallback? onApproved;
+
+  String _code(AppLocalizations l, int? id) =>
+      id == null ? '—' : (codeById[id] ?? l.userFallback(id));
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -199,14 +223,15 @@ class ShiftChangePendingPanel extends ConsumerWidget {
       separatorBuilder: (_, _) => const Divider(height: 1),
       itemBuilder: (context, i) {
         final req = pending[i];
+        final isSwap = req.kind == 'swap_with';
         return ListTile(
           leading: req.strictReview
               ? const Icon(Icons.warning_amber, color: DsColors.warning)
               : const Icon(Icons.swap_horiz_outlined),
           title: Text(
-            '${req.kind} — ${req.workDate.year}-'
-            '${req.workDate.month.toString().padLeft(2, '0')}-'
-            '${req.workDate.day.toString().padLeft(2, '0')}',
+            '${_code(l, req.requesterId)} · '
+            '${l.text(isSwap ? 'swapWith' : 'changeCode')} · '
+            '${_isoDate(req.workDate)}',
           ),
           subtitle: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -216,8 +241,15 @@ class ShiftChangePendingPanel extends ConsumerWidget {
                   l.text('strictReviewRequired'),
                   style: const TextStyle(color: DsColors.warning),
                 ),
-              if (req.requestedCode != null)
+              if (isSwap)
+                Text(
+                  '${l.text('swapPartner')}: '
+                  '${_code(l, req.counterpartUserId)}',
+                )
+              else if (req.requestedCode != null)
                 Text('${l.text("newShiftCode")}: ${req.requestedCode}'),
+              if (req.note != null && req.note!.isNotEmpty)
+                Text('${l.text('note')}: ${req.note}'),
               if (req.warnings.isNotEmpty)
                 Text(
                   req.warnings.join('; '),
@@ -257,20 +289,96 @@ class ShiftChangePendingPanel extends ConsumerWidget {
     String status,
     AppLocalizations l,
   ) async {
-    final ok = await ref
+    final decided = await ref
         .read(shiftChangeControllerProvider.notifier)
         .decide(id, status);
-    if (context.mounted) {
+    if (!context.mounted) return;
+    if (decided == null) {
       DsFeedback.show(
         context,
-        ok
-            ? (status == 'approved'
-                ? l.text('requestApproved')
-                : l.text('requestRejected'))
-            : (ref.read(shiftChangeControllerProvider).error ?? 'error'),
-        tone: ok ? DsTone.success : DsTone.danger,
+        ref.read(shiftChangeControllerProvider).error ??
+            l.text('actionFailed'),
+        tone: DsTone.danger,
+      );
+      return;
+    }
+    if (status != 'approved') {
+      DsFeedback.show(
+        context,
+        l.text('requestRejected'),
+        tone: DsTone.success,
+      );
+      return;
+    }
+    if (decided.warnings.isEmpty) {
+      DsFeedback.show(
+        context,
+        l.text('requestApproved'),
+        tone: DsTone.success,
+      );
+    } else {
+      // The approval is saved; the warnings are the backend's rule recheck
+      // of the changed cells, listed in full instead of a one-line toast.
+      await showDialog<void>(
+        context: context,
+        builder: (context) => DsFormDialog(
+          title: l.text('approvedWithWarnings'),
+          content: RuleWarningsList(lines: decided.warnings),
+          actions: [
+            DsPrimaryButton(
+              label: l.text('close'),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+          ],
+        ),
       );
     }
+    onApproved?.call();
+  }
+}
+
+String _isoDate(DateTime d) =>
+    '${d.year}-${d.month.toString().padLeft(2, '0')}-'
+    '${d.day.toString().padLeft(2, '0')}';
+
+/// Rule warnings / violations, one per line with a warning icon, for a
+/// dialog or panel; long lists scroll instead of growing past [maxHeight].
+class RuleWarningsList extends StatelessWidget {
+  const RuleWarningsList({
+    super.key,
+    required this.lines,
+    this.maxHeight = 280,
+  });
+
+  final List<String> lines;
+  final double maxHeight;
+
+  @override
+  Widget build(BuildContext context) {
+    return ConstrainedBox(
+      constraints: BoxConstraints(maxHeight: maxHeight),
+      child: ListView.builder(
+        shrinkWrap: true,
+        itemCount: lines.length,
+        itemBuilder: (context, i) => Padding(
+          padding: const EdgeInsets.symmetric(vertical: DsSpacing.x1),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Padding(
+                padding: EdgeInsets.only(right: DsSpacing.x2),
+                child: Icon(
+                  Icons.warning_amber_outlined,
+                  size: 16,
+                  color: DsColors.warning,
+                ),
+              ),
+              Expanded(child: Text(lines[i])),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 
