@@ -42,6 +42,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "flight.import_failed": "Excel import failed.",
         "flight.import_bad_file": "Unsupported or unreadable Excel file.",
         "flight.preset_not_found": "Flight preset not found.",
+        "flight.import_row_invalid_date": "Row {row}: invalid date \"{value}\" (expected YYYY-MM-DD).",
+        "flight.import_row_invalid_flt": "Row {row}: invalid FLT number \"{value}\".",
+        "flight.import_row_invalid_time": "Row {row}: invalid time \"{value}\" (expected HH:MM).",
+        "flight.import_row_duplicate": "Row {row} repeats row {first_row} (same date and FLT {flt}); the later row is used.",
         # --- Leaves (F-05/F-06) ---
         "leave.not_found": "Leave request not found.",
         "leave.window_closed_monthly": "Monthly leave registration is open from day 1 to day {day} of the previous month.",
@@ -115,6 +119,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "flight.import_failed": "Import Excel thất bại.",
         "flight.import_bad_file": "File Excel không hợp lệ hoặc không đọc được.",
         "flight.preset_not_found": "Không tìm thấy preset chuyến bay.",
+        "flight.import_row_invalid_date": "Dòng {row}: ngày \"{value}\" không hợp lệ (định dạng YYYY-MM-DD).",
+        "flight.import_row_invalid_flt": "Dòng {row}: số hiệu chuyến bay \"{value}\" không hợp lệ.",
+        "flight.import_row_invalid_time": "Dòng {row}: giờ \"{value}\" không hợp lệ (định dạng HH:MM).",
+        "flight.import_row_duplicate": "Dòng {row} trùng với dòng {first_row} (cùng ngày và chuyến {flt}); dùng dòng sau.",
         # --- Leaves (F-05/F-06) ---
         "leave.not_found": "Không tìm thấy đơn nghỉ.",
         "leave.window_closed_monthly": "Đăng ký nghỉ tháng mở từ ngày 1 đến ngày {day} của tháng trước.",

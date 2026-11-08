@@ -7,6 +7,7 @@ separate so new layouts need no API change (spec §4.7).
 
 from __future__ import annotations
 
+from app.models.enums import UserStatus
 from app.models.user import User
 from app.scheduler.calendar_utils import month_days
 from app.services import attendance_service
@@ -14,7 +15,14 @@ from app.services.report_table import ReportTable, UserRow, build_monthly, build
 
 
 def _user_rows(db) -> list[UserRow]:
-    users = db.query(User).order_by(User.id).all()
+    """Report rows: active accounts only (ruling R7) — pending sign-ups and
+    disabled accounts never appear in an export."""
+    users = (
+        db.query(User)
+        .filter(User.status == UserStatus.active)
+        .order_by(User.id)
+        .all()
+    )
     return [UserRow(user_id=u.id, name=u.full_name, role=u.role.value) for u in users]
 
 
