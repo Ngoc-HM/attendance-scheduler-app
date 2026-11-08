@@ -304,7 +304,7 @@ def apply_shift_change(db: Session, req: ShiftChangeRequest) -> list[str]:
     # No commit: the caller commits the cells together with the request's
     # status (one transaction under the request's row lock).
     db.flush()
-    return [f"{v.rule}: {violation_text(v)}" for v in _recheck_violations(db, schedule)]
+    return [f"{v.rule}: {v.message}" for v in _recheck_violations(db, schedule)]
 
 
 def apply_leave_span(
@@ -366,18 +366,10 @@ def apply_leave_span(
     warnings = [t("leave.schedule_applied"), *not_generated]
     for schedule in updated:
         warnings += [
-            # A violation tied to a day already names its month.
-            violation_text(v) if v.day else f"{schedule.year}-{schedule.month:02d}: {v.message}"
+            f"{schedule.year}-{schedule.month:02d}: {v.message}"
             for v in _recheck_violations(db, schedule)
         ]
     return warnings
-
-
-def violation_text(v: ConstraintViolation) -> str:
-    """One-line form for text-only callers: the day (when the violation has
-    one in its structured field, e.g. ``disabled_user_duty``) leads, like the
-    checker's own ``"{day}: ..."`` lines."""
-    return f"{v.day}: {v.message}" if v.day is not None else v.message
 
 
 # --- internals -------------------------------------------------------------
@@ -440,7 +432,9 @@ def _recheck_violations(db: Session, schedule: MonthlySchedule) -> list[Constrai
             day=a.work_date,
             user_id=a.user_id,
             rule="disabled_user_duty",
-            message=f"{t('schedule.disabled_user_duty')} ({a.code.value})",
+            # Day first, like the checker's own "{day}: ..." lines, so the
+            # text-only callers (shift change, leave, self-arrange) show it.
+            message=f"{a.work_date}: {t('schedule.disabled_user_duty')} ({a.code.value})",
         )
         for a in sorted(schedule.assignments, key=lambda a: (a.work_date, a.user_id))
         if a.user_id in inactive_ids and a.code.is_working

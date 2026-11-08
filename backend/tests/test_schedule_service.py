@@ -669,16 +669,32 @@ def test_recheck_flags_disabled_user_ad_cells(client: TestClient) -> None:
     assert [(v["day"], v["user_id"]) for v in flagged] == [
         (duty_day.isoformat(), a1["id"])
     ]
-    assert flagged[0]["message"].startswith(t("schedule.disabled_user_duty"))
+    # The message itself names the day once (text-only callers show it too).
+    assert flagged[0]["message"] == (
+        f"{duty_day}: {t('schedule.disabled_user_duty')} (A/D)"
+    )
     # The disabled user's A/D is no longer cover: the day is now short.
     assert _short_on_duty_day(after)
+    staffing = [
+        v["message"] for v in after
+        if "short flight coverage" in v["message"] and str(duty_day) in v["message"]
+    ]
+    assert len(staffing) == 1 and staffing[0].count(str(duty_day)) == 1
     # Per-person rules no longer report the disabled user.
     assert not any(f"User {a1['id']}:" in v["message"] for v in after)
 
-    # Text-only callers (shift change, leave, self-arrange) lead with the day.
-    from app.schemas.schedule import ConstraintViolation
-    from app.services.schedule_service import violation_text
+    # Text-only caller (leave decision): each line is "YYYY-MM: <message>" with
+    # the message unchanged — no second day prefix on either kind of line.
+    from app.core.database import SessionLocal
+    from app.models.enums import AttendanceCode
+    from app.services import schedule_service
 
-    line = violation_text(ConstraintViolation(**flagged[0]))
-    assert line == f"{duty_day}: {flagged[0]['message']}"
-    assert violation_text(ConstraintViolation(rule="r", message="m")) == "m"
+    with SessionLocal() as db:
+        lines = schedule_service.apply_leave_span(
+            db, a2["id"], date(2052, 3, 20), date(2052, 3, 20), AttendanceCode.AL
+        )
+        db.rollback()
+    for message in (flagged[0]["message"], staffing[0]):
+        assert f"2052-03: {message}" in lines
+        line = next(x for x in lines if message in x)
+        assert line.count(str(duty_day)) == 1
