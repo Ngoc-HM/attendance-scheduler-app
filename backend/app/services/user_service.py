@@ -18,7 +18,7 @@ from app.core.i18n import t
 from app.core.security import get_password_hash
 from app.models.attendance import AttendanceRecord
 from app.models.audit import AuditLog
-from app.models.enums import Role, UserStatus
+from app.models.enums import LeaveStatus, Role, UserStatus
 from app.models.leave import LeaveRequest
 from app.models.role_code_counter import RoleCodeCounter
 from app.models.schedule import ShiftAssignment
@@ -266,6 +266,17 @@ def update(db: Session, user_id: int, payload: UserUpdate) -> tuple[User, list[s
     return user, warnings
 
 
+def ensure_deletable(db: Session, user_id: int) -> User:
+    """Run the delete guards (404, last-admin lockout) without changing data.
+
+    The endpoint calls this before writing the ``user.delete`` audit row, so a
+    refused delete never leaves an audit entry behind.
+    """
+    user = _get_or_404(db, user_id)
+    _ensure_last_admin_survives_delete(db, user)
+    return user
+
+
 def delete(db: Session, user_id: int, acting_admin_id: int) -> None:
     """Hard delete a user and cascade their historical rows.
 
@@ -279,12 +290,15 @@ def delete(db: Session, user_id: int, acting_admin_id: int) -> None:
        user's own day).
     3. Leave / shift / self-arrange / shift-change / time-clock rows owned by
        this user are deleted.
-    4. The ``User`` row itself is removed.
+    4. Requests of OTHER users (ruling R8): the ones this user decided keep
+       their row with ``decided_by_id`` NULL (shift changes and self-arrange
+       batches); a swap naming this user as counterpart is deleted while
+       pending and kept with ``counterpart_user_id`` NULL once decided.
+    5. The ``User`` row itself is removed.
 
     Last-admin lockout is enforced before any cascade runs.
     """
-    user = _get_or_404(db, user_id)
-    _ensure_last_admin_survives_delete(db, user)
+    user = ensure_deletable(db, user_id)
 
     db.query(AuditLog).filter(AuditLog.actor_id == user.id).update(
         {AuditLog.actor_id: None}, synchronize_session=False
@@ -312,15 +326,26 @@ def delete(db: Session, user_id: int, acting_admin_id: int) -> None:
     db.query(ShiftChangeRequest).filter(
         ShiftChangeRequest.requester_id == user.id
     ).delete(synchronize_session=False)
-    db.query(ShiftChangeRequest).filter(
-        ShiftChangeRequest.counterpart_user_id == user.id
-    ).delete(synchronize_session=False)
-    db.query(ShiftChangeRequest).filter(
-        ShiftChangeRequest.decided_by_id == user.id
-    ).delete(synchronize_session=False)
     db.query(TimeClockEntry).filter(TimeClockEntry.user_id == user.id).delete(
         synchronize_session=False
     )
+
+    # R8 — other users' requests outlive the people who decided or joined them.
+    db.query(ShiftChangeRequest).filter(
+        ShiftChangeRequest.counterpart_user_id == user.id,
+        ShiftChangeRequest.status == LeaveStatus.pending,
+    ).delete(synchronize_session=False)
+    db.query(ShiftChangeRequest).filter(
+        ShiftChangeRequest.counterpart_user_id == user.id
+    ).update(
+        {ShiftChangeRequest.counterpart_user_id: None}, synchronize_session=False
+    )
+    db.query(ShiftChangeRequest).filter(
+        ShiftChangeRequest.decided_by_id == user.id
+    ).update({ShiftChangeRequest.decided_by_id: None}, synchronize_session=False)
+    db.query(SelfArrangeRequest).filter(
+        SelfArrangeRequest.decided_by_id == user.id
+    ).update({SelfArrangeRequest.decided_by_id: None}, synchronize_session=False)
 
     db.delete(user)
     db.commit()

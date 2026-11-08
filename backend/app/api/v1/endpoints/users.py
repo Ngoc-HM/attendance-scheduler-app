@@ -70,7 +70,18 @@ def update_user(
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_user(db: DbSession, user_id: int, admin: AdminUser) -> Response:
-    """F-03 (extension) — admin hard-deletes a user; cascades history."""
+    """F-03 (extension) — admin hard-deletes a user; cascades history.
+
+    The audit row is written after the guards pass and before the delete
+    commits: once an admin's own row is gone, an audit row naming them as
+    actor would violate the foreign key. A self-delete is therefore recorded
+    with no actor and detail ``self``.
+    """
+    user_service.ensure_deletable(db, user_id)
+    is_self = user_id == admin.id
+    audit_service.record(
+        db, None if is_self else admin.id, "user.delete", "User", user_id,
+        detail="self" if is_self else None,
+    )
     user_service.delete(db, user_id, acting_admin_id=admin.id)
-    audit_service.record(db, admin.id, "user.delete", "User", user_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
