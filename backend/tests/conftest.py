@@ -31,6 +31,10 @@ os.environ.setdefault("AUTO_CREATE_TABLES", "true")
 os.environ.setdefault("FIRST_ADMIN_USERNAME", "admin")
 os.environ.setdefault("FIRST_ADMIN_PASSWORD", "admin123")
 os.environ.setdefault("SECRET_KEY", "test-secret")
+# No background autorun: its startup check would generate the real next month
+# in a scheduler thread during any test run after AUTORUN_DAY. Autorun tests
+# switch it on explicitly.
+os.environ.setdefault("AUTORUN_ENABLED", "false")
 
 from fastapi.testclient import TestClient  # noqa: E402
 
