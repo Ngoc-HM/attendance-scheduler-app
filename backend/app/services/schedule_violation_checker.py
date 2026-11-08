@@ -47,8 +47,13 @@ def recheck(
     previous_working: dict[int, dict[date, bool]] | None = None,
     carry_comps: dict[int, int] | None = None,
     annual_off: dict[int, set[date]] | None = None,
+    prev_codes: dict[int, tuple[AttendanceCode, ...]] | None = None,
 ) -> list[str]:
-    """Run every mirrored rule over the grid; return human-readable warnings."""
+    """Run every mirrored rule over the grid; return human-readable warnings.
+
+    ``prev_codes`` holds each user's previous-month codes, oldest first
+    (``BoundaryState.prev_codes``), for off-runs crossing the month start.
+    """
     warnings: list[str] = []
     warnings += check_consecutive(grid, roles, carry_streaks, weeks)
     warnings += check_rolling_rest(grid, roles, weeks, previous_working or {})
@@ -56,7 +61,7 @@ def recheck(
     warnings += check_staffing(grid, roles, weeks, flight_pairs)
     warnings += check_min_a_days(grid, roles, weeks)
     warnings += check_comp_days(grid, roles, weeks, carry_comps or {})
-    warnings += check_off_chain(grid, roles, weeks, annual_off or {})
+    warnings += check_off_chain(grid, roles, weeks, annual_off or {}, prev_codes)
     return warnings
 
 
@@ -103,13 +108,18 @@ def check_consecutive(grid, roles, carry_streaks, weeks) -> list[str]:
     for uid in roles:
         # Role F is T-like (owner 2026-07-22): the consecutive rule applies.
         run = carry_streaks.get(uid, 0)
+        reported = False
         for d in days:
             code = grid.get((uid, d))
             if code is None or code in OFF_CODES:
                 run = 0
+                reported = False
                 continue
             run += 1
-            if run == 6:  # report once per streak, at the breaching day
+            # ``>=``: a carried run may already be 6 or more on day 1 (F7).
+            # Report once per run, at the first breaching day.
+            if run >= 6 and not reported:
+                reported = True
                 warnings.append(
                     f"User {uid}: more than 5 consecutive working days at {d}"
                 )
@@ -117,9 +127,12 @@ def check_consecutive(grid, roles, carry_streaks, weeks) -> list[str]:
     return warnings
 
 
-# Codes the persisted grid stores for approved leave/sick days — they occupy
-# block days without consuming the genuine-X quota (decision #4).
-LEAVE_CODES = {AttendanceCode.AL, AttendanceCode.CD, AttendanceCode.S}
+# Leave/sick codes that occupy block days without consuming the genuine-X
+# quota (decision #4) AND shrink the block's X target: the engine's pins
+# (approved leave) and sick days, which nobody chooses. A CD does not consume
+# the quota either, but it is placed by choice, so like in the engine it does
+# not shrink the target — it competes with the weekly X.
+TARGET_CAP_CODES = {AttendanceCode.AL, AttendanceCode.S}
 
 
 def check_off_quota(grid, roles, weeks) -> list[str]:
@@ -128,12 +141,14 @@ def check_off_quota(grid, roles, weeks) -> list[str]:
     AL/CD/S days do not consume the quota (decision #4) — only X counts.
     The target shrinks when leave fills the block (mirrors the engine's cap,
     2026-07-17): a person on a 6-day leave has only 1 day left for genuine X.
+    Like the engine, only AL (and S) shrink it: 6 AL + 1 CD in a block still
+    misses its one weekly X.
     """
     warnings: list[str] = []
     for uid in roles:
         for block in weeks:
             leave_days = sum(
-                1 for d in block if grid.get((uid, d)) in LEAVE_CODES
+                1 for d in block if grid.get((uid, d)) in TARGET_CAP_CODES
             )
             target = min(
                 partial_block_off_target(len(block)), len(block) - leave_days
@@ -215,30 +230,46 @@ def check_comp_days(grid, roles, weeks, carry_comps) -> list[str]:
     return warnings
 
 
-def check_off_chain(grid, roles, weeks, annual_off) -> list[str]:
+def check_off_chain(grid, roles, weeks, annual_off, prev_codes=None) -> list[str]:
     """Customer rule 2026-06-12 — no more than 5 consecutive OFF days.
 
     Mirrors ``constraints_off_chain``: any 6-day window that is entirely off
-    warns, unless it touches an approved ANNUAL-leave day (the sanctioned long
-    break). Reported once per off-run, at the window where the run starts.
+    warns, unless it holds approved leave — an AL cell, an approved
+    annual-leave day, or an AL among the previous month's codes (ruling R1).
+    Windows reach back into the previous month through ``prev_codes``
+    (oldest first, ending on its last day). Reported once per off-run, at its
+    first non-exempt all-off window.
     """
     days = _days(weeks)
+    if not days:
+        return []
     window = MAX_CONSECUTIVE_OFF + 1
+    prev_codes = prev_codes or {}
     warnings: list[str] = []
     for uid in roles:
         annual = annual_off.get(uid, set())
-        for i in range(len(days) - window + 1):
-            span = days[i : i + window]
-            if any(d in annual for d in span):
+        prev = list(prev_codes.get(uid, ()))[-(window - 1) :]
+        timeline = [
+            (days[0] - timedelta(days=len(prev) - i), code) for i, code in enumerate(prev)
+        ] + [(d, grid.get((uid, d))) for d in days]
+
+        run_start: int | None = None
+        reported = False
+        for i, (_, code) in enumerate(timeline):
+            if code not in OFF_CODES:
+                run_start, reported = None, False
                 continue
-            if not all(grid.get((uid, d)) in OFF_CODES for d in span):
-                continue
-            # Only the first window of an off-run reports (avoid one warning
-            # per day of a long break).
-            if i > 0 and grid.get((uid, days[i - 1])) in OFF_CODES:
-                continue
+            if run_start is None:
+                run_start = i
+            start = i - window + 1
+            if reported or start < run_start:
+                continue  # already reported, or the window is not all off
+            span = timeline[start : i + 1]
+            if any(c is AttendanceCode.AL or d in annual for d, c in span):
+                continue  # holds approved leave (R1)
+            reported = True
             warnings.append(
                 f"User {uid}: more than {MAX_CONSECUTIVE_OFF} consecutive OFF days "
-                f"from {span[0]} — such a break must be registered as annual leave"
+                f"from {span[0][0]} — such a break must be registered as annual leave"
             )
     return warnings

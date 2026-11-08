@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from datetime import date
 
+from sqlalchemy import event
+
 from app.core.config import settings
-from app.core.database import SessionLocal
+from app.core.database import SessionLocal, engine
 from app.core.security import get_password_hash
 from app.models.attendance import AttendanceRecord
 from app.models.enums import AttendanceCode, Role, ScheduleStatus, UserStatus
@@ -14,6 +16,7 @@ from app.models.schedule import MonthlySchedule, ShiftAssignment
 from app.models.user import User
 from app.scheduler import PersonInput, SchedulerEngine, SolverInput
 from app.scheduler.calendar_utils import build_weeks, month_days
+from app.services import carry_over_math
 from app.services.schedule_history import build_boundary_states
 from app.services.user_service import next_user_code
 
@@ -228,5 +231,164 @@ def test_stored_streak_fallback_only_without_any_history(client) -> None:
         assert [none.previous_working[date(2037, 5, d)] for d in range(26, 32)] == [
             False, False, True, True, True, True,
         ]
+        assert none.prev_codes == ()
     finally:
         db.close()
+
+
+def _user(db, username: str, role: Role = Role.A) -> User:
+    user = User(
+        username=username,
+        code=next_user_code(db, role),
+        full_name=username,
+        hashed_password=get_password_hash("pass123"),
+        role=role,
+        status=UserStatus.active,
+    )
+    db.add(user)
+    db.flush()
+    return user
+
+
+def _planned(db, year: int, month: int, cells) -> None:
+    """Add a published schedule for (year, month) with ``cells``:
+    ``[(user_id, day_of_month, code), ...]``."""
+    schedule = MonthlySchedule(year=year, month=month, status=ScheduleStatus.published)
+    db.add(schedule)
+    db.flush()
+    for user_id, day, code in cells:
+        db.add(
+            ShiftAssignment(
+                schedule_id=schedule.id,
+                user_id=user_id,
+                work_date=date(year, month, day),
+                code=code,
+            )
+        )
+
+
+def test_pre_cutoff_cd_does_not_consume_post_cutoff_comp(client, monkeypatch) -> None:
+    """F10 / ruling R3: comp days consumed before HOLIDAY_COMP_EFFECTIVE_FROM
+    only offset what was earned before it — a legacy manual CD never eats the
+    holiday comp earned after the cut-off. A pre-cut-off A/D that its own CD
+    already paid back stays paid back."""
+    effective = date(2051, 3, 10)
+    monkeypatch.setattr(settings, "HOLIDAY_COMP_EFFECTIVE_FROM", effective)
+    holidays = {date(2051, 3, 15), date(2051, 3, 20)}
+
+    A_D, CD, A, D = AttendanceCode.A_D, AttendanceCode.CD, AttendanceCode.A, AttendanceCode.D
+    records = [
+        (date(2051, 2, 3), A_D),   # pre: earns 1
+        (date(2051, 2, 5), CD),    # pre: pays it back
+        (date(2051, 2, 7), CD),    # pre: legacy manual CD, nothing left to pay
+        (date(2051, 3, 15), A),    # post: holiday work earns 1
+        (date(2051, 3, 20), D),    # post: holiday work earns 1
+    ]
+    assert carry_over_math.comp_balance(records, holidays, effective) == 2
+    # A CD after the cut-off consumes post-cut-off comp as before.
+    assert carry_over_math.comp_balance(
+        [*records, (date(2051, 3, 25), CD)], holidays, effective
+    ) == 1
+    # No cut-off: one undivided history, as before.
+    assert carry_over_math.comp_balance(records, holidays, None) == 1
+
+    db = SessionLocal()
+    try:
+        user = _user(db, "history_comp_cutoff")
+        for day in holidays:
+            db.add(Holiday(day=day, name=f"Holiday {day}"))
+        _planned(db, 2051, 2, [(user.id, d.day, c) for d, c in records if d.month == 2])
+        _planned(db, 2051, 3, [(user.id, d.day, c) for d, c in records if d.month == 3])
+        db.commit()
+
+        assert build_boundary_states(db, [user], 2051, 4)[user.id].carry_comp == 2
+    finally:
+        db.close()
+
+
+def test_boundary_states_prev_codes(client) -> None:
+    """``prev_codes`` = the effective codes of the previous month's last six
+    days, oldest first (actual over planned); a missing day cuts it short."""
+    db = SessionLocal()
+    try:
+        full = _user(db, "history_prev_full", Role.T)
+        gap = _user(db, "history_prev_gap", Role.T)
+        X, AD, CD = AttendanceCode.X, AttendanceCode.AD, AttendanceCode.CD
+        _planned(
+            db, 2053, 5,
+            [(full.id, d, X if d in (27, 28) else AD) for d in range(20, 32)]
+            + [(gap.id, d, X) for d in (26, 27, 29, 30, 31)],
+        )
+        db.add(AttendanceRecord(user_id=full.id, work_date=date(2053, 5, 30), code=CD))
+        db.commit()
+
+        states = build_boundary_states(db, [full, gap], 2053, 6)
+        assert states[full.id].prev_codes == (AD, X, X, AD, CD, AD)
+        assert states[full.id].carry_streak == 1
+        assert states[gap.id].prev_codes == (X, X, X)
+        assert states[gap.id].carry_streak == 0
+    finally:
+        db.close()
+
+
+def test_boundary_states_query_count_bounded(client) -> None:
+    """F14: the number of SQL statements does not grow with the number of
+    users (no per-user query, no full-history ORM load)."""
+    db = SessionLocal()
+    try:
+        ids = []
+        for n in range(8):
+            user = _user(db, f"history_queries_{n}")
+            ids.append(user.id)
+        _planned(
+            db, 2052, 5,
+            [
+                (uid, d, AttendanceCode.X if (d + uid) % 7 in (0, 1) else AttendanceCode.A)
+                for uid in ids
+                for d in range(1, 32)
+            ],
+        )
+        for uid in ids:
+            db.add(AttendanceRecord(user_id=uid, work_date=date(2052, 5, 31),
+                                    code=AttendanceCode.A_D))
+        db.commit()
+    finally:
+        db.close()
+
+    fresh = SessionLocal()
+    try:
+
+        history_rows: list[object] = []
+
+        def on_load(session, instance) -> None:
+            if isinstance(instance, (ShiftAssignment, AttendanceRecord)):
+                history_rows.append(instance)
+
+        def count_statements(users: list[User]) -> int:
+            statements: list[str] = []
+
+            def listener(conn, cursor, statement, parameters, context, executemany):
+                statements.append(statement)
+
+            event.listen(engine, "before_cursor_execute", listener)
+            try:
+                states = build_boundary_states(fresh, users, 2052, 6)
+            finally:
+                event.remove(engine, "before_cursor_execute", listener)
+            assert all(states[u.id].carry_comp == 1 for u in users)
+            return len(statements)
+
+        # Load the users up front so lazy refreshes are not counted.
+        loaded = fresh.query(User).filter(User.id.in_(ids)).order_by(User.id).all()
+        event.listen(fresh, "loaded_as_persistent", on_load)
+        try:
+            few = count_statements(loaded[:2])
+            many = count_statements(loaded)
+        finally:
+            event.remove(fresh, "loaded_as_persistent", on_load)
+        assert few == many
+        assert many <= 4
+        # History is aggregated in SQL, never loaded as ORM objects.
+        assert history_rows == []
+    finally:
+        fresh.close()

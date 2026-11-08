@@ -368,5 +368,6 @@ def _recheck_violations(db: Session, schedule: MonthlySchedule) -> list[Constrai
         },
         carry_comps={uid: state.carry_comp for uid, state in boundary.items()},
         annual_off=leave_service.annual_off_dates(db, schedule.year, schedule.month),
+        prev_codes={uid: state.prev_codes for uid, state in boundary.items()},
     )
     return [ConstraintViolation(rule="manual_recheck", message=w) for w in warnings]

@@ -23,6 +23,10 @@ class PersonInput:
     # Premium OFF days (off on Sat/Sun/holiday) received so far — balanced
     # across months by the premium-off fairness objective (decision #6).
     carry_premium_off: int = 0
+    # Effective codes of the previous month's last days, oldest first (at most
+    # six, ending on its last day; cut short at a day with no cell; empty
+    # without history). The off-chain rule reads it across the month boundary.
+    prev_codes: tuple[AttendanceCode, ...] = ()
 
 
 @dataclass(frozen=True)
