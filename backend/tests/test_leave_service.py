@@ -921,3 +921,77 @@ def test_balance_endpoint_self_and_admin(client: TestClient) -> None:
     assert client.get(
         f"{V}/leaves/balance", headers=admin, params={"user_id": 999_999}
     ).status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Review 2 (E): a string longer than its DB column is a 422 at the API, not a
+# 500 from PostgreSQL. The limit is read from the model, so a later column
+# change that forgets the schema fails here.
+# ---------------------------------------------------------------------------
+
+def _long_text_cases():
+    from app.models.attendance import AttendanceRecord
+    from app.models.leave import LeaveRequest
+    from app.models.self_arrange_request import SelfArrangeRequest
+    from app.models.shift_change_request import ShiftChangeRequest
+    from app.models.user import User
+    from app.schemas.attendance import AttendanceUpsert
+    from app.schemas.leave import LeaveCreate
+    from app.schemas.self_arrange import SelfArrangeCreate
+    from app.schemas.shift_change import ShiftChangeCreate
+    from app.schemas.user import UserUpdate
+
+    return [
+        pytest.param(
+            LeaveRequest.__table__.c.note, LeaveCreate, "note", "post", "/leaves",
+            {"start_date": "2061-05-04", "end_date": "2061-05-04"},
+            id="leave-note",
+        ),
+        pytest.param(
+            ShiftChangeRequest.__table__.c.note, ShiftChangeCreate, "note",
+            "post", "/shift-changes",
+            {"work_date": "2061-05-04", "kind": "change_code", "requested_code": "X"},
+            id="shift-change-note",
+        ),
+        pytest.param(
+            SelfArrangeRequest.__table__.c.note, SelfArrangeCreate, "note",
+            "post", "/self-arrange",
+            {"year": 2061, "month": 5,
+             "changes": [{"work_date": "2061-05-04", "code": "X"}]},
+            id="self-arrange-note",
+        ),
+        pytest.param(
+            AttendanceRecord.__table__.c.note, AttendanceUpsert, "note",
+            "put", "/attendance",
+            {"user_id": 1, "work_date": "2061-05-04", "code": "X"},
+            id="attendance-note",
+        ),
+        pytest.param(
+            User.__table__.c.full_name, UserUpdate, "full_name",
+            "patch", "/users/1", {},
+            id="user-full-name",
+        ),
+    ]
+
+
+@pytest.mark.parametrize(
+    ("column", "schema", "field", "method", "path", "body"), _long_text_cases()
+)
+def test_note_longer_than_column_422(
+    client: TestClient, column, schema, field, method, path, body
+) -> None:
+    from pydantic import ValidationError
+
+    limit = column.type.length
+    assert limit, f"{column} has no length"
+    # Exactly the column length is accepted; one more character is not.
+    schema.model_validate({**body, field: "x" * limit})
+    with pytest.raises(ValidationError):
+        schema.model_validate({**body, field: "x" * (limit + 1)})
+
+    admin = _bearer(_token(client, "admin", "admin123"))
+    res = getattr(client, method)(
+        f"{V}{path}", headers=admin, json={**body, field: "x" * (limit + 1)}
+    )
+
+    assert res.status_code == 422, res.text

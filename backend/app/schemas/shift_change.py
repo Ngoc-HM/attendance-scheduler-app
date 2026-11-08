@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.models.enums import AttendanceCode, LeaveStatus, SwapKind
 from app.schemas.common import ORMModel
@@ -19,7 +19,8 @@ class ShiftChangeCreate(BaseModel):
     requested_code: AttendanceCode | None = None
     # Required when kind == swap_with.
     counterpart_user_id: int | None = None
-    note: str | None = None
+    # ShiftChangeRequest.note is String(255).
+    note: str | None = Field(default=None, max_length=255)
 
 
 class ShiftChangeDecision(BaseModel):

@@ -13,7 +13,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.i18n import t
-from app.models.enums import AttendanceCode, ScheduleStatus, SwapKind
+from app.models.enums import AttendanceCode, ScheduleStatus, SwapKind, UserStatus
 from app.models.schedule import MonthlySchedule, ShiftAssignment
 from app.models.shift_change_request import ShiftChangeRequest
 from app.models.user import User
@@ -226,12 +226,18 @@ def apply_shift_change(db: Session, req: ShiftChangeRequest) -> list[str]:
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail=t("user.not_found"))
         if req.requested_code is None:
             raise HTTPException(
-                status.HTTP_422_UNPROCESSABLE_CONTENT,
-                detail="A requested code is required for a code change.",
+                status.HTTP_422_UNPROCESSABLE_CONTENT, detail=t("swap.code_required")
             )
         # Re-checked here too: a request filed before the rule existed must
         # not slip an AL/CD/admin code through approval.
         role_code_validation.validate_requestable(requester.role, req.requested_code)
+        # B4: the cell may have become leave (AL), a comp day (CD), sickness or
+        # an admin code since the request was filed — those are not re-coded
+        # by request (the AL would still count against the quota).
+        if mine.code not in role_code_validation.requestable_codes(requester.role):
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_CONTENT, detail=t("swap.cell_locked")
+            )
         mine.code = req.requested_code
         mine.is_manual_override = True
     else:  # swap_with — exchange the two users' codes for that date
@@ -246,6 +252,10 @@ def apply_shift_change(db: Session, req: ShiftChangeRequest) -> list[str]:
         counterpart = db.get(User, req.counterpart_user_id)
         if requester is None or counterpart is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail=t("user.not_found"))
+        if counterpart.status is not UserStatus.active:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_CONTENT, detail=t("swap.counterpart_inactive")
+            )
         # Each person's resulting code must be one they could request: a swap
         # must not hand over leave (AL), a comp day (CD) or an admin code.
         role_code_validation.validate_requestable(requester.role, theirs.code)
@@ -257,7 +267,9 @@ def apply_shift_change(db: Session, req: ShiftChangeRequest) -> list[str]:
     if schedule.status is ScheduleStatus.published:
         for cell in changed:
             attendance_service.sync_planned_cell(db, cell.user_id, cell.work_date, cell.code)
-    db.commit()
+    # No commit: the caller commits the cells together with the request's
+    # status (one transaction under the request's row lock).
+    db.flush()
     return [f"{v.rule}: {v.message}" for v in _recheck_violations(db, schedule)]
 
 

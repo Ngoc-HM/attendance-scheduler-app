@@ -24,7 +24,8 @@ class SelfArrangeCreate(BaseModel):
     year: int
     month: int = Field(ge=1, le=12)
     changes: list[SelfArrangeChange] = Field(min_length=1, max_length=MAX_CHANGES)
-    note: str | None = None
+    # SelfArrangeRequest.note is String(255).
+    note: str | None = Field(default=None, max_length=255)
 
 
 class SelfArrangeDecision(BaseModel):

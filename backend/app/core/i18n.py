@@ -66,6 +66,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "swap.code_required": "A requested code is required for a change request.",
         "swap.no_schedule": "There is no schedule for that date yet.",
         "swap.code_not_requestable": "Employees may only request their regular working or off codes.",
+        "swap.cell_locked": "Leave, comp, sick and admin-assigned days cannot be changed by request — only regular working or off days.",
+        "swap.counterpart_self": "You cannot swap a shift with yourself.",
+        "swap.counterpart_inactive": "That colleague's account is not active.",
+        "swap.counterpart_other_role": "You can only swap with a colleague who works the same shift codes.",
         # --- Attendance / holidays (F-10..F-13) ---
         "attendance.not_found": "Attendance record not found.",
         "holiday.not_found": "Holiday not found.",
@@ -139,6 +143,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "swap.code_required": "Cần chọn mã ca muốn đổi.",
         "swap.no_schedule": "Chưa có lịch cho ngày này.",
         "swap.code_not_requestable": "Nhân viên chỉ được yêu cầu mã ca làm hoặc nghỉ thông thường.",
+        "swap.cell_locked": "Không thể yêu cầu đổi ngày nghỉ phép, nghỉ bù, ngày ốm hoặc ngày do admin gán — chỉ đổi được ngày làm hoặc ngày nghỉ thường.",
+        "swap.counterpart_self": "Không thể hoán đổi ca với chính mình.",
+        "swap.counterpart_inactive": "Tài khoản của đồng nghiệp này không còn hoạt động.",
+        "swap.counterpart_other_role": "Chỉ được hoán đổi ca với đồng nghiệp làm cùng loại mã ca.",
         # --- Attendance / holidays (F-10..F-13) ---
         "attendance.not_found": "Không tìm thấy bản ghi chấm công.",
         "holiday.not_found": "Không tìm thấy ngày lễ.",

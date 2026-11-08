@@ -15,7 +15,8 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.i18n import t
-from app.models.enums import LeaveStatus, SwapKind
+from app.models.enums import LeaveStatus, SwapKind, UserStatus
+from app.models.schedule import MonthlySchedule, ShiftAssignment
 from app.models.shift_change_request import ShiftChangeRequest
 from app.models.user import User
 from app.schemas.shift_change import ShiftChangeCreate
@@ -25,8 +26,16 @@ from app.services import role_code_validation
 # Internal helpers
 # ---------------------------------------------------------------------------
 
-def _get_or_404(db: Session, req_id: int) -> ShiftChangeRequest:
-    req = db.get(ShiftChangeRequest, req_id)
+def _get_locked_or_404(db: Session, req_id: int) -> ShiftChangeRequest:
+    """Load the request with a row lock held until the caller commits
+    (``FOR UPDATE`` on PostgreSQL; SQLite ignores it)."""
+    req = (
+        db.query(ShiftChangeRequest)
+        .filter(ShiftChangeRequest.id == req_id)
+        .with_for_update()
+        .populate_existing()
+        .one_or_none()
+    )
     if req is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=t("swap.not_found"))
     return req
@@ -37,6 +46,27 @@ def _get_user_or_404(db: Session, user_id: int) -> User:
     if user is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=t("user.not_found"))
     return user
+
+
+def _validate_counterpart(db: Session, requester: User, counterpart_id: int) -> None:
+    """A swap partner must exist, be someone else, be active and work the same
+    codes — otherwise the request could only fail later, at approval."""
+    if counterpart_id == requester.id:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT, detail=t("swap.counterpart_self")
+        )
+    counterpart = _get_user_or_404(db, counterpart_id)
+    if counterpart.status is not UserStatus.active:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT, detail=t("swap.counterpart_inactive")
+        )
+    # T and F share {AD, X}: they may swap; A, T/F and M may not mix.
+    if role_code_validation.requestable_codes(
+        counterpart.role
+    ) != role_code_validation.requestable_codes(requester.role):
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT, detail=t("swap.counterpart_other_role")
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -53,7 +83,11 @@ def create_request(
     Returns (ShiftChangeRequest, strict_review) where strict_review reflects
     whether the requester has a fixed role (A1–A4).
 
-    Raises 400 if kind-specific required fields are missing.
+    Raises 400 if kind-specific required fields are missing; 404 for an
+    unknown swap partner and 422 for oneself, an inactive partner or one with
+    other codes; 409 ``swap.own_cell_only`` when the requester has no planned
+    cell that day; 422 ``swap.cell_locked`` for a code change on a cell that
+    is not a regular working/off day (AL, CD, S, A/D, T, B).
     """
     # Validate kind-specific fields.
     if payload.kind is SwapKind.change_code and payload.requested_code is None:
@@ -68,6 +102,34 @@ def create_request(
         # Employees ask only for their regular working / off codes; leave (AL),
         # comp days (CD), sickness (S) and admin codes (A/D, T, B) are refused.
         role_code_validation.validate_requestable(requester.role, payload.requested_code)
+
+    if payload.kind is SwapKind.swap_with and payload.counterpart_user_id is not None:
+        _validate_counterpart(db, requester, payload.counterpart_user_id)
+
+    # The request is about the requester's own planned cell: no cell (no
+    # schedule for that month, or not on it) means nothing to change.
+    cell = (
+        db.query(ShiftAssignment)
+        .join(MonthlySchedule, ShiftAssignment.schedule_id == MonthlySchedule.id)
+        .filter(
+            MonthlySchedule.year == payload.work_date.year,
+            MonthlySchedule.month == payload.work_date.month,
+            ShiftAssignment.user_id == current_user_id,
+            ShiftAssignment.work_date == payload.work_date,
+        )
+        .one_or_none()
+    )
+    if cell is None:
+        raise HTTPException(status.HTTP_409_CONFLICT, detail=t("swap.own_cell_only"))
+    if (
+        payload.kind is SwapKind.change_code
+        and cell.code not in role_code_validation.requestable_codes(requester.role)
+    ):
+        # Leave (AL), comp (CD), sickness and admin-assigned days are not the
+        # employee's to re-code (B4); approval checks the cell again.
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT, detail=t("swap.cell_locked")
+        )
 
     req = ShiftChangeRequest(
         requester_id=current_user_id,
@@ -133,7 +195,10 @@ def decide(
 
     Returns (request, strict_review, warnings).
     """
-    req = _get_or_404(db, req_id)
+    # Row lock (PostgreSQL): a second approve waits here until the first one
+    # commits, then sees the request decided — a swap is never applied twice.
+    # Cells and status are committed together below.
+    req = _get_locked_or_404(db, req_id)
 
     if req.status != LeaveStatus.pending:
         raise HTTPException(status.HTTP_409_CONFLICT, detail=t("swap.already_decided"))
