@@ -39,13 +39,13 @@ def upgrade() -> None:
         sa.Column(
             "created_at",
             sa.DateTime(),
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
             nullable=False,
         ),
         sa.Column(
             "updated_at",
             sa.DateTime(),
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
             nullable=False,
         ),
         sa.ForeignKeyConstraint(["requester_id"], ["users.id"]),
