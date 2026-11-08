@@ -11,8 +11,11 @@ regardless.
 Catch-up (review C4): a host that was off at 00:05 must not lose the month.
 The check runs on ANY day after ``AUTORUN_DAY`` while M+1 has no schedule;
 the daily job tolerates a wake-up up to an hour late, and the app runs the
-check once at startup. Failures are logged as errors; a next month without
-flight data is logged as a warning (the draft is planned without flights).
+check once at startup. The same check also drafts the CURRENT month when it
+has no schedule at all (host off across the whole run window, review M3).
+Failures are logged as errors; a next month without flight data is logged as
+a warning (the draft is planned without flights); losing the insert race to
+another backend process is "already exists", logged at INFO (review M4).
 
 ``maybe_run_autorun`` is a pure-ish trigger (testable without APScheduler);
 ``start_scheduler`` wires it into a background scheduler for the app lifespan.
@@ -25,6 +28,8 @@ from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.background import BackgroundScheduler
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
 
 from app.core.business_time import business_today
 from app.core.config import settings
@@ -61,16 +66,34 @@ def maybe_run_autorun(today: date | None = None) -> bool:
     today = today or business_today()
     if not settings.AUTORUN_ENABLED or today.day <= settings.AUTORUN_DAY:
         return False
+    return _draft_if_missing(*next_month(today))
 
-    year, month = next_month(today)
+
+def maybe_draft_current_month(today: date | None = None) -> bool:
+    """Draft the CURRENT month when it has no schedule at all (review M3).
+
+    A host that was off from day ``AUTORUN_DAY + 1`` to the end of the month
+    (or a fresh install) reaches a month nobody planned; the startup and the
+    daily catch-up check draft it on any day so the admin has a starting
+    point. An existing schedule is never touched. Returns True when a draft
+    was generated.
+    """
+    if not settings.AUTORUN_ENABLED:
+        return False
+    today = today or business_today()
+    return _draft_if_missing(today.year, today.month)
+
+
+def _draft_if_missing(year: int, month: int) -> bool:
+    """Generate a draft for ``year-month`` unless a schedule exists already.
+
+    Never raises (the scheduler loop must survive). Losing the insert race to
+    another backend process (unique ``uq_schedule_year_month``) is the same
+    outcome as finding the schedule: logged at INFO (review M4).
+    """
     db = SessionLocal()
     try:
-        exists = (
-            db.query(MonthlySchedule)
-            .filter(MonthlySchedule.year == year, MonthlySchedule.month == month)
-            .one_or_none()
-        )
-        if exists is not None:
+        if _schedule_exists(db, year, month):
             logger.info("Autorun: schedule %s-%02d already exists, skipping.", year, month)
             return False
 
@@ -109,6 +132,18 @@ def maybe_run_autorun(today: date | None = None) -> bool:
             detail=f"{year}-{month:02d} autorun violations={len(result.violations)}",
         )
         return True
+    except IntegrityError:
+        db.rollback()
+        if _schedule_exists(db, year, month):
+            # Another backend inserted the month while this one was solving.
+            logger.info(
+                "Autorun: schedule %s-%02d already exists (created concurrently), "
+                "skipping.",
+                year, month,
+            )
+        else:
+            logger.exception("Autorun: generation for %s-%02d failed.", year, month)
+        return False
     except Exception:  # job must never crash the scheduler loop
         logger.exception("Autorun: generation for %s-%02d failed.", year, month)
         return False
@@ -116,8 +151,22 @@ def maybe_run_autorun(today: date | None = None) -> bool:
         db.close()
 
 
+def _schedule_exists(db: Session, year: int, month: int) -> bool:
+    return (
+        db.query(MonthlySchedule.id)
+        .filter(MonthlySchedule.year == year, MonthlySchedule.month == month)
+        .first()
+        is not None
+    )
+
+
 def _run_autorun_job() -> None:
-    """Scheduler entry point (looked up at call time, so tests can stub it)."""
+    """Scheduler entry point (looked up at call time, so tests can stub it).
+
+    The current month first (its plan is next month's boundary state), then
+    next month once the registration window has closed.
+    """
+    maybe_draft_current_month()
     maybe_run_autorun()
 
 
