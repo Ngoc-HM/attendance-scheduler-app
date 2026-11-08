@@ -23,8 +23,8 @@ Future<void> main() async {
     });
   }
 
-  // Load runtime config (API base URL). Optional: falls back to the
-  // --dart-define value / default if the file is absent.
+  // Load runtime config (API base URL). Optional; a non-empty
+  // --dart-define=API_BASE_URL wins over it (see AppConfig).
   await dotenv.load(fileName: '.env', isOptional: true);
   runApp(const ProviderScope(child: AttendanceSchedulerApp()));
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/network/api_error_message.dart';
 import '../../../../design_system/design_system.dart';
 import '../../../../i18n/app_localizations.dart';
 import '../../data/datasources/time_clock_remote_datasource.dart';
@@ -36,8 +37,11 @@ class _TimeClockPageState extends ConsumerState<TimeClockPage> {
       context,
       ok
           ? '${isCheckIn ? l.text('clockCheckedInAt') : l.text('clockCheckedOutAt')} ${_hm(DateTime.now())}'
-          : (ref.read(timeClockControllerProvider).error ??
-              l.text('clockActionFailed')),
+          : apiErrorMessage(
+              l,
+              ref.read(timeClockControllerProvider).error,
+              fallbackKey: 'clockActionFailed',
+            ),
       tone: ok ? DsTone.success : DsTone.danger,
     );
   }

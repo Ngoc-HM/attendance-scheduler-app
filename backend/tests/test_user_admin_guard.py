@@ -13,6 +13,7 @@ from app.models.audit import AuditLog
 from app.models.enums import AttendanceCode, LeaveStatus, LeaveType, Role, UserStatus
 from app.models.leave import LeaveRequest
 from app.models.user import User
+from app.services import user_service
 
 V = "/api/v1"
 
@@ -29,27 +30,18 @@ def reset_db_state(request: pytest.FixtureRequest) -> None:
     request.getfixturevalue("client")
     db = SessionLocal()
     try:
-        seed = db.query(User).filter(User.username == "admin").one_or_none()
-        if seed is not None:
-            seed.role = Role.M
-            seed.status = UserStatus.active
-        non_seed = (
-            db.query(User)
-            .filter(User.username != "admin")
-            .all()
-        )
-        for u in non_seed:
-            db.query(AttendanceRecord).filter(
-                AttendanceRecord.user_id == u.id
-            ).delete(synchronize_session=False)
-            db.query(LeaveRequest).filter(LeaveRequest.user_id == u.id).delete(
-                synchronize_session=False
-            )
-            db.query(AuditLog).filter(AuditLog.actor_id == u.id).update(
-                {AuditLog.actor_id: None}, synchronize_session=False
-            )
-            db.delete(u)
+        seed = db.query(User).filter(User.username == "admin").one()
+        seed.role = Role.M
+        seed.status = UserStatus.active
         db.commit()
+        # Foreign keys are enforced, so remove each user through the service:
+        # it clears every child row (schedule cells, requests, clock entries…)
+        # and nulls the references other users' rows keep.
+        non_seed_ids = [
+            uid for (uid,) in db.query(User.id).filter(User.id != seed.id).all()
+        ]
+        for uid in non_seed_ids:
+            user_service.delete(db, uid, acting_admin_id=seed.id)
     finally:
         db.close()
     yield

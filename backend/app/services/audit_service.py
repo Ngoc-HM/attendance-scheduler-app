@@ -5,10 +5,13 @@ compliance trail exists. An audit row that cannot be written is an incident,
 not a footnote: the failure is logged with a stack trace and surfaced to the
 caller as HTTP 500 so it is never silently lost.
 
-Limitation (documented in ``docs/deployment-guide.md``): services commit the
-business change before the endpoint records the audit row, so a failed audit
-write can leave the change persisted while the client receives a 500. The
-error log carries the full action/entity context for reconciliation.
+Limitation (documented in ``docs/deployment-guide.md``): for most actions the
+service commits the business change before the endpoint records the audit
+row, so a failed audit write can leave the change persisted while the client
+receives a 500. The error log carries the full action/entity context for
+reconciliation. User deletion does not use ``record``: its endpoint adds the
+``user.delete`` row to the session and ``user_service.delete`` commits it
+together with the delete (both or neither).
 """
 
 from __future__ import annotations
@@ -18,6 +21,7 @@ import logging
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.core.i18n import t
 from app.models.audit import AuditLog
 
 logger = logging.getLogger(__name__)
@@ -50,6 +54,6 @@ def record(
         )
         raise HTTPException(
             status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Audit log write failed; the action was not confirmed.",
+            detail=t("audit.write_failed"),
         ) from exc
     return row

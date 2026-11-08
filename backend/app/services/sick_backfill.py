@@ -30,7 +30,9 @@ class BackfillProposal:
     user_id: int
     new_code: AttendanceCode  # always A/D (§6)
     forced: bool              # True when the recently-sick rule applied
-    reason: str
+    # i18n catalog key explaining the pick (shown to the admin only; never
+    # stored on the cover row — it would reveal a colleague's sickness, §9.1).
+    reason_key: str
 
 
 def needs_cover(dropped_code: AttendanceCode | None) -> bool:
@@ -50,6 +52,8 @@ def pick_candidate(
     ``day_codes``: that day's code per user (actuals, falling back to plan).
     ``recently_sick``: user ids with an S in the previous 30 days, most
     recent first. ``month_ad_counts``: A/D doubles already worked this month.
+    ``roles``: the role of every ACTIVE user — anyone missing from it
+    (disabled, pending, deleted) is never a candidate (B6).
     """
     candidates = [
         uid
@@ -69,7 +73,7 @@ def pick_candidate(
                 user_id=uid,
                 new_code=AttendanceCode.A_D,
                 forced=True,
-                reason="recently sick — forced A/D cover (§6)",
+                reason_key="attendance.sick_cover_forced",
             )
 
     # 2. Fairness: fewest A/D doubles this month, then lowest id.
@@ -78,5 +82,5 @@ def pick_candidate(
         user_id=chosen,
         new_code=AttendanceCode.A_D,
         forced=False,
-        reason="fewest A/D doubles this month",
+        reason_key="attendance.sick_cover_fewest_ad",
     )

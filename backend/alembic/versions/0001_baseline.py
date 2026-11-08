@@ -1,8 +1,10 @@
 """baseline — schema as it existed before this plan (pre carry_premium_off /
 shift_change_requests; those land in 0002).
 
-Existing dev databases created via ``create_all`` should be stamped at this
-revision (``alembic stamp 0001``); fresh databases run it normally.
+Fresh databases run it normally. A database created via ``create_all`` holds
+the schema of the code that created it, not this baseline: stamp that code's
+head (``alembic stamp head`` for the current code), never ``0001`` — the later
+migrations would then fail with DuplicateTable.
 
 Revision ID: 0001
 Revises:
@@ -28,8 +30,8 @@ def upgrade() -> None:
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('day', sa.Date(), nullable=False),
     sa.Column('flight_pairs', sa.Integer(), nullable=False),
-    sa.Column('created_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
-    sa.Column('updated_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
+    sa.Column('created_at', sa.DateTime(), server_default=sa.func.now(), nullable=False),
+    sa.Column('updated_at', sa.DateTime(), server_default=sa.func.now(), nullable=False),
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_flight_days_day'), 'flight_days', ['day'], unique=True)
@@ -40,8 +42,8 @@ def upgrade() -> None:
     sa.Column('route', sa.String(length=32), nullable=True),
     sa.Column('sta', sa.Time(), nullable=True),
     sa.Column('std', sa.Time(), nullable=True),
-    sa.Column('created_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
-    sa.Column('updated_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
+    sa.Column('created_at', sa.DateTime(), server_default=sa.func.now(), nullable=False),
+    sa.Column('updated_at', sa.DateTime(), server_default=sa.func.now(), nullable=False),
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_flights_day'), 'flights', ['day'], unique=False)
@@ -49,8 +51,8 @@ def upgrade() -> None:
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('day', sa.Date(), nullable=False),
     sa.Column('name', sa.String(length=128), nullable=False),
-    sa.Column('created_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
-    sa.Column('updated_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
+    sa.Column('created_at', sa.DateTime(), server_default=sa.func.now(), nullable=False),
+    sa.Column('updated_at', sa.DateTime(), server_default=sa.func.now(), nullable=False),
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_holidays_day'), 'holidays', ['day'], unique=True)
@@ -61,8 +63,8 @@ def upgrade() -> None:
     sa.Column('status', sa.Enum('draft', 'published', name='schedule_status'), nullable=False),
     sa.Column('generated_at', sa.DateTime(), nullable=True),
     sa.Column('note', sa.String(length=255), nullable=True),
-    sa.Column('created_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
-    sa.Column('updated_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
+    sa.Column('created_at', sa.DateTime(), server_default=sa.func.now(), nullable=False),
+    sa.Column('updated_at', sa.DateTime(), server_default=sa.func.now(), nullable=False),
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('year', 'month', name='uq_schedule_year_month')
     )
@@ -76,8 +78,8 @@ def upgrade() -> None:
     sa.Column('annual_leave_balance', sa.Integer(), nullable=False),
     sa.Column('carry_comp', sa.Integer(), nullable=False),
     sa.Column('carry_streak', sa.Integer(), nullable=False),
-    sa.Column('created_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
-    sa.Column('updated_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
+    sa.Column('created_at', sa.DateTime(), server_default=sa.func.now(), nullable=False),
+    sa.Column('updated_at', sa.DateTime(), server_default=sa.func.now(), nullable=False),
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_users_username'), 'users', ['username'], unique=True)
@@ -88,8 +90,8 @@ def upgrade() -> None:
     sa.Column('code', sa.Enum('A', 'D', 'A_D', 'AD', 'X', 'CD', 'O_D', 'T', 'B', 'S', 'AL', name='attendance_code'), nullable=False),
     sa.Column('recorded_by', sa.Integer(), nullable=True),
     sa.Column('note', sa.String(length=255), nullable=True),
-    sa.Column('created_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
-    sa.Column('updated_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
+    sa.Column('created_at', sa.DateTime(), server_default=sa.func.now(), nullable=False),
+    sa.Column('updated_at', sa.DateTime(), server_default=sa.func.now(), nullable=False),
     sa.ForeignKeyConstraint(['recorded_by'], ['users.id'], ),
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
     sa.PrimaryKeyConstraint('id'),
@@ -104,7 +106,7 @@ def upgrade() -> None:
     sa.Column('entity', sa.String(length=64), nullable=False),
     sa.Column('entity_id', sa.Integer(), nullable=True),
     sa.Column('detail', sa.Text(), nullable=True),
-    sa.Column('created_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
+    sa.Column('created_at', sa.DateTime(), server_default=sa.func.now(), nullable=False),
     sa.ForeignKeyConstraint(['actor_id'], ['users.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
@@ -118,8 +120,8 @@ def upgrade() -> None:
     sa.Column('leave_type', sa.Enum('monthly', 'annual', name='leave_type'), nullable=False),
     sa.Column('status', sa.Enum('pending', 'approved', 'rejected', name='leave_status'), nullable=False),
     sa.Column('note', sa.String(length=255), nullable=True),
-    sa.Column('created_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
-    sa.Column('updated_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
+    sa.Column('created_at', sa.DateTime(), server_default=sa.func.now(), nullable=False),
+    sa.Column('updated_at', sa.DateTime(), server_default=sa.func.now(), nullable=False),
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
@@ -131,8 +133,8 @@ def upgrade() -> None:
     sa.Column('work_date', sa.Date(), nullable=False),
     sa.Column('code', sa.Enum('A', 'D', 'A_D', 'AD', 'X', 'CD', 'O_D', 'T', 'B', 'S', 'AL', name='attendance_code'), nullable=False),
     sa.Column('is_manual_override', sa.Boolean(), nullable=False),
-    sa.Column('created_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
-    sa.Column('updated_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
+    sa.Column('created_at', sa.DateTime(), server_default=sa.func.now(), nullable=False),
+    sa.Column('updated_at', sa.DateTime(), server_default=sa.func.now(), nullable=False),
     sa.ForeignKeyConstraint(['schedule_id'], ['monthly_schedules.id'], ),
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
     sa.PrimaryKeyConstraint('id'),

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../../core/network/api_exception.dart';
+import '../../../../core/network/api_error_message.dart';
 import '../../../../design_system/design_system.dart';
 import '../../../../i18n/app_localizations.dart';
 import '../../../auth/domain/entities/user.dart';
@@ -20,6 +20,11 @@ class UsersPage extends ConsumerWidget {
     final controller = ref.read(usersControllerProvider.notifier);
     final users = usersAsync.asData?.value ?? const [];
     final currentUser = ref.watch(authControllerProvider).user;
+    final auth = ref.read(authControllerProvider.notifier);
+    // After the admin changed their own account, re-read GET /users/me so a
+    // self-demotion drops the admin UI (and a self-disable ends the session).
+    Future<void> Function()? refreshIfSelf(int targetId) =>
+        targetId == currentUser?.id ? auth.refreshCurrentUser : null;
 
     return DsUsersView(
       users: [
@@ -44,27 +49,39 @@ class UsersPage extends ConsumerWidget {
         context,
         controller,
         users.firstWhere((user) => user.id == id),
+        afterSelfEdit: refreshIfSelf(id),
       ),
       onDisable: (id) =>
           _confirmSelfOrAdmin(context, controller, currentUser?.id, id, (ctrl) {
         return ctrl.setStatus(id, 'disabled');
-      }, warningKey: 'selfActionWarning'),
+      }, warningKey: 'selfActionWarning', afterSelfEdit: refreshIfSelf(id)),
       onEnable: (id) =>
           _confirmSelfOrAdmin(context, controller, currentUser?.id, id, (ctrl) {
         return ctrl.setStatus(id, 'active');
-      }, warningKey: 'selfActionWarning'),
+      }, warningKey: 'selfActionWarning', afterSelfEdit: refreshIfSelf(id)),
       onChangeRole: (id, role) => _confirmChangeRole(
         context,
         controller,
         currentUser?.id,
         id,
         role,
+        afterSelfEdit: refreshIfSelf(id),
       ),
-      onDelete: (id) => _confirmDelete(context, controller, currentUser?.id, id),
+      // A deleted account's token is dead: re-reading /users/me (or the
+      // list) would come back 401 and end the session as "expired". Deleting
+      // yourself is deliberate, so it is a plain logout instead.
+      onDelete: (id) => _confirmDelete(
+        context,
+        controller,
+        currentUser?.id,
+        id,
+        afterSelfEdit: id == currentUser?.id ? auth.logout : null,
+      ),
       onEditQuota: (id) => _editQuota(
         context,
         controller,
         users.firstWhere((user) => user.id == id),
+        afterSelfEdit: refreshIfSelf(id),
       ),
     );
   }
@@ -74,8 +91,9 @@ class UsersPage extends ConsumerWidget {
   Future<void> _editQuota(
     BuildContext context,
     UsersController controller,
-    User user,
-  ) async {
+    User user, {
+    Future<void> Function()? afterSelfEdit,
+  }) async {
     final l = AppLocalizations.of(context);
     final quota = await showDialog<int>(
       context: context,
@@ -94,6 +112,7 @@ class UsersPage extends ConsumerWidget {
         l.text('annualLeaveQuotaUpdated'),
         tone: DsTone.success,
       ),
+      afterSelfEdit: afterSelfEdit,
     );
   }
 
@@ -106,8 +125,9 @@ class UsersPage extends ConsumerWidget {
   Future<void> _confirmApprove(
     BuildContext context,
     UsersController controller,
-    User user,
-  ) async {
+    User user, {
+    Future<void> Function()? afterSelfEdit,
+  }) async {
     final l = AppLocalizations.of(context);
     var selected = user.role == UserRole.m ? UserRole.t : user.role;
     final role = await showDialog<UserRole>(
@@ -150,7 +170,11 @@ class UsersPage extends ConsumerWidget {
       ),
     );
     if (role == null || !context.mounted) return;
-    await _runMutation(context, controller.approve(user.id, role));
+    await _runMutation(
+      context,
+      controller.approve(user.id, role),
+      afterSelfEdit: afterSelfEdit,
+    );
   }
 
   /// Confirm before changing a role: the backend reassigns the account code to
@@ -163,8 +187,9 @@ class UsersPage extends ConsumerWidget {
     UsersController controller,
     int? currentUserId,
     int targetId,
-    String role,
-  ) async {
+    String role, {
+    Future<void> Function()? afterSelfEdit,
+  }) async {
     final l = AppLocalizations.of(context);
     final isSelf = currentUserId == targetId;
     final ok = await showDialog<bool>(
@@ -193,6 +218,7 @@ class UsersPage extends ConsumerWidget {
       context,
       controller.setRole(targetId, UserRoleX.fromApi(role)),
       onWarnings: _showWarnings,
+      afterSelfEdit: afterSelfEdit,
     );
   }
 
@@ -203,6 +229,7 @@ class UsersPage extends ConsumerWidget {
     int targetId,
     Future<List<String>> Function(UsersController ctrl) action, {
     required String warningKey,
+    Future<void> Function()? afterSelfEdit,
   }) async {
     final l = AppLocalizations.of(context);
     final isSelf = currentUserId == targetId;
@@ -227,15 +254,21 @@ class UsersPage extends ConsumerWidget {
       if (!(ok ?? false)) return;
     }
     if (!context.mounted) return;
-    await _runMutation(context, action(controller), onWarnings: _showWarnings);
+    await _runMutation(
+      context,
+      action(controller),
+      onWarnings: _showWarnings,
+      afterSelfEdit: afterSelfEdit,
+    );
   }
 
   Future<void> _confirmDelete(
     BuildContext context,
     UsersController controller,
     int? currentUserId,
-    int targetId,
-  ) async {
+    int targetId, {
+    Future<void> Function()? afterSelfEdit,
+  }) async {
     final l = AppLocalizations.of(context);
     final isSelf = currentUserId == targetId;
     final ok = await showDialog<bool>(
@@ -268,37 +301,42 @@ class UsersPage extends ConsumerWidget {
     if (!(ok ?? false) || !context.mounted) return;
     await _runMutation(
       context,
-      controller.delete(targetId),
+      controller.delete(targetId, reload: !isSelf),
       onSuccess: () => DsFeedback.show(context, l.text('userDeleted'), tone: DsTone.success),
+      afterSelfEdit: afterSelfEdit,
     );
   }
 
   /// Runs a mutation, shows warnings if any, and surfaces backend errors
-  /// (e.g. last-admin lockout → 409). Returns silently on success. Nothing is
-  /// shown once [context] is gone (page left while the request was in flight).
+  /// (e.g. last-admin lockout → 409) by status code, see [apiErrorMessage].
+  /// On success, [afterSelfEdit] (set when the admin edited their own
+  /// account) re-reads the signed-in user, or signs out after a self-delete.
+  /// Nothing is shown once [context] is gone (page left while the request
+  /// was in flight).
   Future<void> _runMutation(
     BuildContext context,
     Future<dynamic> future, {
     void Function(BuildContext, List<String> warnings)? onWarnings,
     VoidCallback? onSuccess,
+    Future<void> Function()? afterSelfEdit,
   }) async {
     final l = AppLocalizations.of(context);
+    final Object? result;
     try {
-      final result = await future;
+      result = await future;
+    } catch (e) {
       if (!context.mounted) return;
+      DsFeedback.show(context, apiErrorMessage(l, e), tone: DsTone.danger);
+      return;
+    }
+    if (context.mounted) {
       final warnings = result is List<String> ? result : <String>[];
       if (warnings.isNotEmpty && onWarnings != null) {
         onWarnings(context, warnings);
       }
       onSuccess?.call();
-    } on ApiException catch (e) {
-      if (!context.mounted) return;
-      final message = _mapGuardMessage(l, e);
-      DsFeedback.show(context, message, tone: DsTone.danger);
-    } catch (_) {
-      if (!context.mounted) return;
-      DsFeedback.show(context, l.loadFailed, tone: DsTone.danger);
     }
+    if (afterSelfEdit != null) await afterSelfEdit();
   }
 
   void _showWarnings(BuildContext context, List<String> warnings) {
@@ -307,12 +345,4 @@ class UsersPage extends ConsumerWidget {
     }
   }
 
-  String _mapGuardMessage(AppLocalizations l, ApiException e) {
-    if (e.message == 'You cannot remove or disable the last remaining admin.' ||
-        e.message ==
-            'Không thể hạ quyền hoặc vô hiệu hoá admin cuối cùng.') {
-      return l.text('lastAdminWarning');
-    }
-    return e.message;
-  }
 }

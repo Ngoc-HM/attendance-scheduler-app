@@ -1,3 +1,9 @@
+// Pixel goldens rendered on macOS. Font rasterisation differs on Linux and
+// Windows, so CI runs these only on the macOS job (`flutter test --tags golden`)
+// and every other job runs `flutter test --exclude-tags golden`.
+@Tags(['golden'])
+library;
+
 import 'package:attendance_scheduler_app/design_system/design_system.dart';
 import 'package:attendance_scheduler_app/features/auth/presentation/pages/login_page.dart';
 import 'package:attendance_scheduler_app/features/home/presentation/pages/home_shell.dart';

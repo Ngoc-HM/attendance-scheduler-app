@@ -20,7 +20,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.i18n import t
-from app.models.enums import AttendanceCode, LeaveStatus, ScheduleStatus
+from app.models.enums import AttendanceCode, LeaveStatus
 from app.models.schedule import MonthlySchedule, ShiftAssignment
 from app.models.self_arrange_request import SelfArrangeRequest
 from app.models.user import User
@@ -205,8 +205,9 @@ def decide(
             cell = own[c.work_date]
             cell.code = c.code
             cell.is_manual_override = True
-            if schedule.status is ScheduleStatus.published:
-                attendance_service.sync_planned_cell(db, cell.user_id, cell.work_date, c.code)
+            # Every edit moves a still-seeded actual (I1; _validate only
+            # accepts a published month anyway).
+            attendance_service.sync_planned_cell(db, cell.user_id, cell.work_date, c.code)
         # Informational hard-rule recheck for the admin (same as F-09 edits).
         warnings = [
             f"{v.rule}: {v.message}"

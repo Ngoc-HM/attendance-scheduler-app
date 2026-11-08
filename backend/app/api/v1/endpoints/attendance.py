@@ -10,6 +10,7 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from app.api.deps import ActiveUser, AdminUser, DbSession
+from app.api.params import MonthQuery, YearQuery
 from app.schemas.attendance import (
     AttendanceRead,
     AttendanceUpsert,
@@ -21,26 +22,27 @@ router = APIRouter()
 
 
 @router.get("", response_model=list[AttendanceRead])
-def list_attendance(db: DbSession, year: int, month: int, _admin: AdminUser):
+def list_attendance(db: DbSession, year: YearQuery, month: MonthQuery, _admin: AdminUser):
     """F-11 — actual attendance for a month. Admin-only: records may carry the
     sick code ``S``, which is special-category health data (§9.1)."""
     return attendance_service.list_month(db, year, month)
 
 
 @router.get("/me", response_model=list[AttendanceRead])
-def list_my_attendance(db: DbSession, year: int, month: int, current_user: ActiveUser):
-    """A user sees only their OWN month of records (§9.5 data minimization)."""
-    return [
-        r
-        for r in attendance_service.list_month(db, year, month)
-        if r.user_id == current_user.id
-    ]
+def list_my_attendance(db: DbSession, year: YearQuery, month: MonthQuery, current_user: ActiveUser):
+    """A user sees only their OWN month of records (§9.5 data minimization).
+
+    Seeded rows mirror the plan, so they stay hidden while the month's
+    schedule is not published (none, or a draft after a forced regenerate).
+    """
+    return attendance_service.list_own_month(db, current_user.id, year, month)
 
 
 @router.post("/seed", response_model=dict)
-def seed_from_schedule(db: DbSession, year: int, month: int, admin: AdminUser):
-    """Seed missing actuals from the schedule; on a published month, also
-    re-sync still-seeded cells (admin-recorded cells are never overwritten)."""
+def seed_from_schedule(db: DbSession, year: YearQuery, month: MonthQuery, admin: AdminUser):
+    """Seed missing actuals from the PUBLISHED schedule and re-sync
+    still-seeded cells (admin-recorded cells are never overwritten). A draft
+    month answers 409 ``attendance.schedule_not_published``."""
     seeded = attendance_service.seed_from_schedule(db, year, month)
     audit_service.record(db, admin.id, "attendance.seed", "AttendanceRecord",
                          detail=f"{year}-{month:02d}: {seeded} cells")

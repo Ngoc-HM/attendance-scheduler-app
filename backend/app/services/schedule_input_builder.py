@@ -3,8 +3,9 @@
 Pure data assembly — no solving here, so it is testable against a DB fixture
 without running OR-Tools. Pulls together every §5.1 input:
 
-    people (active users + carry_*), days, 7-day blocks, flight_pairs (F-04),
-    approved leave (F-05/06), holidays (premium-off markers, decision #5).
+    people (active users + carry_* + previous-month codes), days, 7-day
+    blocks, flight_pairs (F-04), approved leave (F-05/06), holidays
+    (premium-off markers, decision #5).
 """
 
 from __future__ import annotations
@@ -35,6 +36,7 @@ def build(db: Session, year: int, month: int) -> SolverInput:
             carry_comp=boundary[u.id].carry_comp,
             carry_streak=boundary[u.id].carry_streak,
             carry_premium_off=boundary[u.id].carry_premium_off,
+            prev_codes=boundary[u.id].prev_codes,
         )
         for u in users
     ]

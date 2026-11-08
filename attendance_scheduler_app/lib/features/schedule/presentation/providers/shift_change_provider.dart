@@ -15,7 +15,11 @@ class ShiftChangeState {
   final List<ShiftChangeRequest> requests;
   final bool isLoading;
   final bool isMutating;
-  final String? error;
+
+  /// The caught error of the last failed call; the page turns it into text
+  /// with `apiErrorMessage` (backend detail, or a translated "server
+  /// unavailable" / "server error"), never the exception's debug text.
+  final Object? error;
 
   /// The last [ShiftChangeController.load] failed, so [requests] is not
   /// trustworthy (as opposed to [error] from a failed submit or decide).
@@ -25,7 +29,7 @@ class ShiftChangeState {
     List<ShiftChangeRequest>? requests,
     bool? isLoading,
     bool? isMutating,
-    String? error,
+    Object? error,
     bool? loadFailed,
     bool clearError = false,
   }) =>
@@ -51,13 +55,11 @@ class ShiftChangeController extends StateNotifier<ShiftChangeState> {
     );
     try {
       final requests = await _ds.fetchShiftChanges(all: all);
+      if (!mounted) return;
       state = state.copyWith(isLoading: false, requests: requests);
     } catch (e) {
-      state = state.copyWith(
-        isLoading: false,
-        loadFailed: true,
-        error: e.toString(),
-      );
+      if (!mounted) return;
+      state = state.copyWith(isLoading: false, loadFailed: true, error: e);
     }
   }
 
@@ -77,27 +79,33 @@ class ShiftChangeController extends StateNotifier<ShiftChangeState> {
         counterpartUserId: counterpartUserId,
         note: note,
       );
+      if (!mounted) return true;
       state = state.copyWith(isMutating: false);
       return true;
     } catch (e) {
-      state = state.copyWith(isMutating: false, error: e.toString());
+      if (!mounted) return false;
+      state = state.copyWith(isMutating: false, error: e);
       return false;
     }
   }
 
-  Future<bool> decide(int id, String status) async {
+  /// Returns the decided request, whose `warnings` carry the backend's rule
+  /// recheck after an approval; null when the call failed (error is set).
+  Future<ShiftChangeRequest?> decide(int id, String status) async {
     state = state.copyWith(isMutating: true, clearError: true);
     try {
       final updated = await _ds.decideShiftChange(id: id, status: status);
+      if (!mounted) return updated;
       final newList = [
         for (final r in state.requests)
           if (r.id == id) updated else r,
       ];
       state = state.copyWith(isMutating: false, requests: newList);
-      return true;
+      return updated;
     } catch (e) {
-      state = state.copyWith(isMutating: false, error: e.toString());
-      return false;
+      if (!mounted) return null;
+      state = state.copyWith(isMutating: false, error: e);
+      return null;
     }
   }
 }

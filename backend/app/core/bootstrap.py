@@ -3,8 +3,12 @@
 Called from the FastAPI lifespan on startup. Two jobs:
 
 1. (dev) create tables so the API runs locally without an Alembic step;
-   production should manage schema with migrations instead.
-2. Ensure the seed admin (role M) exists: create it if missing. In DEV only
+   production should manage schema with migrations instead. Skipped once the
+   database carries ``alembic_version`` (Alembic owns the schema then), and
+   warn (never block) when that revision is behind the code's migration head.
+2. Ensure an admin can log in: the seed admin (role M) is created only while
+   no ACTIVE admin exists, so a seed account an admin deleted on purpose is
+   not resurrected on the next restart. In DEV only
    (``FIRST_ADMIN_RESET_ON_STARTUP``), an existing seed admin has its
    password reset to the configured default so local login is one click.
    In staging/prod an existing admin's credentials are never touched.
@@ -14,8 +18,9 @@ from __future__ import annotations
 
 import logging
 from datetime import time
+from pathlib import Path
 
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.engine.url import make_url
 from sqlalchemy.orm import Session
 
@@ -69,17 +74,69 @@ def create_tables_if_enabled() -> None:
     """Create all tables in dev (``AUTO_CREATE_TABLES``). No-op otherwise.
 
     FRESH-DB CONVENIENCE ONLY: ``create_all`` never ALTERs existing tables.
-    Schema changes are managed with Alembic (``alembic upgrade head``);
-    existing databases created this way are stamped at the baseline revision
-    (see ``alembic/versions/0001_baseline.py``).
+    Schema changes are managed with Alembic (``alembic upgrade head``). A
+    database created this way already holds the schema of the code that
+    created it: stamp that code's head (``alembic stamp head`` for the current
+    code), never the baseline ``0001``, then ``alembic upgrade head``.
     """
-    if settings.AUTO_CREATE_TABLES:
-        Base.metadata.create_all(bind=engine)
-        logger.info("Database tables ensured (AUTO_CREATE_TABLES=on).")
+    if not settings.AUTO_CREATE_TABLES:
+        return
+    if inspect(engine).has_table("alembic_version"):
+        # create_all would add tables a later migration also creates, and
+        # 'alembic upgrade' would then fail with DuplicateTable.
+        logger.warning(
+            "AUTO_CREATE_TABLES ignored: the database has an alembic_version table, "
+            "so its schema is managed by Alembic ('alembic upgrade head')."
+        )
+        return
+    Base.metadata.create_all(bind=engine)
+    logger.info("Database tables ensured (AUTO_CREATE_TABLES=on).")
 
 
-def ensure_first_admin(db: Session) -> User:
-    """Create the seed admin; reset its password only in dev (see module doc)."""
+ALEMBIC_DIR = Path(__file__).resolve().parents[2] / "alembic"
+
+
+def alembic_script_head() -> str | None:
+    """The newest migration revision shipped with this code (None if unknown)."""
+    from alembic.script import ScriptDirectory
+
+    heads = ScriptDirectory(str(ALEMBIC_DIR)).get_heads()
+    return heads[0] if len(heads) == 1 else None
+
+
+def warn_if_schema_outdated() -> None:
+    """Log a WARNING when the database is not at the code's migration head.
+
+    Only for databases Alembic manages (an ``alembic_version`` table); a dev
+    database built by ``create_all`` has none and is skipped. Never blocks
+    startup: any failure of the check itself is logged and ignored (M2).
+    """
+    try:
+        if not inspect(engine).has_table("alembic_version"):
+            return
+        with engine.connect() as conn:
+            current = sorted(
+                row[0] for row in conn.execute(text("SELECT version_num FROM alembic_version"))
+            )
+        head = alembic_script_head()
+        if head is None or current == [head]:
+            return
+        logger.warning(
+            "Database schema revision %s differs from the code's migration head %s; "
+            "run 'alembic upgrade head' (the API may fail on missing columns).",
+            ", ".join(current) or "(none)", head,
+        )
+    except Exception:  # noqa: BLE001 — a diagnostic must never stop startup
+        logger.warning("Could not compare the database schema revision with the "
+                       "migration head.", exc_info=True)
+
+
+def ensure_first_admin(db: Session) -> User | None:
+    """Create the seed admin; reset its password only in dev (see module doc).
+
+    Returns the seed admin, or None when it is absent and another active
+    admin exists (it was deleted on purpose and stays deleted).
+    """
     admin = (
         db.query(User)
         .filter(User.username == settings.FIRST_ADMIN_USERNAME)
@@ -87,6 +144,17 @@ def ensure_first_admin(db: Session) -> User:
     )
 
     if admin is None:
+        other_admin = (
+            db.query(User.username)
+            .filter(User.role == Role.M, User.status == UserStatus.active)
+            .first()
+        )
+        if other_admin is not None:
+            logger.info(
+                "Seed admin '%s' not created: active admin '%s' exists.",
+                settings.FIRST_ADMIN_USERNAME, other_admin[0],
+            )
+            return None
         admin = User(
             username=settings.FIRST_ADMIN_USERNAME,
             full_name=settings.FIRST_ADMIN_FULL_NAME,
@@ -160,8 +228,12 @@ def ensure_default_flight_presets(db: Session) -> None:
 
 def run_startup_bootstrap() -> None:
     """Entry point for the app lifespan."""
-    ensure_database_exists()
+    # Dev convenience only: a production process never issues CREATE DATABASE
+    # (its role should not be allowed to, and a typo must fail loudly).
+    if not settings.is_production:
+        ensure_database_exists()
     create_tables_if_enabled()
+    warn_if_schema_outdated()
     db = SessionLocal()
     try:
         ensure_first_admin(db)

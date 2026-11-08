@@ -15,8 +15,14 @@ import io
 from datetime import date
 
 import openpyxl
+import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy.exc import IntegrityError
 
+from app.core.database import SessionLocal
+from app.core.i18n import t
+from app.models.flight import Flight
+from app.services.flight_excel_parser import parse_flight_workbook
 from app.services.flight_pair_derivation import derive_pairs_for_day
 
 V = "/api/v1"
@@ -314,3 +320,137 @@ class TestImportExcel:
         )
         assert resp.status_code == 200
         assert resp.json() == []
+
+    def test_import_duplicate_rows_kept_once(self, client: TestClient):
+        """B5 — two rows with the same day + FLT are saved once (last row wins)."""
+        headers = _admin_headers(client)
+        day_str = "2026-12-07"
+        xlsx_bytes = _make_xlsx([
+            (day_str, 37, "HAN-FRA", "06:30", None),
+            (day_str, 36, "FRA-HAN", None, "10:00"),
+            (day_str, 37, "HAN-FRA", "07:45", None),  # duplicate of row 2
+        ])
+
+        rows, errors, warnings = parse_flight_workbook(xlsx_bytes)
+        assert errors == []
+        assert [(r["day"], r["flt_number"]) for r in rows] == [
+            (date(2026, 12, 7), 37),
+            (date(2026, 12, 7), 36),
+        ]
+        assert warnings == [
+            t("flight.import_row_duplicate").format(row=4, first_row=2, flt=37)
+        ]
+
+        resp = client.post(
+            f"{V}/flights/import",
+            headers=headers,
+            files={"file": ("flights.xlsx", xlsx_bytes, XLSX_MIME)},
+        )
+        assert resp.status_code == 200, resp.text
+        flights = resp.json()
+        assert len(flights) == 2
+        f37 = next(f for f in flights if f["flt_number"] == 37)
+        assert f37["sta"].startswith("07:45")
+
+        # Re-import is still accepted (no permanent 422) and a manual edit works.
+        resp = client.post(
+            f"{V}/flights/import",
+            headers=headers,
+            files={"file": ("flights.xlsx", xlsx_bytes, XLSX_MIME)},
+        )
+        assert resp.status_code == 200, resp.text
+        resp = client.put(
+            f"{V}/flights",
+            headers=headers,
+            json={"day": day_str, "flt_number": 37, "route": "HAN-FRA",
+                  "sta": "08:00", "std": None},
+        )
+        assert resp.status_code == 200, resp.text
+
+        db = SessionLocal()
+        try:
+            count = (
+                db.query(Flight)
+                .filter(Flight.day == date(2026, 12, 7), Flight.flt_number == 37)
+                .count()
+            )
+            assert count == 1
+        finally:
+            db.close()
+
+    def test_row_errors_are_translated(self, client: TestClient):
+        """Parser row errors come from the i18n catalog, with row/value params."""
+        headers = _admin_headers(client)
+        xlsx_bytes = _make_xlsx([
+            ("2026-12-08", 37, "HAN-FRA", "06:30", None),
+            ("NOT-A-DATE", 36, "FRA-HAN", None, "10:00"),
+            ("2026-12-08", "abc", "FRA-HAN", None, "10:00"),
+            ("2026-12-08", 36, "FRA-HAN", None, "25:99"),
+        ])
+        files = {"file": ("flights.xlsx", xlsx_bytes, XLSX_MIME)}
+
+        resp = client.post(f"{V}/flights/import", headers=headers, files=files)
+        assert resp.status_code == 422
+        errors = resp.json()["detail"]["errors"]
+        assert errors == [
+            t("flight.import_row_invalid_date", "en").format(row=3, value="NOT-A-DATE"),
+            t("flight.import_row_invalid_flt", "en").format(row=4, value="abc"),
+            t("flight.import_row_invalid_time", "en").format(row=5, value="25:99"),
+        ]
+
+        resp = client.post(
+            f"{V}/flights/import",
+            headers={**headers, "Accept-Language": "vi"},
+            files=files,
+        )
+        assert resp.status_code == 422
+        errors_vi = resp.json()["detail"]["errors"]
+        assert errors_vi[0] == t("flight.import_row_invalid_date", "vi").format(
+            row=3, value="NOT-A-DATE"
+        )
+        assert errors_vi[0].startswith("Dòng 3")
+
+    def test_route_longer_than_column_is_a_row_error(self, client: TestClient):
+        """A route that does not fit ``Flight.route`` (String(32)) is rejected as
+        a translated row error (422) instead of failing in PostgreSQL."""
+        from app.services.flight_excel_parser import ROUTE_MAX_LENGTH
+
+        assert ROUTE_MAX_LENGTH == Flight.__table__.c.route.type.length
+        headers = _admin_headers(client)
+        too_long = "HAN-FRA-" + "X" * ROUTE_MAX_LENGTH
+        xlsx_bytes = _make_xlsx([
+            ("2026-12-09", 37, "H" * ROUTE_MAX_LENGTH, "06:30", None),  # fits exactly
+            ("2026-12-09", 36, too_long, None, "10:00"),
+        ])
+        resp = client.post(
+            f"{V}/flights/import",
+            headers=headers,
+            files={"file": ("flights.xlsx", xlsx_bytes, XLSX_MIME)},
+        )
+        assert resp.status_code == 422, resp.text
+        assert resp.json()["detail"]["errors"] == [
+            t("flight.import_row_route_too_long", "en").format(
+                row=3, max=ROUTE_MAX_LENGTH
+            )
+        ]
+        list_resp = client.get(
+            f"{V}/flights/days", params={"year": 2026, "month": 12}, headers=headers
+        )
+        assert "2026-12-09" not in {d["day"] for d in list_resp.json()}
+
+
+class TestFlightUniqueness:
+    def test_unique_flight_day_number_constraint(self, client: TestClient):
+        """B5 — the DB refuses a second Flight row for the same day + FLT."""
+        db = SessionLocal()
+        try:
+            db.add(Flight(day=date(2026, 12, 9), flt_number=31))
+            db.commit()
+            db.add(Flight(day=date(2026, 12, 9), flt_number=31))
+            with pytest.raises(IntegrityError):
+                db.commit()
+            db.rollback()
+        finally:
+            db.query(Flight).filter(Flight.day == date(2026, 12, 9)).delete()
+            db.commit()
+            db.close()

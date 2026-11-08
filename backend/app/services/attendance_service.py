@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.core.i18n import t
 from app.models.attendance import AttendanceRecord
-from app.models.enums import AttendanceCode, Role, ScheduleStatus
+from app.models.enums import AttendanceCode, Role, ScheduleStatus, UserStatus
 from app.models.schedule import MonthlySchedule, ShiftAssignment
 from app.models.user import User
 from app.schemas.attendance import AttendanceRead, AttendanceUpsert, SickCoverResult
@@ -40,6 +40,44 @@ def list_month(db: Session, year: int, month: int) -> list[AttendanceRecord]:
         .order_by(AttendanceRecord.work_date, AttendanceRecord.user_id)
         .all()
     )
+
+
+def list_own_month(
+    db: Session, user_id: int, year: int, month: int
+) -> list[AttendanceRecord]:
+    """One user's actuals for ``/attendance/me``.
+
+    A seeded row (``recorded_by`` NULL) is a copy of the plan, so it is only
+    shown while the month's schedule is PUBLISHED: after a forced regenerate
+    the seeded rows follow the draft and must not leak unpublished codes.
+    Admin-recorded rows and sick days (always a real record) stay visible.
+    """
+    published = (
+        db.query(MonthlySchedule.id)
+        .filter(
+            MonthlySchedule.year == year,
+            MonthlySchedule.month == month,
+            MonthlySchedule.status == ScheduleStatus.published,
+        )
+        .first()
+        is not None
+    )
+    first, last = _month_bounds(year, month)
+    rows = (
+        db.query(AttendanceRecord)
+        .filter(
+            AttendanceRecord.user_id == user_id,
+            AttendanceRecord.work_date >= first,
+            AttendanceRecord.work_date <= last,
+        )
+        .order_by(AttendanceRecord.work_date)
+        .all()
+    )
+    return [
+        r
+        for r in rows
+        if published or r.recorded_by is not None or r.code is AttendanceCode.S
+    ]
 
 
 def _get_cell(db: Session, user_id: int, day: date) -> AttendanceRecord | None:
@@ -73,10 +111,15 @@ def upsert(db: Session, payload: AttendanceUpsert, recorded_by: int) -> Attendan
 def seed_from_schedule(db: Session, year: int, month: int) -> int:
     """Copy a schedule's cells into actuals as the admin's starting point.
 
-    Missing actuals are inserted. On a PUBLISHED schedule, actuals still as
-    seeded (``recorded_by`` NULL) are re-synced to the roster, so publishing a
-    regenerated month refreshes them (B5). An admin-recorded actual is never
-    overwritten. Returns the number of cells inserted.
+    Only a PUBLISHED schedule is copied: actuals are readable by the employee
+    (``/attendance/me``), so seeding a draft would leak unpublished codes —
+    a draft answers 409 ``attendance.schedule_not_published``. ``publish()``
+    flips the status before it calls this, so publishing still seeds.
+
+    Missing actuals are inserted; actuals still as seeded (``recorded_by``
+    NULL) are re-synced to the roster, so publishing a regenerated month
+    refreshes them (B5). An admin-recorded actual is never overwritten.
+    Returns the number of cells inserted.
     """
     schedule = (
         db.query(MonthlySchedule)
@@ -85,9 +128,12 @@ def seed_from_schedule(db: Session, year: int, month: int) -> int:
     )
     if schedule is None:
         return 0
+    if schedule.status is not ScheduleStatus.published:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, detail=t("attendance.schedule_not_published")
+        )
 
     existing = {(r.user_id, r.work_date): r for r in list_month(db, year, month)}
-    resync = schedule.status is ScheduleStatus.published
     seeded = 0
     for a in schedule.assignments:
         cell = existing.get((a.user_id, a.work_date))
@@ -96,8 +142,8 @@ def seed_from_schedule(db: Session, year: int, month: int) -> int:
                 AttendanceRecord(user_id=a.user_id, work_date=a.work_date, code=a.code)
             )
             seeded += 1
-        elif resync:
-            _follow_plan(cell, a.code)
+        else:
+            follow_plan(cell, a.code)
     db.commit()
     return seeded
 
@@ -105,17 +151,21 @@ def seed_from_schedule(db: Session, year: int, month: int) -> int:
 def sync_planned_cell(
     db: Session, user_id: int, work_date: date, code: AttendanceCode
 ) -> bool:
-    """Carry an edit of a PUBLISHED roster cell into its seeded actual (B5).
+    """Carry an edit of a roster cell into its seeded actual (B5, I1).
+
+    Draft or published: a draft can still hold actuals seeded while it was
+    published (forced regenerate), and the next month's boundary reads them.
+    Never inserts a row, so a never-published draft gains no actuals.
 
     Only an actual nobody recorded by hand (``recorded_by`` NULL, i.e. left as
     ``seed_from_schedule`` wrote it) follows the plan; an admin-recorded cell
     always wins. Does not commit. Returns True when the actual was updated.
     """
     cell = _get_cell(db, user_id, work_date)
-    return cell is not None and _follow_plan(cell, code)
+    return cell is not None and follow_plan(cell, code)
 
 
-def _follow_plan(cell: AttendanceRecord, code: AttendanceCode) -> bool:
+def follow_plan(cell: AttendanceRecord, code: AttendanceCode) -> bool:
     """Set a still-seeded actual (``recorded_by`` NULL) to the planned code.
 
     A sick day (S) never follows the plan, whoever recorded it: the planned
@@ -165,18 +215,22 @@ def handle_sick(db: Session, payload: AttendanceUpsert, recorded_by: int) -> Sic
             sick=sick_record, cover=None, message=t("attendance.sick_no_cover")
         )
 
+    # §9.1 — the cover row is the colleague's ordinary actual; a note such as
+    # "recently sick" would put health data on it, so it carries none. The
+    # reason goes to the admin in the response only.
     cover = AttendanceRead.model_validate(
         upsert(
             db,
             AttendanceUpsert(
                 user_id=proposal.user_id, work_date=day, code=proposal.new_code,
-                note=proposal.reason,
+                note=None,
             ),
             recorded_by,
         )
     )
     return SickCoverResult(
-        sick=sick_record, cover=cover, forced=proposal.forced, message=proposal.reason
+        sick=sick_record, cover=cover, forced=proposal.forced,
+        message=t(proposal.reason_key),
     )
 
 
@@ -205,7 +259,10 @@ def self_day_codes(db: Session, day: date) -> dict[int, AttendanceCode]:
 
 
 def _roles(db: Session) -> dict[int, Role]:
-    return {u.id: u.role for u in db.query(User).all()}
+    """Roles of ACTIVE users only — a disabled or pending account is never
+    picked as A/D cover (B6)."""
+    rows = db.query(User.id, User.role).filter(User.status == UserStatus.active).all()
+    return {uid: role for uid, role in rows}
 
 
 def _recently_sick(db: Session, before: date, exclude: int) -> list[int]:

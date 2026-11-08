@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/network/api_error_message.dart';
 import '../../../../core/network/api_exception.dart';
 import '../../../../design_system/design_system.dart';
 import '../../../../i18n/app_localizations.dart';
@@ -65,16 +66,17 @@ class _CreateUserDialogState extends ConsumerState<CreateUserDialog> {
             annualLeaveQuota: quota.isEmpty ? null : int.parse(quota),
           );
       if (mounted) Navigator.of(context).pop(true);
-    } on ApiException catch (e) {
+    } catch (e) {
+      // A 4xx carries the backend's reason (username taken, quota out of
+      // range, ...); anything else is the generic create failure.
       if (!mounted) return;
-      setState(() {
-        _error = e.statusCode == 409
-            ? AppLocalizations.of(context).text('usernameTaken')
-            : AppLocalizations.of(context).createUserFailed;
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() => _error = AppLocalizations.of(context).createUserFailed);
+      final l = AppLocalizations.of(context);
+      final status = e is ApiException ? e.statusCode : null;
+      setState(
+        () => _error = status != null && status < 500
+            ? apiErrorMessage(l, e)
+            : l.createUserFailed,
+      );
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }

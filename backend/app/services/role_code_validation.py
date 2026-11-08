@@ -62,9 +62,8 @@ def _reject(role: Role, code: AttendanceCode, allowed: set[AttendanceCode]) -> N
     listed = ", ".join(sorted(item.value for item in allowed))
     raise HTTPException(
         status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-        detail=(
-            f"Code {code.value} is not valid for role {role.value}; "
-            f"allowed: {listed}"
+        detail=t("code.not_allowed_for_role").format(
+            code=code.value, role=role.value, allowed=listed
         ),
     )
 

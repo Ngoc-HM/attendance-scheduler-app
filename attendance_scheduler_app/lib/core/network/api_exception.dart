@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:dio/dio.dart';
 
 /// Normalized API error surfaced to the presentation layer.
@@ -13,12 +15,37 @@ class ApiException implements Exception {
   /// "String is not a subtype of int of 'index'", so we only read `detail`
   /// when the body is actually a Map and fall back to a friendly message.
   factory ApiException.fromDio(DioException e, [String fallback = 'request_failed']) {
-    final data = e.response?.data;
-    final detail = data is Map ? data['detail']?.toString() : null;
     return ApiException(
-      detail ?? e.message ?? fallback,
+      detailOf(e.response?.data) ?? e.message ?? fallback,
       statusCode: e.response?.statusCode,
     );
+  }
+
+  /// The backend `detail` of an error body, or null. A string detail is
+  /// returned as is; FastAPI's 422 list is flattened to its `msg`s; a body
+  /// fetched as bytes (file downloads) is decoded as UTF-8 JSON first.
+  static String? detailOf(Object? data) {
+    var body = data;
+    if (body is List<int>) {
+      try {
+        body = jsonDecode(utf8.decode(body));
+      } catch (_) {
+        return null;
+      }
+    }
+    if (body is! Map) return null;
+    final detail = body['detail'];
+    if (detail is List) {
+      final messages = [
+        for (final item in detail)
+          if (item is Map && item['msg'] != null)
+            item['msg'].toString()
+          else if (item is String)
+            item,
+      ];
+      return messages.isEmpty ? null : messages.join('; ');
+    }
+    return detail?.toString();
   }
 
   @override

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/network/api_error_message.dart';
 import '../../../../design_system/design_system.dart';
 import '../../../../i18n/app_localizations.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
@@ -56,8 +57,11 @@ class _SelfArrangePageState extends ConsumerState<SelfArrangePage> {
       context,
       ok
           ? l.text('selfArrangeSubmitted')
-          : (ref.read(selfArrangeControllerProvider).error ??
-                l.text('selfArrangeSubmitFailed')),
+          : apiErrorMessage(
+              l,
+              ref.read(selfArrangeControllerProvider).error,
+              fallbackKey: 'selfArrangeSubmitFailed',
+            ),
       tone: ok ? DsTone.success : DsTone.danger,
     );
   }

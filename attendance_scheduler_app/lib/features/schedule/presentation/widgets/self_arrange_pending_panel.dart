@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/network/api_error_message.dart';
 import '../../../../design_system/design_system.dart';
 import '../../../../i18n/app_localizations.dart';
 import '../providers/self_arrange_provider.dart';
@@ -110,7 +111,7 @@ class SelfArrangePendingPanel extends ConsumerWidget {
     if (decided == null) {
       DsFeedback.show(
         context,
-        ref.read(selfArrangeAdminControllerProvider).error ?? 'error',
+        apiErrorMessage(l, ref.read(selfArrangeAdminControllerProvider).error),
         tone: DsTone.danger,
       );
       return;

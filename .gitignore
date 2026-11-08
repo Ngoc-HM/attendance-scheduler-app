@@ -132,3 +132,16 @@ backend/.env
 .mypy_cache/
 .ruff_cache/
 .coverage
+
+# --- Local data and OS files ---
+# SQLite databases and pg_dump archives hold personal data; never commit them.
+*.db
+*.dump
+backups/
+.DS_Store
+
+# --- Lock files ---
+# `*.lock` above comes from the Flutter template. Both project lock files pin
+# the exact package versions CI and the goldens were verified with.
+!attendance_scheduler_app/pubspec.lock
+!backend/requirements.lock

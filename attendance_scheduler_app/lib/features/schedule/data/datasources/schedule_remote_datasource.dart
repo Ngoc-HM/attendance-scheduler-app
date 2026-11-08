@@ -90,6 +90,22 @@ class ScheduleRemoteDataSource {
     }
   }
 
+  /// GET /schedules/{id}/violations (admin) — the hard-rule recheck of the
+  /// month as it stands now (generated, edited and approved changes).
+  Future<List<ConstraintViolation>> fetchViolations(int scheduleId) async {
+    try {
+      final response =
+          await _dio.get(ApiEndpoints.scheduleViolations(scheduleId));
+      final list = response.data as List<dynamic>;
+      return list
+          .map((e) =>
+              ConstraintViolationModel.fromJson(e as Map<String, dynamic>))
+          .toList();
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e, 'violations_fetch_failed');
+    }
+  }
+
   /// GET /shift-changes — all=true for admin list.
   Future<List<ShiftChangeRequest>> fetchShiftChanges({
     bool all = false,

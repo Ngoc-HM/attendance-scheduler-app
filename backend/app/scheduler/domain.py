@@ -23,6 +23,10 @@ class PersonInput:
     # Premium OFF days (off on Sat/Sun/holiday) received so far — balanced
     # across months by the premium-off fairness objective (decision #6).
     carry_premium_off: int = 0
+    # Effective codes of the previous month's last days, oldest first (at most
+    # six, ending on its last day; cut short at a day with no cell; empty
+    # without history). The off-chain rule reads it across the month boundary.
+    prev_codes: tuple[AttendanceCode, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -71,3 +75,10 @@ class SolverOutput:
     feasible: bool
     assignments: list[AssignmentResult] = field(default_factory=list)
     violations: list[Violation] = field(default_factory=list)
+    # "optimal" | "feasible" | "infeasible" | "unknown". "optimal" only when
+    # both solve phases (slack, then soft objectives) are proven optimal.
+    status: str = "unknown"
+    # True when the slack total (hence every reported violation count) is
+    # proven to be the smallest possible — the violations are real, not an
+    # artefact of the time limit.
+    slack_proven_minimal: bool = False
