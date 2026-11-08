@@ -10,14 +10,17 @@ from __future__ import annotations
 from datetime import date
 from functools import lru_cache
 from typing import Annotated, Literal
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
+from sqlalchemy.engine.url import make_url
 
 # Dev-only defaults. ``validate_for_environment`` refuses to start a
 # staging/prod process that still carries them.
 _DEFAULT_SECRET_KEY = "CHANGE_ME_dev_only_secret"
 _DEFAULT_ADMIN_PASSWORD = "admin123"
+_DEFAULT_DATABASE_URL = "postgresql+psycopg2://postgres:postgres@localhost:5432/attendance"
 _MIN_SECRET_LENGTH = 32
 _MIN_ADMIN_PASSWORD_LENGTH = 12
 
@@ -49,18 +52,18 @@ class Settings(BaseSettings):
     FIRST_ADMIN_PASSWORD: str = _DEFAULT_ADMIN_PASSWORD
     FIRST_ADMIN_FULL_NAME: str = "System Administrator"
     FIRST_ADMIN_RESET_ON_STARTUP: bool = True
-    # Create DB tables on startup in dev (no Alembic step needed to run locally).
-    # In prod, manage schema with Alembic migrations instead.
+    # Create DB tables on startup in dev (no Alembic step needed to run locally);
+    # skipped once the database has ``alembic_version``. Refused in
+    # staging/prod: manage the schema with Alembic migrations there.
     AUTO_CREATE_TABLES: bool = True
 
     # --- Database (PostgreSQL on an EU/Frankfurt cloud region, spec §9.4) --
-    DATABASE_URL: str = (
-        "postgresql+psycopg2://postgres:postgres@localhost:5432/attendance"
-    )
+    DATABASE_URL: str = _DEFAULT_DATABASE_URL
 
     # --- CORS (Flutter desktop client) -------------------------------------
     # ``NoDecode`` skips pydantic-settings' JSON pre-parse so the validator
     # below can accept a plain ``*`` or a comma-separated list from the env.
+    # ``*`` is dev only: staging/prod refuse to start with it.
     BACKEND_CORS_ORIGINS: Annotated[list[str], NoDecode] = ["*"]
 
     # --- i18n: English primary, Vietnamese optional (spec §2) --------------
@@ -133,6 +136,29 @@ class Settings(BaseSettings):
                 "FIRST_ADMIN_PASSWORD must not be the dev default and needs at least "
                 f"{_MIN_ADMIN_PASSWORD_LENGTH} characters"
             )
+        if _is_sqlite_url(self.DATABASE_URL):
+            errors.append(
+                "DATABASE_URL points at SQLite; a production-like process needs the "
+                "shared PostgreSQL database"
+            )
+        elif self.DATABASE_URL == _DEFAULT_DATABASE_URL:
+            errors.append(
+                "DATABASE_URL still holds the dev default (postgres:postgres@localhost)"
+            )
+        if "*" in self.BACKEND_CORS_ORIGINS:
+            errors.append(
+                "BACKEND_CORS_ORIGINS must list the allowed origins explicitly, not '*'"
+            )
+        if self.AUTO_CREATE_TABLES:
+            errors.append(
+                "AUTO_CREATE_TABLES must be false; manage the schema with "
+                "'alembic upgrade head'"
+            )
+        if self.DATA_RETENTION_MONTHS < self.DATA_RETENTION_MIN_MONTHS:
+            errors.append(
+                f"DATA_RETENTION_MONTHS={self.DATA_RETENTION_MONTHS} is below the legal "
+                f"minimum DATA_RETENTION_MIN_MONTHS={self.DATA_RETENTION_MIN_MONTHS}"
+            )
         return errors
 
     def production_config_warnings(self) -> list[str]:
@@ -140,13 +166,6 @@ class Settings(BaseSettings):
         if not self.is_production:
             return []
         warnings: list[str] = []
-        if self.AUTO_CREATE_TABLES:
-            warnings.append(
-                "AUTO_CREATE_TABLES=true in a production-like environment; "
-                "prefer 'alembic upgrade head'"
-            )
-        if "*" in self.BACKEND_CORS_ORIGINS:
-            warnings.append("BACKEND_CORS_ORIGINS='*' — restrict to known origins")
         if self.FIRST_ADMIN_RESET_ON_STARTUP:
             warnings.append(
                 "FIRST_ADMIN_RESET_ON_STARTUP is ignored outside dev "
@@ -170,6 +189,24 @@ class Settings(BaseSettings):
         if isinstance(v, str) and not v.startswith("["):
             return [item.strip() for item in v.split(",") if item.strip()]
         return v
+
+    @field_validator("TIMEZONE")
+    @classmethod
+    def _known_timezone(cls, v: str) -> str:
+        """Refuse an unknown zone at startup, in every environment: every
+        business date (leave window, autorun) is computed in it."""
+        try:
+            ZoneInfo(v)
+        except (ZoneInfoNotFoundError, ValueError) as exc:
+            raise ValueError(f"TIMEZONE {v!r} is not a known IANA time zone") from exc
+        return v
+
+
+def _is_sqlite_url(url: str) -> bool:
+    try:
+        return make_url(url).get_backend_name() == "sqlite"
+    except Exception:  # noqa: BLE001 — an unparsable URL fails at connect anyway
+        return url.startswith("sqlite")
 
 
 @lru_cache
