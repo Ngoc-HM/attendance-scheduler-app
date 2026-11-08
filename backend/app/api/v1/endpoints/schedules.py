@@ -10,6 +10,7 @@ from app.core.business_time import business_today
 from app.core.config import settings
 from app.core.i18n import t
 from app.schemas.schedule import (
+    ConstraintViolation,
     GenerateScheduleRequest,
     ManualOverrideRequest,
     MonthlyScheduleRead,
@@ -18,6 +19,14 @@ from app.schemas.schedule import (
 from app.services import audit_service, schedule_service
 
 router = APIRouter()
+
+
+# Declared before ``/{year}/{month}``, which would otherwise capture this path
+# and answer 422 on the non-integer "violations" segment.
+@router.get("/{schedule_id}/violations", response_model=list[ConstraintViolation])
+def get_schedule_violations(db: DbSession, schedule_id: int, _admin: AdminUser):
+    """C2 — the month's hard-rule check (admin only), e.g. before publishing."""
+    return schedule_service.violations_for(db, schedule_id)
 
 
 @router.get("/{year}/{month}", response_model=MonthlyScheduleRead)
