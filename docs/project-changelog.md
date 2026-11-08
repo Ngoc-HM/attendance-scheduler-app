@@ -27,20 +27,24 @@ ones and the customer notes are under "Open questions".
 ### Schedules
 - `GET /schedules/{id}/violations` (admin) re-checks a month on demand; the
   client shows the violations and asks before publishing (#46).
-- Admin override can create the missing cell of an active user; the re-check
-  flags working cells of disabled users and does not count them as cover
-  (R4, #44).
-- Force-regenerating a published month moves still-seeded actuals onto the
-  new plan; `GET /attendance/me` hides seeded rows of unpublished months, and
-  `POST /attendance/seed` refuses a draft (#52).
+- Admin override can create the missing cell of an active user (R4, #44).
+  For a disabled user, cells before today stay ordinary cover; working cells
+  from today on are flagged `disabled_user_duty` and not counted as cover
+  (ruling I2, provisional, #44).
+- Still-seeded actuals follow EVERY roster edit and regenerate, draft or
+  published (one query per month for the resync); `GET /attendance/me` hides
+  seeded rows of unpublished months, and `POST /attendance/seed` refuses a
+  draft (#27, #52).
 
 ### Requests, users, reports, flights
 - Shift changes: a code change on an AL/CD/S/A-D/T/B cell is refused (422
   `swap.cell_locked`); creation validates the counterpart; decisions lock the
-  row, so a double approval is 409 (#51). Leave decisions lock the row too.
+  row, so a double approval is 409 `swap.already_decided` (#51). Leave
+  decisions lock the row too.
 - Deleting a user keeps other people's requests they decided or joined
   (R8); the delete and its audit row commit together; self-delete works on
-  PostgreSQL; SQLite enforces foreign keys (#50).
+  PostgreSQL; SQLite enforces foreign keys (#50). A failed delete answers
+  with the new key `user.delete_failed` instead of the audit message.
 - Reports exclude pending users, include disabled users only with actuals in
   the period, and escape formula-like text cells (R7 revised, #48).
 - Flights: one leg per day + FLT number (migration `0009`, lowest id kept);
@@ -52,14 +56,22 @@ ones and the customer notes are under "Open questions".
 - Year (2000–2100) and month (1–12) parameters answer 422 instead of 500;
   text fields have column-length limits; every error detail is an i18n key;
   business dates come from `business_today()` / `business_now()` and the
-  time clock uses `TIMEZONE` (#54).
+  time clock uses `TIMEZONE` (#54). Known gap: an id above the 64-bit range
+  still answers 500 on PostgreSQL.
+- `compliance.retention_too_short` names the effective retention floor
+  (`{months}`) instead of a fixed "24 months".
 
 ### Runtime and operations
 - Seed admin created only while no active admin exists; `create_all`
   skipped once `alembic_version` exists; `CREATE DATABASE` in dev only;
-  `app.*` logs at INFO; autorun catches up on any later day of the month and
-  at startup, logs failures, warns without flight data (#55).
-- Staging/prod refuse SQLite or the default `DATABASE_URL`, CORS `*`,
+  `app.*` logs at INFO; startup logs a WARNING when the database is behind
+  the migration head; autorun catches up on any later day of the month and
+  at startup, also drafts the current month when it has no schedule (a fresh
+  install gets a current-month draft at its first start), logs failures,
+  warns without flight data, and logs a lost insert race as "already exists"
+  (#55).
+- Staging/prod refuse the `.env.example` `SECRET_KEY` placeholder as well as
+  the code default, SQLite or the default `DATABASE_URL`, CORS `*`,
   `AUTO_CREATE_TABLES=true` and a retention below 24 months; `TIMEZONE` is
   validated everywhere; `/docs` only in dev (#21, #55).
 - Alembic accepts `%` in the password; migrations use `sa.func.now()`;
@@ -68,7 +80,9 @@ ones and the customer notes are under "Open questions".
 - `backend/.dockerignore` keeps `.env` and local databases out of the image;
   compose waits for a healthy PostgreSQL; backup/restore pass the password
   via `PGPASSWORD`, mask the URL and can encrypt with `age` or `gpg`.
-- Dependencies locked: `backend/requirements.lock`, tracked `pubspec.lock`.
+- Dependencies locked: `backend/requirements.lock` (CI, Docker and
+  `make install` install with `-c`), tracked `pubspec.lock` (every Flutter CI
+  job runs `flutter pub get --enforce-lockfile`).
 - CI: Ubuntu 24.04, Flutter 3.47.7, actions pinned to commit SHAs, goldens
   on macOS 15 only, Windows build no longer waits for the goldens,
   `alembic check` on PostgreSQL (#47).
@@ -87,7 +101,12 @@ ones and the customer notes are under "Open questions".
   only; Leaves reloads on every visit and has a refresh button; the end date
   resets when the start moves past it; Reports has year / month or "Full
   year" / format selectors on the page (#57); a failed flights batch keeps the
-  previous month; error toasts show the backend message.
+  previous month.
+- One error-message rule for every screen (`apiErrorMessage`): no response →
+  "server unavailable", 5xx → a translated generic message (ruling: never
+  the server's text), other errors → the backend's translated detail;
+  controllers check `mounted` after every `await`; deleting your own account
+  signs you out without a further request.
 
 ### Docs
 - README, backend README, deployment guide (the real workstation +
@@ -95,8 +114,8 @@ ones and the customer notes are under "Open questions".
   architecture (violations not stored, determinism only with 1 worker),
   codebase summary, roadmap, code standards, `.env.example` (every setting),
   test guide additions.
-- Gates: 463 backend tests collected (pytest), `ruff`/`mypy` clean; Flutter
-  `analyze` clean, 119 tests pass including the 3 goldens on macOS.
+- Gates: 479 backend tests collected (pytest), `ruff`/`mypy` clean; Flutter
+  `analyze` clean, 136 tests pass including the 3 goldens on macOS.
 
 ## 2026-11-07 — Final-review fixes
 

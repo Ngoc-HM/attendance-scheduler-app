@@ -16,15 +16,15 @@ Living status of the full-implementation plan
 | 08 | Reports (monthly/yearly export) | F-15 | ✅ done |
 | 09 | Flutter wiring (5 pages → real API) | all UI | ✅ done |
 | 10 | GDPR hardening (RBAC, audit, sick) | §9 | ✅ done |
-| 11 | Testing | — | ✅ done (2026-11-08: 463 backend + 119 Flutter tests) |
+| 11 | Testing | — | ✅ done (2026-11-08: 479 backend + 136 Flutter tests) |
 | 12 | Docs | — | ✅ done |
 
 ## Current state — 2026-11-08 review-2 fixes
 - 2026-11-08: every finding of the 2026-11-08 whole-system review fixed
   except A1 (the dev-mode seed-admin reset, kept on purpose by the owner);
   rulings R1–R8 and the rulings taken during the work are design decisions
-  #41–#59 (see `project-changelog.md`). Backend 463 tests, `ruff`/`mypy`
-  clean, Alembic head `0009`; Flutter `analyze` clean, 119 tests incl. 3
+  #41–#59 (see `project-changelog.md`). Backend 479 tests, `ruff`/`mypy`
+  clean, Alembic head `0009`; Flutter `analyze` clean, 136 tests incl. 3
   goldens (goldens run on macOS only).
 - The backend runs in `ENVIRONMENT=dev` on a workstation against a shared
   PostgreSQL over Tailscale (`deployment-guide.md`, "The current setup").
@@ -58,8 +58,10 @@ Living status of the full-implementation plan
 | Weekend preference for paired offs (D6) | owner / customer | engine stays adjacency-only until decided |
 | Real annual-leave quota | customer | 30 days is a placeholder (decision #30) |
 | 2026-11 customer notes | owner / customer | listed in design-decisions "Open questions" |
-| Confirm the 2026-11-08 provisional rulings | owner / customer | leave next to weekly offs (#41), comp days before the cut-off (#43), no holiday-work penalty (R5) |
+| Confirm the 2026-11-08 provisional rulings | owner / customer | leave next to weekly offs (#41), comp days before the cut-off (#43), disabled users' past cells as cover (I2, #44), no holiday-work penalty (R5) |
 | Night shifts and the time clock | customer | check-out after midnight answers 409 today |
+| Drafts in the data-subject export | customer DPO | Art. 15 export includes draft cells and draft-synced actuals |
+| Id above the 64-bit range | dev | `schedule_id` > int64 still answers 500 on PostgreSQL |
 | Leave dev mode on the shared database | owner | today: admin password reset on start, no leave window, CORS `*`, `/docs` open (`deployment-guide.md`) |
 | Real "WR JUN26" Excel layout | customer | importer expects date / flt / route / STA / STD |
 | Final retention period | customer DPO | shipped 36 months, floor 24 |
