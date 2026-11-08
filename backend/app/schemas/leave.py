@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.models.enums import LeaveStatus, LeaveType
 from app.schemas.common import ORMModel
@@ -16,7 +16,8 @@ class LeaveCreate(BaseModel):
     # leave_type is optional (two distinct UI flows); the service always
     # classifies by span and rejects a supplied leave_type that disagrees.
     leave_type: LeaveType | None = None
-    note: str | None = None
+    # LeaveRequest.note is String(255).
+    note: str | None = Field(default=None, max_length=255)
 
 
 class LeaveDecision(BaseModel):

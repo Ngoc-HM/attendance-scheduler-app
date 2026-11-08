@@ -159,12 +159,12 @@ void main() {
       // surface so the column doesn't overflow in the default test viewport.
     });
 
-    testWidgets('shows usernameTaken on 409 from the backend', (tester) async {
+    testWidgets('shows the backend detail on 409', (tester) async {
       await tester.binding.setSurfaceSize(const Size(800, 900));
       addTearDown(() => tester.binding.setSurfaceSize(null));
       final ds = _StubUserDataSource(
         createException: const ApiException(
-          'That username is already taken.',
+          'Backend says: username "long" is taken.',
           statusCode: 409,
         ),
       );
@@ -183,7 +183,7 @@ void main() {
       await tester.tap(find.text('Create'));
       await tester.pumpAndSettle();
 
-      expect(find.text('That username is already taken.'), findsOneWidget);
+      expect(find.text('Backend says: username "long" is taken.'), findsOneWidget);
     });
 
     testWidgets('falls back to generic failure for non-409 errors', (

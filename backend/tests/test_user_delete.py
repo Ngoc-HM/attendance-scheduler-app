@@ -12,14 +12,18 @@ from __future__ import annotations
 import uuid
 from datetime import date, datetime
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import func, text
 
 from app.core.database import SessionLocal
+from app.main import app
 from app.models.audit import AuditLog
 from app.models.enums import LeaveStatus, Role, SwapKind
 from app.models.self_arrange_request import SelfArrangeRequest
 from app.models.shift_change_request import ShiftChangeRequest
+from app.models.user import User
+from app.services import user_service
 
 V = "/api/v1"
 
@@ -94,7 +98,7 @@ def test_sqlite_foreign_keys_enforced(client: TestClient) -> None:
     db = SessionLocal()
     try:
         if db.get_bind().dialect.name != "sqlite":
-            return  # PostgreSQL always enforces foreign keys.
+            pytest.skip("PostgreSQL always enforces FKs")
         assert db.execute(text("PRAGMA foreign_keys")).scalar() == 1
     finally:
         db.close()
@@ -229,3 +233,39 @@ def test_refused_delete_writes_no_audit_row(client: TestClient) -> None:
     finally:
         db.close()
     assert after == before
+
+
+def test_delete_failing_after_guards_rolls_back_audit_and_user(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The audit row and the delete commit together: a failure inside the
+    cascade leaves neither a ``user.delete`` row nor a missing user."""
+    admin = _admin(client)
+    victim = _create_user(client, admin, "del_boom", Role.T)
+    db = SessionLocal()
+    try:
+        last_audit_id = db.query(func.max(AuditLog.id)).scalar() or 0
+    finally:
+        db.close()
+
+    def _boom(*_args: object, **_kwargs: object) -> int:
+        raise RuntimeError("cascade failed")
+
+    # Runs inside user_service.delete, after ensure_deletable has passed.
+    monkeypatch.setattr(user_service, "_recorder_after_delete", _boom)
+    res = TestClient(app, raise_server_exceptions=False).delete(
+        f"{V}/users/{victim}", headers=admin
+    )
+
+    assert res.status_code == 500
+    db = SessionLocal()
+    try:
+        assert db.get(User, victim) is not None
+        assert (
+            db.query(AuditLog)
+            .filter(AuditLog.id > last_audit_id, AuditLog.action == "user.delete")
+            .count()
+            == 0
+        )
+    finally:
+        db.close()

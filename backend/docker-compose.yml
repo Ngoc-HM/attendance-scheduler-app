@@ -3,6 +3,7 @@
 services:
   db:
     image: postgres:16
+    restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -11,12 +12,22 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    # The API runs `alembic upgrade head` on start; wait until PostgreSQL
+    # accepts connections instead of racing it.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d attendance"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
 
   api:
     build: .
+    restart: unless-stopped
     env_file: .env
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     ports:
       - "8035:8035"
     environment:

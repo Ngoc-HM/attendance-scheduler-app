@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import csv
 import io
+import re
 
 from openpyxl import Workbook
 
@@ -22,6 +23,39 @@ CONTENT_TYPES = {
     ),
 }
 
+# Ruling R7 (B1): a cell starting with one of these is run as a formula by
+# Excel/LibreOffice (CSV injection, e.g. a self-registered name
+# ``=HYPERLINK(...)``). Prefixing ``'`` keeps the text but makes it inert.
+_FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
+
+
+# A plain signed decimal number ("-1", "+2", "-0.5", "1e3"); no whitespace,
+# so a TAB/CR-prefixed value is never treated as a number.
+_NUMBER = re.compile(r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?")
+
+
+def _is_number(value: str) -> bool:
+    return _NUMBER.fullmatch(value) is not None
+
+
+def escape_cell(value: str) -> str:
+    """Return ``value`` with a leading ``'`` if a spreadsheet would run it.
+
+    Plain numbers such as ``-1`` or ``+2`` are left alone: they are data,
+    not formulas.
+    """
+    if (
+        isinstance(value, str)
+        and value.startswith(_FORMULA_PREFIXES)
+        and not _is_number(value)
+    ):
+        return "'" + value
+    return value
+
+
+def _escaped(row: list[str]) -> list[str]:
+    return [escape_cell(cell) for cell in row]
+
 
 def serialize(table: ReportTable, fmt: str) -> bytes:
     if fmt == "xlsx":
@@ -32,8 +66,8 @@ def serialize(table: ReportTable, fmt: str) -> bytes:
 def to_csv(table: ReportTable) -> bytes:
     buf = io.StringIO()
     writer = csv.writer(buf)
-    writer.writerow(table.headers)
-    writer.writerows(table.rows)
+    writer.writerow(_escaped(table.headers))
+    writer.writerows(_escaped(row) for row in table.rows)
     return buf.getvalue().encode("utf-8-sig")  # BOM → Excel opens UTF-8 cleanly
 
 
@@ -41,9 +75,11 @@ def to_xlsx(table: ReportTable) -> bytes:
     wb = Workbook()
     ws = wb.active
     ws.title = table.title[:31]  # Excel sheet-name limit
-    ws.append(table.headers)
+    ws.append(_escaped(table.headers))
     for row in table.rows:
-        ws.append(row)
+        # Escaped text never starts with "=", so openpyxl stores it as a
+        # string cell, never as a formula.
+        ws.append(_escaped(row))
     buf = io.BytesIO()
     wb.save(buf)
     return buf.getvalue()

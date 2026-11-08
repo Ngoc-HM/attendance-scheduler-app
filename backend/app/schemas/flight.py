@@ -34,7 +34,8 @@ class FlightDayRead(ORMModel):
 class FlightUpsert(BaseModel):
     day: date
     flt_number: int  # 37/36/31/30 (§8)
-    route: str | None = None
+    # Flight.route is String(32).
+    route: str | None = Field(default=None, max_length=32)
     sta: time | None = None  # LT FRA
     std: time | None = None  # LT FRA
 
@@ -45,8 +46,9 @@ class FlightUpsert(BaseModel):
 
 
 class FlightPresetUpsert(BaseModel):
-    label: str
-    route: str | None = None
+    # FlightPreset.label is String(64), .route String(32).
+    label: str = Field(max_length=64)
+    route: str | None = Field(default=None, max_length=32)
     flt_arr: int
     flt_dep: int
     sta: time

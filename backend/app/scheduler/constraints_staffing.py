@@ -13,6 +13,11 @@ Per-day MINIMUM coverage required (spec table, §5.3 #4):
 This is a FLOOR, not an exact target: extra coverage above the floor is fine.
 The automatic solver never creates A/D. Under-coverage is returned as a
 Violation; A/D can only be recorded later for a real unexpected absence.
+
+The shortfall of a shift is bounded by its demand, not by the role-A head
+count: with the only role-A person on leave on a 2-pair day the D shortfall is
+2. With no role-A people at all, every flight day is one fixed shortfall,
+reported once per day like ``schedule_violation_checker.check_staffing``.
 """
 
 from __future__ import annotations
@@ -37,8 +42,6 @@ def add(
 ) -> None:
     # Only role-A people have A / D vars.
     role_a = [p for p in inp.people if p.role is Role.A]
-    if not role_a:
-        return
 
     for d in sorted(inp.days):
         pairs = inp.flight_pairs.get(d, 0)
@@ -46,14 +49,28 @@ def add(
         if demand_a == 0 and demand_d == 0:
             continue  # no flight ops that day → no minimum to enforce
 
+        if not role_a:
+            # Nobody can cover: the whole demand is short (a constant slack).
+            registry.register(
+                model.new_constant(demand_a + demand_d),
+                rule="flight_staffing",
+                message=(
+                    f"{d}: no role-A staff for flight coverage (need at least "
+                    f"{demand_a} on A and {demand_d} on D)"
+                ),
+                day=d,
+            )
+            continue
+
         # Count A and D across role-A people only.
         sum_a = sum(x[(p.user_id, d, AttendanceCode.A)] for p in role_a)
         sum_d = sum(x[(p.user_id, d, AttendanceCode.D)] for p in role_a)
 
         for shift, total, demand in (("A", sum_a, demand_a), ("D", sum_d, demand_d)):
             label = f"staff_{shift}_{d.isoformat()}"
-            # Floor only: total + under >= demand (no over cap).
-            under = model.new_int_var(0, len(role_a), f"{label}_under")
+            # Floor only: total + under >= demand (no over cap). ``under`` can
+            # reach the whole demand (everyone on leave), never more.
+            under = model.new_int_var(0, demand, f"{label}_under")
             model.add(total + under >= demand)
 
             registry.register(

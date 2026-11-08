@@ -20,13 +20,29 @@ class SessionExpiredSignal extends StateNotifier<int> {
 
 final sessionExpiredSignalProvider =
     StateNotifierProvider<SessionExpiredSignal, int>(
-  (ref) => SessionExpiredSignal(),
+      (ref) => SessionExpiredSignal(),
+    );
+
+/// Monotonic counter bumped on every 403 outside login and `GET /users/me`.
+/// A 403 is either a plain permission refusal or an account an admin disabled
+/// mid-session; the backend's `detail` is translated text, so `AuthController`
+/// tells them apart by re-reading `/users/me` (403 there → inactive → the
+/// session ends). Same acyclic set-up as [SessionExpiredSignal].
+class ForbiddenSignal extends StateNotifier<int> {
+  ForbiddenSignal() : super(0);
+
+  void fire() => state = state + 1;
+}
+
+final forbiddenSignalProvider = StateNotifierProvider<ForbiddenSignal, int>(
+  (ref) => ForbiddenSignal(),
 );
 
 /// Shared Dio instance, configured with the base URL, a bearer-token
 /// interceptor, the current UI language (so backend error messages come
-/// back in the same language the user reads the app in) and a 401 watcher
-/// that ends the session when the token is no longer accepted.
+/// back in the same language the user reads the app in) and a 401/403
+/// watcher that ends the session when the token or the account is no longer
+/// accepted.
 final dioProvider = Provider<Dio>((ref) {
   final dio = Dio(
     BaseOptions(
@@ -37,29 +53,42 @@ final dioProvider = Provider<Dio>((ref) {
   );
   dio.interceptors.add(_AuthInterceptor(ref.read(tokenStorageProvider)));
   // Read lazily per request: language switches must not rebuild Dio.
-  dio.interceptors.add(_LocaleInterceptor(
-    () => ref.read(localeControllerProvider).languageCode,
-  ));
-  // Read lazily inside the callback: keeps Dio free of any auth dependency.
-  dio.interceptors.add(_UnauthorizedInterceptor(
-    () => ref.read(sessionExpiredSignalProvider.notifier).fire(),
-  ));
+  dio.interceptors.add(
+    _LocaleInterceptor(() => ref.read(localeControllerProvider).languageCode),
+  );
+  // Read lazily inside the callbacks: keeps Dio free of any auth dependency.
+  dio.interceptors.add(
+    _SessionInterceptor(
+      onUnauthorized: () =>
+          ref.read(sessionExpiredSignalProvider.notifier).fire(),
+      onForbidden: () => ref.read(forbiddenSignalProvider.notifier).fire(),
+    ),
+  );
   return dio;
 });
 
 /// Fires [_onUnauthorized] on every 401 except the login call itself (a 401
-/// there means wrong credentials, handled by `AuthController.login`). The
-/// error is always passed on so datasources still surface their
-/// `ApiException`.
-class _UnauthorizedInterceptor extends Interceptor {
-  _UnauthorizedInterceptor(this._onUnauthorized);
+/// there means wrong credentials, handled by `AuthController.login`), and
+/// [_onForbidden] on every 403 except login and `GET /users/me` (that call is
+/// the inactive-account check itself; its callers handle the 403). The error
+/// is always passed on so datasources still surface their `ApiException`.
+class _SessionInterceptor extends Interceptor {
+  _SessionInterceptor({
+    required this._onUnauthorized,
+    required this._onForbidden,
+  });
 
   final void Function() _onUnauthorized;
+  final void Function() _onForbidden;
 
   @override
   void onError(DioException err, ErrorInterceptorHandler handler) {
-    final isLogin = err.requestOptions.uri.path.endsWith(ApiEndpoints.login);
-    if (err.response?.statusCode == 401 && !isLogin) _onUnauthorized();
+    final path = err.requestOptions.uri.path;
+    final isLogin = path.endsWith(ApiEndpoints.login);
+    final isMe = path.endsWith(ApiEndpoints.me);
+    final status = err.response?.statusCode;
+    if (status == 401 && !isLogin) _onUnauthorized();
+    if (status == 403 && !isLogin && !isMe) _onForbidden();
     handler.next(err);
   }
 }

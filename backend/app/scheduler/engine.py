@@ -1,8 +1,9 @@
 """CP-SAT scheduling engine (spec §5) — rule-based, NO ML/AI (§9.6).
 
 ``SchedulerEngine.solve`` builds the model (decision variables → hard
-constraints §5.3 → soft objectives §5.4 → slack penalties), runs OR-Tools
-with a time limit and returns a ``SolverOutput``.
+constraints §5.3 → soft objectives §5.4 → slack penalties), runs OR-Tools in
+two phases (slack only, then the soft objectives at that slack) within the
+time limit and returns a ``SolverOutput`` with the solver status.
 
 Always-feasible architecture (locked decision #2): staffing and off-day rules
 carry penalized slack, so a solution is returned even when rules cannot all
@@ -30,10 +31,13 @@ and off-chain rules apply to ALL roles, using each role's own working-code set.
 
 from __future__ import annotations
 
+import math
+import time
 from datetime import date
 
 from ortools.sat.python import cp_model
 
+from app.core.config import settings
 from app.models.enums import AttendanceCode
 from app.scheduler import constraints, objectives
 from app.scheduler.domain import AssignmentResult, SolverInput, SolverOutput, Violation
@@ -49,35 +53,141 @@ ASSIGNABLE_CODES: tuple[AttendanceCode, ...] = (
     AttendanceCode.CD,
 )
 
+# Share of ``max_solve_seconds`` for phase 1 (slack only); phase 2 gets the
+# rest, including whatever phase 1 did not use.
+PHASE1_TIME_SHARE = 0.4
+
 
 class SchedulerEngine:
-    def __init__(self, assignable_codes: tuple[AttendanceCode, ...] = ASSIGNABLE_CODES):
+    def __init__(
+        self,
+        assignable_codes: tuple[AttendanceCode, ...] = ASSIGNABLE_CODES,
+        *,
+        num_workers: int | None = None,
+    ):
         # assignable_codes kept as parameter for API compat; ignored internally.
         self.assignable_codes = tuple(assignable_codes)
+        # None → settings.SOLVER_NUM_WORKERS, read at solve time.
+        self.num_workers = num_workers
 
     def solve(self, inp: SolverInput) -> SolverOutput:
+        """Solve in two phases (lexicographic: slack first, then soft terms).
+
+        Phase 1 minimises the weighted slack alone — the cheap question "which
+        rules must break?" — with ``PHASE1_TIME_SHARE`` of the time limit.
+        Phase 2 keeps the slack total within phase 1's result (and at or above
+        its proven bound), starts from phase 1's plan as a hint and minimises
+        the soft objectives with the remaining time. One combined objective
+        used to stop at the time limit on a 1-CPU machine with invented slack
+        although a clean plan existed (review C1). If phase 1 finds no plan in
+        its share, the single combined solve runs with the time that is left.
+        """
         model = cp_model.CpModel()
         x = self._build_vars(model, inp)
         registry = SlackRegistry()
 
         constraints.add_all(model, x, inp, registry)
         soft_terms = objectives.add_all(model, x, inp)
-        model.minimize(sum(registry.penalty_terms()) + sum(soft_terms))
+        slack = sum(registry.penalty_terms())
 
-        solver = cp_model.CpSolver()
-        solver.parameters.max_time_in_seconds = inp.max_solve_seconds
-        # Determinism for tests/reproducibility (§5.6 — same input, same plan).
-        solver.parameters.random_seed = 42
-        status = solver.solve(model)
-
-        if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
-            return SolverOutput(
-                feasible=True,
-                assignments=self._extract(solver, x),
-                # Slack > 0 → rule could not hold; admin resolves (§5.6).
-                violations=registry.violations(solver),
+        started = time.monotonic()
+        model.minimize(slack)
+        phase1 = self._solver(inp.max_solve_seconds * PHASE1_TIME_SHARE)
+        status1 = phase1.solve(model)
+        if status1 == cp_model.UNKNOWN:
+            # Phase 1 ran out of its share without any plan: fall back to the
+            # single combined solve with the time that is left.
+            return self._combined_solve(
+                model, x, registry, slack + sum(soft_terms), inp, started
             )
+        if status1 not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+            return self._no_schedule(status1)
 
+        slack_found = round(phase1.objective_value)
+        # Proven lower bound on the slack (equals slack_found when OPTIMAL).
+        slack_floor = math.ceil(phase1.best_objective_bound - 1e-6)
+        fallback = SolverOutput(
+            feasible=True,
+            assignments=self._extract(phase1, x),
+            # Slack > 0 → rule could not hold; admin resolves (§5.6).
+            violations=registry.violations(phase1),
+            status="feasible",
+            slack_proven_minimal=slack_found <= slack_floor,
+        )
+
+        # Complete hint: every model variable (decision vars, slack and the
+        # objective helpers) takes its phase-1 value, so phase 2 starts from a
+        # full feasible solution.
+        for i in range(len(model.proto.variables)):
+            var = model.get_int_var_from_proto_index(i)
+            model.add_hint(var, phase1.value(var))
+        model.add(slack <= slack_found)
+        if slack_floor > 0:
+            model.add(slack >= slack_floor)
+        # The slack stays in the objective, but phase 2 can never exceed phase
+        # 1's slack; it is fixed exactly when phase 1 is optimal (bound ==
+        # found), otherwise phase 2 may still lower it towards the bound.
+        model.minimize(slack + sum(soft_terms))
+        phase2 = self._solver(self._remaining(inp, started))
+        status2 = phase2.solve(model)
+        if status2 not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+            # Out of time before improving on the hint: keep phase 1's plan.
+            return fallback
+
+        both_optimal = status1 == cp_model.OPTIMAL and status2 == cp_model.OPTIMAL
+        return SolverOutput(
+            feasible=True,
+            assignments=self._extract(phase2, x),
+            violations=registry.violations(phase2),
+            status="optimal" if both_optimal else "feasible",
+            slack_proven_minimal=phase2.value(slack) <= slack_floor,
+        )
+
+    def _combined_solve(
+        self,
+        model: cp_model.CpModel,
+        x: dict[tuple[int, date, AttendanceCode], cp_model.IntVar],
+        registry: SlackRegistry,
+        objective: cp_model.LinearExprT,
+        inp: SolverInput,
+        started: float,
+    ) -> SolverOutput:
+        """Old single-objective solve, used only when phase 1 found nothing.
+
+        Makes no proof claim: the slack is not separately minimised here.
+        """
+        model.minimize(objective)
+        solver = self._solver(self._remaining(inp, started))
+        status = solver.solve(model)
+        if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+            return self._no_schedule(status)
+        return SolverOutput(
+            feasible=True,
+            assignments=self._extract(solver, x),
+            violations=registry.violations(solver),
+            status="feasible",
+            slack_proven_minimal=False,
+        )
+
+    @staticmethod
+    def _remaining(inp: SolverInput, started: float) -> float:
+        return max(inp.max_solve_seconds - (time.monotonic() - started), 0.0)
+
+    def _solver(self, max_seconds: float) -> cp_model.CpSolver:
+        solver = cp_model.CpSolver()
+        solver.parameters.max_time_in_seconds = max_seconds
+        # A fixed worker count and seed (§5.6 — same input, same plan). With
+        # one worker a run that finishes inside the time limit is
+        # reproducible; one stopped by the limit depends on machine speed.
+        workers = self.num_workers
+        if workers is None:
+            workers = settings.SOLVER_NUM_WORKERS
+        solver.parameters.num_workers = workers
+        solver.parameters.random_seed = 42
+        return solver
+
+    @staticmethod
+    def _no_schedule(status: cp_model.CpSolverStatus) -> SolverOutput:
         # With the slack architecture this only happens on contradictory
         # PINS (e.g. approved-off cell that another hard rule forbids) or a
         # too-small time limit (§5.6 #12).
@@ -92,6 +202,11 @@ class SchedulerEngine:
                     ),
                 )
             ],
+            status=(
+                "infeasible"
+                if status in (cp_model.INFEASIBLE, cp_model.MODEL_INVALID)
+                else "unknown"
+            ),
         )
 
     def _build_vars(

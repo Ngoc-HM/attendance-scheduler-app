@@ -358,7 +358,14 @@ class AppLocalizations {
           'regenerate it afterwards.',
       'requestRevoked': 'Approval revoked.',
       // --- User management guards (CSV TC-005/006/007/008) ---
-      'usernameTaken': 'That username is already taken.',
+      // --- Request errors by status code + inactive account (review 2026-11-08) ---
+      'requestFailed': 'The request failed. Please try again.',
+      'requestServerUnavailable':
+          'Cannot reach the server. Check the connection and try again.',
+      'requestServerError':
+          'The server ran into an error. Please try again later.',
+      'authAccountInactive':
+          'Your account is no longer active. Please contact an admin.',
       'lastAdminWarning':
           'You are about to act on the last remaining admin. This action cannot proceed.',
       'lastAdminDialogMessage':
@@ -410,6 +417,21 @@ class AppLocalizations {
       'annualLeaveQuotaInvalid': 'Enter a whole number from 0 to 365.',
       'editAnnualLeaveQuota': 'Edit leave quota',
       'annualLeaveQuotaUpdated': 'Annual leave quota updated.',
+      // --- Schedule screen (review 2026-11-08: A3, C2, D3) ---
+      'scheduleLoadFailed': 'Could not load the schedule:',
+      'actionFailed': 'The action could not be completed.',
+      'checkingRules': 'Checking the rules…',
+      'ruleViolationsInMonth':
+          'rule violation(s) in this month. Review them before publishing.',
+      'publishWithViolationsTitle': 'Publish with rule violations?',
+      'rulesNotCheckedTitle': 'Rules not checked',
+      'publishWithViolationsBody':
+          'This month still breaks these rules. Publish anyway?',
+      'rulesCheckFailed':
+          'The rules could not be checked right now. Publish anyway?',
+      'publishAnyway': 'Publish anyway',
+      'approvedWithWarnings': 'Request approved, with rule warnings',
+      'swapPartner': 'Swap partner',
     },
     'vi': {
       'appTitle': 'Xếp lịch & Chấm công',
@@ -751,7 +773,13 @@ class AppLocalizations {
           'sau khi hủy.',
       'requestRevoked': 'Đã hủy duyệt.',
       // --- User management guards (CSV TC-005/006/007/008) ---
-      'usernameTaken': 'Tên đăng nhập đã tồn tại.',
+      // --- Request errors by status code + inactive account (review 2026-11-08) ---
+      'requestFailed': 'Yêu cầu không thành công. Vui lòng thử lại.',
+      'requestServerUnavailable':
+          'Không kết nối được máy chủ. Hãy kiểm tra kết nối rồi thử lại.',
+      'requestServerError': 'Máy chủ gặp lỗi. Vui lòng thử lại sau.',
+      'authAccountInactive':
+          'Tài khoản của bạn không còn hoạt động. Vui lòng liên hệ quản trị viên.',
       'lastAdminWarning':
           'Bạn sắp thao tác lên admin cuối cùng. Thao tác này không thể tiếp tục.',
       'lastAdminDialogMessage':
@@ -800,6 +828,21 @@ class AppLocalizations {
       'annualLeaveQuotaInvalid': 'Nhập số nguyên từ 0 đến 365.',
       'editAnnualLeaveQuota': 'Sửa định mức phép',
       'annualLeaveQuotaUpdated': 'Đã cập nhật định mức phép năm.',
+      // --- Schedule screen (review 2026-11-08: A3, C2, D3) ---
+      'scheduleLoadFailed': 'Không thể tải lịch:',
+      'actionFailed': 'Không thể thực hiện thao tác.',
+      'checkingRules': 'Đang kiểm tra quy tắc…',
+      'ruleViolationsInMonth':
+          'vi phạm quy tắc trong tháng này. Hãy xem lại trước khi công bố.',
+      'publishWithViolationsTitle': 'Công bố khi còn vi phạm quy tắc?',
+      'rulesNotCheckedTitle': 'Chưa kiểm tra được quy tắc',
+      'publishWithViolationsBody':
+          'Lịch tháng này vẫn vi phạm các quy tắc sau. Vẫn công bố?',
+      'rulesCheckFailed':
+          'Hiện không kiểm tra được quy tắc. Vẫn công bố?',
+      'publishAnyway': 'Vẫn công bố',
+      'approvedWithWarnings': 'Đã duyệt yêu cầu, có cảnh báo quy tắc',
+      'swapPartner': 'Người hoán đổi',
     },
   };
 
@@ -957,6 +1000,7 @@ class AppLocalizations {
     'http_failure' => text('authHttpFailure'),
     'unknown_failure' => text('authUnknownFailure'),
     'session_expired' => text('authSessionExpired'),
+    'account_inactive' => text('authAccountInactive'),
     null => '',
     _ => code,
   };
