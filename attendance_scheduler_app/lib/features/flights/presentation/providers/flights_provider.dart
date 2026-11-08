@@ -46,11 +46,17 @@ class FlightsController extends StateNotifier<FlightsState> {
 
   final FlightsRemoteDataSource _ds;
 
+  /// Nothing is stored once the controller is disposed (logout invalidates
+  /// this provider, possibly mid-request); a response for a month the page
+  /// has already left is dropped.
   Future<void> load() async {
+    if (!mounted) return;
+    final month = state.month;
     state = state.copyWith(rows: const AsyncValue.loading());
     final result = await AsyncValue.guard(
-      () => _ds.listDays(state.month.year, state.month.month),
+      () => _ds.listDays(month.year, month.month),
     );
+    if (!mounted || state.month != month) return;
     state = state.copyWith(
       dayModels: result.valueOrNull ?? const [],
       rows: result.whenData(_toRows),
@@ -107,6 +113,7 @@ class FlightsController extends StateNotifier<FlightsState> {
     if (items.isNotEmpty) {
       await _ds.applyBatch(items);
     }
+    if (!mounted) return;
     state = state.copyWith(month: DateTime(month.year, month.month));
     await load();
   }

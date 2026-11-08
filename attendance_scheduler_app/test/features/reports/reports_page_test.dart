@@ -2,7 +2,9 @@
 // translated labels, and "Full year" exports through the yearly endpoint
 // (month stays null, never month 0, which the backend rejects).
 
+import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:attendance_scheduler_app/design_system/design_system.dart';
@@ -51,6 +53,25 @@ class _Conflict implements HttpClientAdapter {
 
   @override
   void close({bool force = false}) {}
+}
+
+/// monthly() waits for [gate]; yearly() fails with a non-API error (a
+/// malformed response).
+class _GatedReports extends ReportsRemoteDataSource {
+  _GatedReports() : super(Dio());
+
+  final gate = Completer<ReportDownload>();
+  int monthlyCalls = 0;
+
+  @override
+  Future<ReportDownload> monthly(int year, int month, String format) {
+    monthlyCalls++;
+    return gate.future;
+  }
+
+  @override
+  Future<ReportDownload> yearly(int year, String format) async =>
+      throw TypeError();
 }
 
 void main() {
@@ -121,5 +142,55 @@ void main() {
       (result as ExportFailure).message,
       'Không có dữ liệu cho tháng này.',
     );
+  });
+
+  test('a second export while one runs is ignored', () async {
+    final reports = _GatedReports();
+    final ctrl = ReportsController(
+      reports,
+      saveFile: (bytes, name) async => '/downloads/$name',
+    );
+
+    final first = ctrl.export();
+    expect(ctrl.state.isExporting, isTrue);
+    expect(await ctrl.export(), isNull);
+    expect(reports.monthlyCalls, 1);
+
+    reports.gate.complete(const ReportDownload(bytes: [1], filename: 'm.csv'));
+    expect(await first, isA<ExportSuccess>());
+    expect(ctrl.state.isExporting, isFalse);
+  });
+
+  test('only a failed file write is reportSaveFailed', () async {
+    final failingSave = ReportsController(
+      _RecordingReports(),
+      saveFile: (bytes, name) async => throw const FileSystemException('full'),
+    );
+    final saveResult = await failingSave.exportMonthly() as ExportFailure;
+    expect(saveResult.messageKey, 'reportSaveFailed');
+    expect(failingSave.state.isExporting, isFalse);
+
+    // A failed download that is not an ApiException is an export error.
+    final badResponse = ReportsController(
+      _GatedReports(),
+      saveFile: (bytes, name) async => fail('nothing to save'),
+    )..selectMonth(null);
+    final fetchResult = await badResponse.export() as ExportFailure;
+    expect(fetchResult.messageKey, 'reportExportFailed');
+    expect(badResponse.state.isExporting, isFalse);
+  });
+
+  test('an export finishing after dispose throws nothing', () async {
+    final reports = _GatedReports();
+    final ctrl = ReportsController(
+      reports,
+      saveFile: (bytes, name) async => '/downloads/$name',
+    );
+
+    final pending = ctrl.export();
+    ctrl.dispose();
+    reports.gate.complete(const ReportDownload(bytes: [1], filename: 'm.csv'));
+
+    expect(await pending, isA<ExportSuccess>());
   });
 }

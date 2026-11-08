@@ -67,14 +67,23 @@ class LeavesController extends StateNotifier<LeavesState> {
   final LeavesRemoteDataSource _ds;
   final Ref _ref;
 
+  /// Bumped by every [load]; a load whose number is no longer the latest
+  /// drops its result, so an older, slower response never overwrites a
+  /// newer one (Refresh during a load, reload after a decision).
+  int _loadSeq = 0;
+
   bool get _isAdmin =>
       _ref.read(authControllerProvider).user?.isAdmin ?? false;
 
   /// Load leaves — admin sees all (GET /leaves?all=true); others own only —
   /// together with today's registration window and, for employees, their
   /// remaining annual leave.
+  ///
+  /// Nothing is stored once the controller is disposed: logout invalidates
+  /// this provider, possibly mid-load.
   Future<void> load() async {
     if (!mounted) return;
+    final seq = ++_loadSeq;
     state = state.copyWith(entries: const AsyncValue.loading());
     final window = _loadWindow();
     final balance = _loadBalance();
@@ -91,7 +100,7 @@ class LeavesController extends StateNotifier<LeavesState> {
     });
     final loadedWindow = await window;
     final loadedBalance = await balance;
-    if (!mounted) return;
+    if (!mounted || seq != _loadSeq) return;
     state = state.copyWith(
       entries: entries,
       window: loadedWindow,

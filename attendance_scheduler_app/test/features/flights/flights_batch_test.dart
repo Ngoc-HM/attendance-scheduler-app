@@ -1,6 +1,8 @@
 // E: a failed month batch must not switch the page to the dialog's month
 // while the table still holds the previous month's rows.
 
+import 'dart:async';
+
 import 'package:attendance_scheduler_app/core/network/api_exception.dart';
 import 'package:attendance_scheduler_app/features/flights/data/datasources/flights_remote_datasource.dart';
 import 'package:attendance_scheduler_app/features/flights/data/models/flight_day_model.dart';
@@ -31,6 +33,16 @@ class _Flights extends FlightsRemoteDataSource {
   }
 }
 
+/// listDays waits until the test completes [gate].
+class _GatedFlights extends FlightsRemoteDataSource {
+  _GatedFlights() : super(Dio());
+
+  final gate = Completer<List<FlightDayModel>>();
+
+  @override
+  Future<List<FlightDayModel>> listDays(int year, int month) => gate.future;
+}
+
 void main() {
   test('flights_batch_failure_keeps_previous_month', () async {
     final ds = _Flights();
@@ -56,5 +68,18 @@ void main() {
     ]);
     expect(ctrl.state.month, DateTime(other.year, other.month));
     expect(ds.loaded.last, (other.year, other.month));
+  });
+
+  test('a load finishing after dispose stores nothing and throws nothing', () async {
+    final ds = _GatedFlights();
+    final ctrl = FlightsController(ds); // starts a gated load
+    final reload = ctrl.load();
+
+    ctrl.dispose();
+    ds.gate.complete(const []);
+
+    await expectLater(reload, completes);
+    await Future<void>.delayed(Duration.zero); // the constructor's load too
+    expect(ctrl.mounted, isFalse);
   });
 }

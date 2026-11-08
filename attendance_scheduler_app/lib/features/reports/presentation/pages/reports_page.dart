@@ -79,7 +79,8 @@ class ReportsPage extends ConsumerWidget {
     AppLocalizations l,
   ) async {
     final result = await ctrl.export();
-    if (!context.mounted) return;
+    // Null: an export was already running and this click was ignored.
+    if (result == null || !context.mounted) return;
 
     switch (result) {
       case ExportSuccess(:final path):
