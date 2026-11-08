@@ -39,35 +39,51 @@ conveniences are live on that host (kept on purpose by the owner,
    database and is ignored (with a warning in the log) once the database has
    an `alembic_version` table. Migration `0009` removes duplicate flight legs
    (same day + FLT number, keeping the lowest id) and adds a unique
-   constraint; without it the flight import cannot rely on that rule.
-2. **Start the API:**
+   constraint; without it the flight import cannot rely on that rule. If you
+   forget, startup logs a WARNING such as "Database schema revision 0008
+   differs from the code's migration head 0009; run 'alembic upgrade head'"
+   and the API may then fail on missing columns (the warning does not stop
+   startup).
+2. **Start the API**, bound to the workstation's tailnet address (find it
+   with `tailscale ip -4`):
    ```bash
-   .venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8035
+   .venv/bin/python -m uvicorn app.main:app --host <tailnet-ip> --port 8035
    ```
+   Use `--host 127.0.0.1` when only this machine's client needs it.
+   `--host 0.0.0.0` listens on every network of the host (office LAN,
+   public Wi-Fi), and in dev mode CORS is `*` and `/docs` is open — use it
+   only on purpose, behind a firewall.
    `make backend` / `make dev` add `--reload`, which suits editing code but
    not a long-running service. For a backend that others depend on, run the
    command above under a process manager that restarts it after a crash or a
    reboot (launchd on macOS, systemd on Linux, a Windows service wrapper such
    as NSSM), with `backend/` as the working directory so `.env` is found.
-   Bind to the tailnet address instead of `0.0.0.0` if the host has other
-   networks.
 3. **Check it:** `GET /health` answers 200 when the database responds, 503
    otherwise. The `app.*` log lines (bootstrap, autorun) go to stderr at
-   INFO; point the process manager's log file at them.
+   INFO; point the process manager's log file at them, and look for the
+   schema WARNING from step 1 after every update.
 
 ### Autorun on this host
-From day `AUTORUN_DAY + 1` (default the 21st) until the end of the month,
-**every start of the backend, and the daily check at 00:05 Europe/Berlin,
-generates next month's DRAFT if that month has no schedule yet** (decision
-#55). It never overwrites an existing draft or published month. The log says
-what happened ("generated draft", "already exists, skipping", "no flight
-days", or an error). Consequences:
+Every start of the backend, and the daily check at 00:05 Europe/Berlin
+(decision #55):
+- **drafts the CURRENT month if it has no schedule at all** — on any day.
+  On a fresh install (or after the host was off for a whole run window) the
+  first start therefore creates a draft of the current month;
+- **from day `AUTORUN_DAY + 1` (default the 21st) until the end of the
+  month, drafts NEXT month if it has no schedule yet.**
+
+It never overwrites an existing draft or published month; drafts still need
+an admin to publish them. The log says what happened ("generated draft",
+"already exists, skipping", "no flight days", or an error; a second backend
+that loses the race logs "already exists (created concurrently)").
+Consequences:
 - enter next month's flights before day 21, or regenerate after entering
   them (the log warns when a draft was planned without flights);
 - if several backends ever point at the same database, keep
   `AUTORUN_ENABLED=true` on exactly one of them;
-- a developer who starts a dev backend against the shared database on or
-  after day 21 triggers the same generation.
+- a developer who starts a dev backend against the shared database triggers
+  the same generation (current month any day, next month from day 21);
+  set `AUTORUN_ENABLED=false` in that developer's `.env`.
 
 ### Maintenance scripts against the shared database
 `scripts/seed_demo_users.py` and `scripts/reset_all_passwords.py` refuse
@@ -100,7 +116,8 @@ overrides on purpose. Both prompt for the password without echo when
 - `ENVIRONMENT=staging` gets exactly the same checks as `prod`. Both
   **refuse to start** ("Refusing to start: unsafe settings …") while any of
   these hold:
-  - `SECRET_KEY` is the dev default or shorter than 32 characters;
+  - `SECRET_KEY` is the code's dev default, the `.env.example` placeholder
+    (`please-generate-a-long-random-string`) or shorter than 32 characters;
   - `FIRST_ADMIN_PASSWORD` is the dev default or shorter than 12 characters;
   - `DATABASE_URL` is SQLite or the dev default
     (`postgres:postgres@localhost`);
@@ -230,6 +247,10 @@ employees requires a fresh legal review (EU AI Act high-risk from 2026-08-02).
 - **Windows build**: `flutter build windows --release`, uploaded as the
   `attendance-scheduler-windows` artifact. It waits only for the Ubuntu
   Flutter job, not for the goldens.
+
+All three Flutter jobs install packages with `flutter pub get
+--enforce-lockfile`, so a `pubspec.lock` that does not match `pubspec.yaml`
+fails the build instead of resolving new versions.
 
 ## ⚠ Pre-rollout gate — Betriebsrat (§9.2)
 A system that can monitor staff behaviour/performance needs an agreement with

@@ -16,7 +16,8 @@ cd backend && .venv/bin/alembic upgrade head
 ```
 
 - `AUTO_CREATE_TABLES` **không** cứu được: nó chỉ tạo bảng cho một DB hoàn toàn mới, và bị bỏ qua (có dòng cảnh báo trong log) khi DB đã có bảng `alembic_version`. Nó cũng không bao giờ thêm cột hay ràng buộc vào bảng đã có.
-- Nếu muốn test sạch trên máy, đổi `DATABASE_URL` trong `backend/.env` sang SQLite (`sqlite:///./dev.db`) rồi chạy bình thường; với file DB mới, bảng được tạo tự động.
+- Nếu quên migrate, lúc khởi động backend in một dòng **WARNING** dạng "Database schema revision 0008 differs from the code's migration head 0009; run 'alembic upgrade head'". Backend vẫn chạy tiếp nhưng API có thể lỗi vì thiếu cột — thấy dòng này thì tắt backend, chạy `alembic upgrade head` rồi bật lại.
+- Nếu muốn test sạch trên máy, đổi `DATABASE_URL` trong `backend/.env` sang SQLite (`sqlite:///./dev.db`) rồi chạy bình thường; với file DB mới, bảng được tạo tự động. Lưu ý: với `AUTORUN_ENABLED=true` (mặc định), lần khởi động đầu tiên sẽ tự tạo **nháp lịch tháng hiện tại** (tháng chưa có lịch nào); muốn tự bấm Generate từ đầu thì đặt `AUTORUN_ENABLED=false`.
 
 **Khởi động cả backend và app**
 
@@ -45,12 +46,12 @@ cd backend && .venv/bin/python scripts/seed_demo_users.py
 | 1 | Tạo lại lịch bị chặn khi đã publish hoặc đã chỉnh tay | Admin: Generate → Publish → Generate lại | Hộp xác nhận "lịch đã publish/chỉnh tay, tạo lại sẽ xoá chỉnh tay và về nháp". Đồng ý mới tạo lại |
 | 2 | Tự đăng ký không chọn được role | Màn Register: không còn ô role. Đăng ký xong → admin vào Users → Approve | Dialog duyệt bắt chọn role (M/T/A/F). Tài khoản đã active thì không duyệt lại được |
 | 3 | Nhãn nghỉ phải khớp số ngày | Nhân viên đăng ký nghỉ tháng 10 ngày, hoặc nghỉ năm 3 ngày | Bị chặn ngay trên app, backend cũng trả 422 |
-| 4 | Sửa lịch đã publish đồng bộ sang chấm công | Publish → admin sửa 1 ô lịch → mở Attendance | Ô chấm công seed đổi theo; ô admin đã ghi tay giữ nguyên |
+| 4 | Sửa lịch đồng bộ sang chấm công | Publish → admin sửa 1 ô lịch → mở Attendance. Thêm: Generate lại tháng đó (về nháp) → sửa 1 ô của bản nháp → mở Attendance | Ô chấm công seed đổi theo ở cả hai trường hợp (từ 2026-11-08 mọi lần sửa lịch, kể cả bản nháp, đều đồng bộ); ô admin đã ghi tay và ngày ốm S giữ nguyên. Khi tháng đang là nháp, nhân viên không thấy các ô seed đó cho tới khi publish lại |
 | 5 | Duyệt / huỷ nghỉ cập nhật thẳng lịch | Generate tháng X → nhân viên xin nghỉ 3 ngày trong tháng X → admin duyệt / huỷ | Ô lịch thành AL (ngày X nghỉ tuần vẫn giữ X); huỷ thì ô đang AL về X, ô admin đã sửa giữ nguyên |
 | 6 | Nghỉ bù đi làm ngày lễ, mọi role | Thêm ngày lễ ≥ 06/11/2026 → ghi chấm công A/AD/O/D đúng ngày đó → Generate tháng sau | Người đó được 1 ô CD tháng sau (lễ trước 06/11/2026 không tính; sửa mốc bằng `HOLIDAY_COMP_EFFECTIVE_FROM`) |
 | 7 | Định mức phép năm | Users: tạo user có định mức, hoặc "Edit leave quota"; màn Leaves nhân viên | Thẻ "Phép năm còn lại" = định mức − ngày nghỉ đã duyệt trong năm; duyệt quá định mức chỉ cảnh báo |
 | 8 | Cửa sổ đăng ký nghỉ | Màn Leaves hiển thị đúng trạng thái mở/đóng theo ngày 1–20 tháng trước (ở `ENVIRONMENT=dev` luôn mở) | Chuỗi hướng dẫn nêu đúng ngày đóng; không còn chữ "development" |
-| 9 | Autorun | Xem log backend lúc 00:05 (giờ Berlin) ngày 21, hoặc khởi động lại backend vào ngày 21 trở đi khi tháng sau chưa có lịch | Log in "Autorun: generated draft …" và có nháp tháng sau; ngày 20 không chạy. Máy tắt lúc 00:05 thì lần khởi động sau (hoặc lần kiểm tra 00:05 hôm sau) sẽ chạy bù. Tháng sau chưa có chuyến bay thì log cảnh báo |
+| 9 | Autorun | Xem log backend lúc 00:05 (giờ Berlin) ngày 21, hoặc khởi động lại backend vào ngày 21 trở đi khi tháng sau chưa có lịch | Log in "Autorun: generated draft …" và có nháp tháng sau; ngày 20 không chạy. Máy tắt lúc 00:05 thì lần khởi động sau (hoặc lần kiểm tra 00:05 hôm sau) sẽ chạy bù. Tháng sau chưa có chuyến bay thì log cảnh báo. Ngoài ra, bất kỳ ngày nào, nếu **tháng hiện tại** chưa có lịch thì lần khởi động / lần kiểm tra 00:05 sẽ tạo nháp tháng hiện tại; lịch đã có thì không bao giờ bị đụng tới |
 | 10 | Nhân viên xin đổi ca | Đăng nhập nhân viên → bấm vào ô của chính mình trên lịch đã publish | Dialog xin đổi ca; chỉ cho chọn mã thường (T/F: AD, X; A: A, D, X; M: O/D, X); danh sách đơn của mình hiện dưới lịch; admin duyệt ở màn Schedule |
 | 11 | Nhân viên xem chấm công của mình | Đăng nhập nhân viên → mục "Chấm công của tôi" | Chỉ thấy của mình, không có nút admin |
 | 12 | Tên trên lịch cho nhân viên | Đăng nhập nhân viên → Schedule | Hàng hiển thị mã (A1, T2...) thay vì "User 7" |
@@ -63,18 +64,18 @@ cd backend && .venv/bin/python scripts/seed_demo_users.py
 - `backend/scripts/reset_all_passwords.py` và `seed_demo_users.py` hỏi mật khẩu (gõ ẩn) khi không truyền `--password`, và từ chối chạy nếu DB không local trừ khi `--allow-non-dev`.
 - Trước khi deploy lên DB thật: kiểm tra có tài khoản `status='pending' AND role='M'` (đăng ký từ trước) không; nên đổi về T.
 - Giá trị định mức phép năm mặc định 30 ngày (`ANNUAL_LEAVE_DEFAULT_DAYS`) là tạm, chờ khách chốt. Mọi user có sẵn sẽ nhận 30 sau migration; sửa từng người bằng "Edit leave quota".
-- **Autorun trên DB dùng chung:** từ ngày 21 đến hết tháng, **mỗi lần bật backend** (và lần kiểm tra 00:05 mỗi ngày) sẽ tạo nháp tháng sau nếu tháng đó chưa có lịch. Nó không bao giờ ghi đè nháp hay lịch đã publish. Nên nhập chuyến bay tháng sau trước ngày 21; nếu nhiều máy cùng chạy backend vào DB này thì chỉ để `AUTORUN_ENABLED=true` trên một máy.
+- **Autorun trên DB dùng chung:** **mỗi lần bật backend** (và lần kiểm tra 00:05 mỗi ngày) sẽ tạo nháp **tháng hiện tại** nếu tháng đó chưa có lịch nào (bất kỳ ngày nào), và từ ngày 21 đến hết tháng thì tạo nháp **tháng sau** nếu tháng sau chưa có lịch. Nó không bao giờ ghi đè nháp hay lịch đã publish. Nên nhập chuyến bay tháng sau trước ngày 21; nếu nhiều máy cùng chạy backend vào DB này thì chỉ để `AUTORUN_ENABLED=true` trên một máy (máy thứ hai lỡ chạy cùng lúc chỉ ghi log "already exists").
 - Golden test Flutter chỉ khớp trên macOS. CI chạy golden ở job riêng trên macOS 15; job Ubuntu chạy `flutter test --exclude-tags golden`; bản build Windows không còn chờ golden. Trên máy: `flutter test --tags golden` (macOS) và `flutter test --exclude-tags golden`.
-- Thư viện đã được khoá phiên bản: `backend/requirements.lock` (CI và Docker cài với `-c requirements.lock`) và `attendance_scheduler_app/pubspec.lock`.
-- Chế độ `ENVIRONMENT=staging` bị chặn khởi động giống hệt `prod` (mật khẩu/secret mặc định, DB SQLite hoặc URL mặc định, CORS `*`, `AUTO_CREATE_TABLES=true`, thời hạn lưu trữ dưới 24 tháng).
+- Thư viện đã được khoá phiên bản: `backend/requirements.lock` (CI, Docker và `make install` cài với `-c requirements.lock`) và `attendance_scheduler_app/pubspec.lock` (mọi job Flutter trên CI chạy `flutter pub get --enforce-lockfile`, lock lệch với `pubspec.yaml` là CI đỏ).
+- Chế độ `ENVIRONMENT=staging` bị chặn khởi động giống hệt `prod` (mật khẩu/secret mặc định, kể cả giá trị mẫu `please-generate-a-long-random-string` trong `.env.example`, DB SQLite hoặc URL mặc định, CORS `*`, `AUTO_CREATE_TABLES=true`, thời hạn lưu trữ dưới 24 tháng).
 
 ## 5. Những điều vẫn chờ khách chốt
 
-Xem mục "Open questions" trong `docs/design-decisions.md`: ưu tiên cặp nghỉ cuối tuần, định biên "đúng số" hay "tối thiểu" và người nhóm A thừa làm gì, số ngày phép năm thật, hội đồng lao động, và các ghi chú nghiệp vụ nhỏ (ví dụ: CD bị AL đè khi duyệt nghỉ, T/B đúng ngày lễ cũng được nghỉ bù, đơn đổi ca đang chờ với mã AL/CD cũ sẽ bị từ chối khi duyệt). Từ 2026-11-08 có thêm: nghỉ phép nằm cạnh ngày nghỉ tuần không còn bị tính là "nghỉ liền quá dài" (tạm quyết, #41), cách tính CD trước mốc 06/11/2026 (tạm quyết, #43), không phạt làm ngày lễ (R5), và ca đêm với chấm giờ (check-out sau nửa đêm hiện trả 409).
+Xem mục "Open questions" trong `docs/design-decisions.md`: ưu tiên cặp nghỉ cuối tuần, định biên "đúng số" hay "tối thiểu" và người nhóm A thừa làm gì, số ngày phép năm thật, hội đồng lao động, và các ghi chú nghiệp vụ nhỏ (ví dụ: CD bị AL đè khi duyệt nghỉ, T/B đúng ngày lễ cũng được nghỉ bù, đơn đổi ca đang chờ với mã AL/CD cũ sẽ bị từ chối khi duyệt). Từ 2026-11-08 có thêm: nghỉ phép nằm cạnh ngày nghỉ tuần không còn bị tính là "nghỉ liền quá dài" (tạm quyết, #41), cách tính CD trước mốc 06/11/2026 (tạm quyết, #43), không phạt làm ngày lễ (R5), ô của người đã bị khoá trước hôm nay vẫn tính là người trực (tạm quyết I2, #44), bản xuất dữ liệu cá nhân (Art. 15) vẫn gồm ô lịch nháp, và ca đêm với chấm giờ (check-out sau nửa đêm hiện trả 409).
 
 ## 6. Bổ sung 2026-11-08 (đợt sửa theo rà soát 2026-11-08)
 
-Chạy `alembic upgrade head` trước (mục 1). Số liệu: backend 463 test, Flutter 119 test (gồm 3 golden).
+Chạy `alembic upgrade head` trước (mục 1). Số liệu: backend 479 test, Flutter 136 test (gồm 3 golden).
 
 | # | Thay đổi | Cách test | Kết quả mong đợi |
 |---|---|---|---|

@@ -70,9 +70,12 @@ uvicorn app.main:app --reload --port 8035
 ```
 `AUTO_CREATE_TABLES` (dev) only builds a brand-new, empty database; once the
 database has an `alembic_version` table it is ignored and the schema must be
-migrated with `alembic upgrade head` (head `0009`). The real setup today (dev
-backend on a workstation, shared PostgreSQL over Tailscale) is described in
-[`docs/deployment-guide.md`](./docs/deployment-guide.md).
+migrated with `alembic upgrade head` (head `0009`); startup logs a WARNING
+when it is behind. With `AUTORUN_ENABLED=true` (the default) the first start
+of a fresh install drafts the current month automatically (decision #55).
+The real setup today (dev backend on a workstation, shared PostgreSQL over
+Tailscale) is described in [`docs/deployment-guide.md`](./docs/deployment-guide.md).
+
 **Frontend only** (desktop): the API base URL comes from
 `--dart-define=API_BASE_URL=...` when given, otherwise from
 `attendance_scheduler_app/.env` (`API_BASE_URL`, default `http://localhost:8035/api/v1`).
@@ -83,7 +86,7 @@ flutter run -d macos            # or windows / linux
 ```
 
 ## Status (2026-11-08)
-**Backend: F-01..F-15 implemented; 463 pytest tests, ruff and mypy clean;
+**Backend: F-01..F-15 implemented; 479 pytest tests, ruff and mypy clean;
 Alembic head `0009`.**
 The OR-Tools CP-SAT engine enforces every §5.3 rule through an always-feasible
 slack model that reports violations instead of failing (§5.6), plus the §5.4
@@ -93,11 +96,13 @@ with a fixed worker count. Schedule generate (409 guard on published or
 hand-edited months) / manual override (re-checked against every engine rule) /
 on-demand rule check (`GET /schedules/{id}/violations`) / publish, the monthly
 autorun (00:05 on the day after the leave window closes, day 21 by default,
-catching up on later days and at startup),
+catching up on later days and at startup, and drafting a current month that
+has no schedule),
 leave + shift-change + self-arrange requests, leave decisions written straight
 into an already-generated schedule, annual-leave quota and remaining balance,
 holiday work earning a comp day for every role, attendance with sick A/D
-backfill and seeded actuals that follow published edits, holiday CRUD, time
+backfill and seeded actuals that follow every roster edit (hidden from
+employees until the month is published), holiday CRUD, time
 clock, month-close, CSV/XLSX export, retention purge and data-subject export
 are live. Schema is managed by Alembic (`alembic upgrade head`).
 
@@ -108,8 +113,8 @@ shift-change requests from their own roster cells, colleagues shown by code,
 the live leave window and their annual leave left; admin-only actions are
 hidden for everyone else. Admins see the month's rule violations and confirm
 before publishing; logging out clears every screen's data. `flutter analyze`
-reports no issues; `flutter test` passes 119 tests, including the 3 golden
-images (CI runs the goldens on macOS 15 and the other 116 tests on Ubuntu).
+reports no issues; `flutter test` passes 136 tests, including the 3 golden
+images (CI runs the goldens on macOS 15 and the other 133 tests on Ubuntu).
 
 **Not yet done / needs the customer** (details in `docs/design-decisions.md`,
 "Open questions"): weekend preference for paired offs (D6, undecided), staffing

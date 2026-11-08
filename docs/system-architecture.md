@@ -11,7 +11,8 @@ Flutter desktop (Windows)  ──HTTPS / JWT──►  FastAPI  ──►  Postg
    clean architecture                api → services → models
                                             └► scheduler/ (OR-Tools CP-SAT, §5)
                                             └► APScheduler (monthly autorun, 00:05 on day AUTORUN_DAY+1, #9;
-                                               catch-up on later days and at startup, #55)
+                                               catch-up on later days and at startup; also drafts a
+                                               current month without a schedule, #55)
 ```
 That is the target layout. Today the API runs in `ENVIRONMENT=dev` on a
 workstation against a shared PostgreSQL reached over Tailscale
@@ -40,7 +41,10 @@ carry_* (F-14)  ─┘   (carry from schedule_history:                  │
                                           │ GET /schedules/{id}/violations: re-check on demand (#46)
                                           │ admin override F-09, shift change, self-arrange, publish
                                           ▼
-              actuals: AttendanceRecord (F-11/12) ◄─ seed / re-sync ─ published schedule (#27)
+              actuals: AttendanceRecord (F-11/12) ◄─ seed on publish ─ published schedule
+                                                  ◄─ re-sync of still-seeded rows on EVERY edit or
+                                                     regenerate, draft or published (#27; hidden from
+                                                     employees while the month is unpublished, #52)
                           │  sick S → A/D backfill (F-10, §6; recently sick = last 30 days, #35)
                           ▼
               calculations close (F-14): stores carry_comp / carry_streak / carry_premium_off
@@ -51,7 +55,7 @@ Leave decisions after generation (#28):
 ```
 POST /leaves/{id}/decide (approve) ─► AL into the user's cells of every generated month in the span
 POST /leaves/{id}/revoke           ─► X into those cells that are still AL
-        └► published month: seeded actuals follow (#27) ─► re-check warnings returned to the admin
+        └► still-seeded actuals follow (#27) ─► re-check warnings returned to the admin
 ```
 Months without a schedule pick approved leave up when they are generated.
 
@@ -69,8 +73,10 @@ Months without a schedule pick approved leave up when they are generated.
   colleague's legacy S is masked as X), own leave, shift-change and
   self-arrange requests.
 
-Every year/month parameter is bounded (year 2000–2100, month 1–12) and bad
-input answers 422, never 500 (#54).
+Every year/month parameter is bounded (year 2000–2100, month 1–12) and
+answers 422 instead of 500; text fields are length-checked the same way
+(#54). Known gap: an id above the 64-bit range still answers 500 on
+PostgreSQL.
 
 ## Scheduler engine (`scheduler/`, §5)
 - Decision vars `x[(user_id, day, code)]` bool over each person's role domain
@@ -107,8 +113,10 @@ input answers 422, never 500 (#54).
 - Violations are not persisted. The generate response carries the solver's
   list; afterwards `schedule_violation_checker` re-runs every rule over the
   stored grid on demand (manual edit, shift change, leave decision,
-  `GET /schedules/{id}/violations`). The re-check counts only active users
-  and flags working cells of disabled users (#44). Engine, re-check and
+  `GET /schedules/{id}/violations`). For a disabled user, cells before
+  today (`business_today()`) stay ordinary cover; working cells from today
+  on are flagged `disabled_user_duty` and not counted as cover (#44,
+  ruling I2). Engine, re-check and
   month-close count the month boundary the same way: off-runs reach into the
   previous month (`prev_codes`), an off-run holding approved leave is exempt
   (#41), premium offs count only engine-chosen X (#42), comp consumption
@@ -124,8 +132,10 @@ graceful `text(key)` fallback). Admin-only actions are hidden for other roles
 (#38); employees get their own attendance view and shift-change requests (#37).
 Admins see the month's rule violations and confirm before publishing (#46).
 Logout and session expiry reset every user-scoped provider, and a 403 that
-`GET /users/me` confirms ends the session (#56). Error toasts show the
-backend's translated `detail`, not the exception text.
+`GET /users/me` confirms ends the session (#56). Every error message goes
+through `core/network/api_error_message.dart` (`apiErrorMessage`): no
+response → "server unavailable", 5xx → a translated generic message (never
+the server's text), other errors → the backend's translated `detail`.
 
 ## Compliance posture (§9 → `deployment-guide.md`)
 EU/Frankfurt region; sick `S` is special-category (admin-written into actual attendance only, never in the planned schedule, no

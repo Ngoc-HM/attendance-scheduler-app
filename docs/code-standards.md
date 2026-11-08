@@ -20,7 +20,10 @@
   `detail` string. Pure helpers raise nothing — they return data.
 - Input: year/month parameters use the bounded aliases in `app/api/params.py`
   (`YearQuery`, `MonthPath`, …); free-text schema fields carry a
-  `max_length` equal to their column. Bad input is 4xx, never 500.
+  `max_length` equal to their column, so out-of-range years/months and
+  over-long text answer 422 instead of 500. Known gap: an id path parameter
+  above the 64-bit range (e.g. `schedule_id`) still answers 500 on
+  PostgreSQL.
 - Engine code is pure compute over dataclasses (`scheduler/domain.py`); no DB,
   no PII beyond `user_id`; rule-based only (no ML — §9.6).
 - Schema changes go through **Alembic** (one numbered migration per change,
@@ -54,8 +57,12 @@
   `resetUserScopedProviders` (`auth_provider.dart`), so logout and session
   expiry clear it. Controllers check `mounted` before setting state after an
   `await`.
-- Error messages shown to the user come from `ApiException` (the backend's
-  translated `detail`), never from `toString()` of an exception.
+- Error messages shown to the user go through one helper,
+  `apiErrorMessage` (`core/network/api_error_message.dart`): no response →
+  translated "server unavailable", 5xx → translated `requestServerError`
+  (never the server's text), other errors → the backend's translated
+  `detail`, anything else → a translated fallback key. Controllers store the
+  error object, not a string; never show `toString()` of an exception.
 
 ## Testing
 - Backend: `pytest` against an isolated SQLite test DB with foreign keys

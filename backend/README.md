@@ -54,7 +54,8 @@ tests/                 # pytest
 
 All endpoints are implemented. Startup runs the environment guard
 (`Settings.validate_for_environment`) before bootstrap: a staging or prod
-process refuses to start with the dev `SECRET_KEY` / `FIRST_ADMIN_PASSWORD`, a
+process refuses to start with the dev or `.env.example` placeholder
+`SECRET_KEY`, the dev `FIRST_ADMIN_PASSWORD`, a
 SQLite or default `DATABASE_URL`, `BACKEND_CORS_ORIGINS=*`,
 `AUTO_CREATE_TABLES=true` or a retention below 24 months
 (`docs/deployment-guide.md`).
@@ -77,12 +78,20 @@ Docs (dev only): http://localhost:8035/docs · Health: http://localhost:8035/hea
 
 `AUTO_CREATE_TABLES=true` only builds a brand-new database. Once the database
 has an `alembic_version` table it is ignored (a warning is logged) and new
-columns or constraints arrive only through `alembic upgrade head`.
+columns or constraints arrive only through `alembic upgrade head`. Startup
+also logs a WARNING naming both revisions when such a database is behind the
+code's migration head (startup continues; the API may fail on missing
+columns until you migrate).
+
+With `AUTORUN_ENABLED=true` (the default) every start and the daily 00:05
+check draft the current month when it has no schedule, and next month from
+the day after `AUTORUN_DAY`; a fresh database therefore gets a draft of the
+current month at its first start. Set `AUTORUN_ENABLED=false` for a local
+backend pointed at a shared database.
 
 `requirements.lock` pins every package (direct and transitive) to the
-versions CI tests; the Dockerfile and CI install with `-c requirements.lock`.
-`make install` at the repository root installs from `requirements-dev.txt`
-without the lock.
+versions CI tests; the Dockerfile, CI and `make install` at the repository
+root all install with `-c requirements.lock`.
 
 ### Seed demo users
 ```bash
@@ -114,7 +123,7 @@ python scripts/reset_all_passwords.py --password 'a-local-test-password'
 
 ## Test & lint
 ```bash
-pytest                    # 463 tests on a throw-away SQLite database
+pytest                    # 479 tests on a throw-away SQLite database
 ruff check app tests
 mypy app
 ```

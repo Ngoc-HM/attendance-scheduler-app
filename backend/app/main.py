@@ -10,8 +10,9 @@ starting new code. Only in dev, and only for a brand-new database without an
 ``alembic_version`` table, does startup create the tables (``create_all``).
 
 Startup order: environment guard (refuse unsafe production settings) →
-bootstrap (tables in dev, seed admin) → autorun scheduler (draft at 00:05 from
-the day after AUTORUN_DAY, plus one catch-up check at startup).
+bootstrap (tables in dev, schema-revision warning, seed admin) → autorun
+scheduler (daily at 00:05 plus one check at startup: drafts the current month
+when it has no schedule, and next month from the day after AUTORUN_DAY).
 """
 
 from __future__ import annotations
@@ -73,9 +74,12 @@ async def lifespan(app: FastAPI):  # noqa: ANN201
         logger.warning("Configuration: %s", warning)
     # Startup: ensure tables (dev) and the seed admin exist (F-01).
     run_startup_bootstrap()
-    # Autorun (#9): the leave window closes at the end of AUTORUN_DAY; at 00:05
-    # (settings.TIMEZONE) the day after, next month's draft is generated. The
-    # startup check catches up a month missed while the host was off.
+    # Autorun (#9, #55): the leave window closes at the end of AUTORUN_DAY; at
+    # 00:05 (settings.TIMEZONE) from the day after, next month's draft is
+    # generated while it has none. Each check (daily and once at startup) first
+    # drafts the current month if it has no schedule at all, so a host that was
+    # off, or a fresh install, still gets a starting draft. Existing schedules
+    # are never touched.
     from app.services.schedule_autorun import start_scheduler
 
     scheduler = start_scheduler(check_on_startup=True)
