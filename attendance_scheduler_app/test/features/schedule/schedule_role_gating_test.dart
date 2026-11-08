@@ -527,7 +527,7 @@ void main() {
     await _drainToast(tester);
   });
 
-  testWidgets('swap picker lists colleagues by code, excluding self', (
+  testWidgets('swap picker offers no colleague of another role', (
     tester,
   ) async {
     await _pumpSchedule(
@@ -544,10 +544,9 @@ void main() {
     final picker = tester.widget<DropdownButton<int>>(
       find.byType(DropdownButton<int>),
     );
-    expect(picker.items!.map((item) => item.value), [_colleagueId, 1]);
-    expect(picker.items!.map((item) => (item.child as Text).data), [
-      'A1',
-      'M1',
-    ]);
+    // T1's directory has only A1 and M1 besides T1: a cross-role swap is
+    // refused by the backend, so nobody is offered (see
+    // schedule_month_and_requests_test.dart for the same-role list).
+    expect(picker.items, isEmpty);
   });
 }

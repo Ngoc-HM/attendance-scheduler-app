@@ -49,6 +49,7 @@ class ApiEndpoints {
   static String schedule(int year, int month) => '/schedules/$year/$month';
   static String scheduleOverride(int id) => '/schedules/$id/override';
   static String schedulePublish(int id) => '/schedules/$id/publish';
+  static String scheduleViolations(int id) => '/schedules/$id/violations';
 
   // Attendance & holidays (F-10..F-13)
   static const String attendance = '/attendance';

@@ -410,6 +410,20 @@ class AppLocalizations {
       'annualLeaveQuotaInvalid': 'Enter a whole number from 0 to 365.',
       'editAnnualLeaveQuota': 'Edit leave quota',
       'annualLeaveQuotaUpdated': 'Annual leave quota updated.',
+      // --- Schedule screen (review 2026-11-08: A3, C2, D3) ---
+      'scheduleLoadFailed': 'Could not load the schedule:',
+      'actionFailed': 'The action could not be completed.',
+      'checkingRules': 'Checking the rules…',
+      'ruleViolationsInMonth':
+          'rule violation(s) in this month. Review them before publishing.',
+      'publishWithViolationsTitle': 'Publish with rule violations?',
+      'publishWithViolationsBody':
+          'This month still breaks these rules. Publish anyway?',
+      'rulesCheckFailed':
+          'The rules could not be checked right now. Publish anyway?',
+      'publishAnyway': 'Publish anyway',
+      'approvedWithWarnings': 'Request approved, with rule warnings',
+      'swapPartner': 'Swap partner',
     },
     'vi': {
       'appTitle': 'Xếp lịch & Chấm công',
@@ -800,6 +814,20 @@ class AppLocalizations {
       'annualLeaveQuotaInvalid': 'Nhập số nguyên từ 0 đến 365.',
       'editAnnualLeaveQuota': 'Sửa định mức phép',
       'annualLeaveQuotaUpdated': 'Đã cập nhật định mức phép năm.',
+      // --- Schedule screen (review 2026-11-08: A3, C2, D3) ---
+      'scheduleLoadFailed': 'Không thể tải lịch:',
+      'actionFailed': 'Không thể thực hiện thao tác.',
+      'checkingRules': 'Đang kiểm tra quy tắc…',
+      'ruleViolationsInMonth':
+          'vi phạm quy tắc trong tháng này. Hãy xem lại trước khi công bố.',
+      'publishWithViolationsTitle': 'Công bố khi còn vi phạm quy tắc?',
+      'publishWithViolationsBody':
+          'Lịch tháng này vẫn vi phạm các quy tắc sau. Vẫn công bố?',
+      'rulesCheckFailed':
+          'Hiện không kiểm tra được quy tắc. Vẫn công bố?',
+      'publishAnyway': 'Vẫn công bố',
+      'approvedWithWarnings': 'Đã duyệt yêu cầu, có cảnh báo quy tắc',
+      'swapPartner': 'Người hoán đổi',
     },
   };
 
