@@ -164,6 +164,9 @@ class AuthController extends StateNotifier<AuthState> {
       final fresh = await _repository.currentUser();
       final now = state.user;
       if (now == null || now.id != before.id) return; // signed out meanwhile
+      // Nothing changed (the usual case after a plain permission 403): keep
+      // the current state object so HomeShell and the router do not rebuild.
+      if (fresh == now && !state.isLoading && state.error == null) return;
       if (fresh.role != now.role) _onSessionReset?.call();
       state = AuthState(user: fresh);
     } on DioException catch (e) {

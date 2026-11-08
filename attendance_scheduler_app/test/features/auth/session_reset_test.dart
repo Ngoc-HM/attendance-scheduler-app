@@ -290,12 +290,16 @@ void main() {
     final (:c, :backend, :tokens) = _realSession();
     final auth = c.read(authControllerProvider.notifier);
     await auth.login('anna', 'x');
+    // Every auth state change rebuilds HomeShell and pings the router.
+    var authNotifications = 0;
+    c.listen(authControllerProvider, (_, _) => authNotifications++);
 
     // An employee hitting an admin route: forbidden, but still active.
     await expectLater(c.read(dioProvider).get('/users'), throwsA(isA<DioException>()));
     await pumpEventQueue();
 
     expect(backend.meCalls, 2);
+    expect(authNotifications, 0, reason: 'an unchanged user must not emit a new auth state');
     expect(c.read(authControllerProvider).user?.id, _anna.id);
     expect(tokens.token, 'jwt');
   });

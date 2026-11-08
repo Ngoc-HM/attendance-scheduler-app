@@ -358,7 +358,6 @@ class AppLocalizations {
           'regenerate it afterwards.',
       'requestRevoked': 'Approval revoked.',
       // --- User management guards (CSV TC-005/006/007/008) ---
-      'usernameTaken': 'That username is already taken.',
       // --- Request errors by status code + inactive account (review 2026-11-08) ---
       'requestFailed': 'The request failed. Please try again.',
       'requestServerUnavailable':
@@ -759,7 +758,6 @@ class AppLocalizations {
           'sau khi hủy.',
       'requestRevoked': 'Đã hủy duyệt.',
       // --- User management guards (CSV TC-005/006/007/008) ---
-      'usernameTaken': 'Tên đăng nhập đã tồn tại.',
       // --- Request errors by status code + inactive account (review 2026-11-08) ---
       'requestFailed': 'Yêu cầu không thành công. Vui lòng thử lại.',
       'requestServerUnavailable':
