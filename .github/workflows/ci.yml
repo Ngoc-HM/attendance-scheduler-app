@@ -105,7 +105,7 @@ jobs:
           channel: stable
           flutter-version: "3.47.7"
           cache: true
-      - run: flutter pub get
+      - run: flutter pub get --enforce-lockfile
       - run: flutter analyze
       # Pixel goldens are rendered on macOS and only match there; the
       # flutter-goldens job runs them.
@@ -126,7 +126,7 @@ jobs:
           channel: stable
           flutter-version: "3.47.7"
           cache: true
-      - run: flutter pub get
+      - run: flutter pub get --enforce-lockfile
       - run: flutter test --tags golden
       - name: Upload golden diffs
         if: failure()
@@ -151,7 +151,7 @@ jobs:
           flutter-version: "3.47.7"
           cache: true
       - run: flutter config --enable-windows-desktop
-      - run: flutter pub get
+      - run: flutter pub get --enforce-lockfile
       - run: flutter build windows --release
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:

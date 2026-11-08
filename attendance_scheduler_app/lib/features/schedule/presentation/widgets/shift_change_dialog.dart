@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/constants/shift_codes.dart';
+import '../../../../core/network/api_error_message.dart';
 import '../../../../design_system/design_system.dart';
 import '../../../../i18n/app_localizations.dart';
 import '../../../auth/domain/entities/user.dart';
@@ -296,8 +297,11 @@ class ShiftChangePendingPanel extends ConsumerWidget {
     if (decided == null) {
       DsFeedback.show(
         context,
-        ref.read(shiftChangeControllerProvider).error ??
-            l.text('actionFailed'),
+        apiErrorMessage(
+          l,
+          ref.read(shiftChangeControllerProvider).error,
+          fallbackKey: 'actionFailed',
+        ),
         tone: DsTone.danger,
       );
       return;
@@ -332,6 +336,8 @@ class ShiftChangePendingPanel extends ConsumerWidget {
           ],
         ),
       );
+      // The dialog may outlive the panel (logout, month switch).
+      if (!context.mounted) return;
     }
     onApproved?.call();
   }

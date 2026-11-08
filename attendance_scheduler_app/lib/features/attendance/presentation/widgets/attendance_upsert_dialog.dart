@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/constants/shift_codes.dart';
+import '../../../../core/network/api_error_message.dart';
 import '../../../../design_system/design_system.dart';
 import '../../../../i18n/app_localizations.dart';
 import '../../../auth/domain/entities/user.dart';
@@ -187,7 +188,7 @@ class _AttendanceUpsertDialogState
           if (state.error != null) ...[
             const SizedBox(height: DsSpacing.x2),
             Text(
-              state.error!,
+              apiErrorMessage(l, state.error),
               style: const TextStyle(
                 color: DsColors.danger,
                 fontSize: DsFontSize.caption,
@@ -266,8 +267,11 @@ class _AttendanceUpsertDialogState
     }
 
     if (context.mounted && !ok) {
-      final err =
-          ref.read(attendanceControllerProvider).error ?? l.text('saveFailed');
+      final err = apiErrorMessage(
+        l,
+        ref.read(attendanceControllerProvider).error,
+        fallbackKey: 'saveFailed',
+      );
       DsFeedback.show(context, err, tone: DsTone.danger);
     } else if (context.mounted) {
       Navigator.of(context).pop(true);

@@ -1,6 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../../core/network/api_exception.dart';
 import '../../data/datasources/schedule_remote_datasource.dart';
 import '../../domain/entities/schedule_entities.dart';
 
@@ -16,7 +15,11 @@ class ShiftChangeState {
   final List<ShiftChangeRequest> requests;
   final bool isLoading;
   final bool isMutating;
-  final String? error;
+
+  /// The caught error of the last failed call; the page turns it into text
+  /// with `apiErrorMessage` (backend detail, or a translated "server
+  /// unavailable" / "server error"), never the exception's debug text.
+  final Object? error;
 
   /// The last [ShiftChangeController.load] failed, so [requests] is not
   /// trustworthy (as opposed to [error] from a failed submit or decide).
@@ -26,7 +29,7 @@ class ShiftChangeState {
     List<ShiftChangeRequest>? requests,
     bool? isLoading,
     bool? isMutating,
-    String? error,
+    Object? error,
     bool? loadFailed,
     bool clearError = false,
   }) =>
@@ -52,13 +55,11 @@ class ShiftChangeController extends StateNotifier<ShiftChangeState> {
     );
     try {
       final requests = await _ds.fetchShiftChanges(all: all);
+      if (!mounted) return;
       state = state.copyWith(isLoading: false, requests: requests);
     } catch (e) {
-      state = state.copyWith(
-        isLoading: false,
-        loadFailed: true,
-        error: _message(e),
-      );
+      if (!mounted) return;
+      state = state.copyWith(isLoading: false, loadFailed: true, error: e);
     }
   }
 
@@ -78,10 +79,12 @@ class ShiftChangeController extends StateNotifier<ShiftChangeState> {
         counterpartUserId: counterpartUserId,
         note: note,
       );
+      if (!mounted) return true;
       state = state.copyWith(isMutating: false);
       return true;
     } catch (e) {
-      state = state.copyWith(isMutating: false, error: _message(e));
+      if (!mounted) return false;
+      state = state.copyWith(isMutating: false, error: e);
       return false;
     }
   }
@@ -92,6 +95,7 @@ class ShiftChangeController extends StateNotifier<ShiftChangeState> {
     state = state.copyWith(isMutating: true, clearError: true);
     try {
       final updated = await _ds.decideShiftChange(id: id, status: status);
+      if (!mounted) return updated;
       final newList = [
         for (final r in state.requests)
           if (r.id == id) updated else r,
@@ -99,14 +103,11 @@ class ShiftChangeController extends StateNotifier<ShiftChangeState> {
       state = state.copyWith(isMutating: false, requests: newList);
       return updated;
     } catch (e) {
-      state = state.copyWith(isMutating: false, error: _message(e));
+      if (!mounted) return null;
+      state = state.copyWith(isMutating: false, error: e);
       return null;
     }
   }
-
-  /// The backend detail, never "ApiException(409): ...".
-  static String _message(Object e) =>
-      e is ApiException ? e.message : e.toString();
 }
 
 final shiftChangeControllerProvider =

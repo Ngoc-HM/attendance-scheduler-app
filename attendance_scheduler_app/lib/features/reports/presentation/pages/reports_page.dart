@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/network/api_error_message.dart';
 import '../../../../design_system/design_system.dart';
 import '../../../../i18n/app_localizations.dart';
 import '../providers/reports_provider.dart';
@@ -89,10 +90,10 @@ class ReportsPage extends ConsumerWidget {
           '${l.text('reportSavedTo')} $path',
           tone: DsTone.success,
         );
-      case ExportFailure(:final message, :final messageKey):
+      case ExportFailure(:final error, :final messageKey):
         DsFeedback.show(
           context,
-          messageKey != null ? l.text(messageKey) : message,
+          messageKey != null ? l.text(messageKey) : apiErrorMessage(l, error),
           tone: DsTone.danger,
         );
     }

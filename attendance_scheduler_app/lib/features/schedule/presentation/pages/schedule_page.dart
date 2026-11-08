@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/constants/shift_codes.dart';
+import '../../../../core/network/api_error_message.dart';
 import '../../../../core/network/api_exception.dart';
 import '../../../../design_system/design_system.dart';
 import '../../../../i18n/app_localizations.dart';
@@ -222,7 +223,7 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
   ) {
     final error = state.loadError;
     if (error != null && state.loadErrorStatus != 404) {
-      return '${l.text('scheduleLoadFailed')} $error';
+      return '${l.text('scheduleLoadFailed')} ${apiErrorMessage(l, error)}';
     }
     return isAdmin ? null : l.text('scheduleNotPublishedYet');
   }
@@ -429,7 +430,11 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
     final state = ref.read(scheduleControllerProvider);
     if (!context.mounted) return;
     if (state.error != null) {
-      DsFeedback.show(context, state.error!, tone: DsTone.danger);
+      DsFeedback.show(
+        context,
+        apiErrorMessage(l, state.error),
+        tone: DsTone.danger,
+      );
     } else {
       final result = state.lastResult;
       if (result != null && !result.feasible) {
@@ -517,7 +522,11 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
     if (warnings == null) {
       DsFeedback.show(
         context,
-        ref.read(scheduleControllerProvider).error ?? l.text('actionFailed'),
+        apiErrorMessage(
+          l,
+          ref.read(scheduleControllerProvider).error,
+          fallbackKey: 'actionFailed',
+        ),
         tone: DsTone.danger,
       );
     } else if (warnings.isEmpty) {
@@ -561,7 +570,11 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
     } else {
       DsFeedback.show(
         context,
-        ref.read(shiftChangeControllerProvider).error ?? l.text('actionFailed'),
+        apiErrorMessage(
+          l,
+          ref.read(shiftChangeControllerProvider).error,
+          fallbackKey: 'actionFailed',
+        ),
         tone: DsTone.danger,
       );
     }
@@ -599,7 +612,11 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
     if (!ok) {
       DsFeedback.show(
         context,
-        ref.read(scheduleControllerProvider).error ?? l.text('actionFailed'),
+        apiErrorMessage(
+          l,
+          ref.read(scheduleControllerProvider).error,
+          fallbackKey: 'actionFailed',
+        ),
         tone: DsTone.danger,
       );
     } else {

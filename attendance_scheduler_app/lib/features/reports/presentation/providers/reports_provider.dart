@@ -17,14 +17,21 @@ class ExportSuccess extends ExportResult {
 }
 
 class ExportFailure extends ExportResult {
-  /// A server/IO failure, already in the user's language (or raw).
-  const ExportFailure(this.message) : messageKey = null;
+  /// A failed download: [error] is the caught [ApiException], which the page
+  /// shows with `apiErrorMessage` (backend detail, or a translated "server
+  /// unavailable" / "server error"); [message] is its raw detail.
+  ExportFailure(ApiException this.error)
+      : message = error.message,
+        messageKey = null;
 
   /// A client-side check failed; the page localizes [messageKey].
-  const ExportFailure.localized(String this.messageKey) : message = '';
+  const ExportFailure.localized(String this.messageKey)
+      : message = '',
+        error = null;
 
   final String message;
   final String? messageKey;
+  final ApiException? error;
 }
 
 /// State for the reports page.
@@ -128,7 +135,7 @@ class ReportsController extends StateNotifier<ReportsState> {
     try {
       download = await fetch();
     } on ApiException catch (e) {
-      return _finish(ExportFailure(e.message));
+      return _finish(ExportFailure(e));
     } catch (_) {
       // A malformed response (e.g. a body that is not bytes).
       return _finish(const ExportFailure.localized('reportExportFailed'));

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/network/api_error_message.dart';
 import '../../../../core/network/api_exception.dart';
 import '../../../../core/router/app_router.dart';
 import '../../../../design_system/design_system.dart';
@@ -44,7 +45,7 @@ class FlightsPage extends ConsumerWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              err is ApiException ? err.message : l.text('flightsLoadFailed'),
+              apiErrorMessage(l, err, fallbackKey: 'flightsLoadFailed'),
               style: Theme.of(context).textTheme.bodyMedium,
             ),
             const SizedBox(height: DsSpacing.x3),
@@ -109,7 +110,7 @@ class FlightsPage extends ConsumerWidget {
       }
     } on ApiException catch (e) {
       if (context.mounted) {
-        DsFeedback.show(context, e.message, tone: DsTone.danger);
+        DsFeedback.show(context, apiErrorMessage(l, e), tone: DsTone.danger);
       }
     } catch (_) {
       if (context.mounted) {
@@ -186,7 +187,7 @@ class FlightsPage extends ConsumerWidget {
             }
           } on ApiException catch (e) {
             if (context.mounted) {
-              DsFeedback.show(context, e.message, tone: DsTone.danger);
+              DsFeedback.show(context, apiErrorMessage(l, e), tone: DsTone.danger);
             }
           }
         },

@@ -15,7 +15,11 @@ class TimeClockState {
   final List<TimeClockEntry> monthEntries;
   final bool isLoading;
   final bool isMutating;
-  final String? error;
+
+  /// The caught error of the last failed call; the page turns it into text
+  /// with `apiErrorMessage` (backend detail, or a translated "server
+  /// unavailable" / "server error"), never "ApiException(409): ...".
+  final Object? error;
 
   bool get checkedIn => today?.checkInAt != null;
   bool get checkedOut => today?.checkOutAt != null;
@@ -28,7 +32,7 @@ class TimeClockState {
     List<TimeClockEntry>? monthEntries,
     bool? isLoading,
     bool? isMutating,
-    String? error,
+    Object? error,
     bool clearError = false,
   }) =>
       TimeClockState(
@@ -50,7 +54,9 @@ class TimeClockController extends StateNotifier<TimeClockState> {
     try {
       final now = DateTime.now();
       final today = await _ds.today();
+      if (!mounted) return;
       final entries = await _ds.month(now.year, now.month);
+      if (!mounted) return;
       state = state.copyWith(
         isLoading: false,
         today: today,
@@ -58,7 +64,8 @@ class TimeClockController extends StateNotifier<TimeClockState> {
         monthEntries: entries.reversed.toList(), // newest first
       );
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: e.toString());
+      if (!mounted) return;
+      state = state.copyWith(isLoading: false, error: e);
     }
   }
 
@@ -70,11 +77,13 @@ class TimeClockController extends StateNotifier<TimeClockState> {
     state = state.copyWith(isMutating: true, clearError: true);
     try {
       await action();
+      if (!mounted) return true;
       state = state.copyWith(isMutating: false);
       await load();
       return true;
     } catch (e) {
-      state = state.copyWith(isMutating: false, error: e.toString());
+      if (!mounted) return false;
+      state = state.copyWith(isMutating: false, error: e);
       return false;
     }
   }

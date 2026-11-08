@@ -60,28 +60,13 @@ class UserManagementDataSource {
 
   final Dio _dio;
 
-  /// Runs [call], turning a [DioException] into an [ApiException]. pydantic's
-  /// 422 `detail` is a list of `{loc, msg, ...}` objects; its `msg`s are
-  /// joined instead of showing the raw list.
+  /// Runs [call], turning a [DioException] into an [ApiException]
+  /// ([ApiException.fromDio] already flattens pydantic's 422 `detail` list
+  /// to its `msg`s instead of showing the raw list).
   Future<T> _guard<T>(Future<T> Function() call) async {
     try {
       return await call();
     } on DioException catch (e) {
-      final detail = e.response?.data is Map
-          ? (e.response!.data as Map)['detail']
-          : null;
-      if (detail is List) {
-        final messages = [
-          for (final item in detail)
-            if (item is Map && item['msg'] != null) item['msg'].toString(),
-        ];
-        if (messages.isNotEmpty) {
-          throw ApiException(
-            messages.join('\n'),
-            statusCode: e.response?.statusCode,
-          );
-        }
-      }
       throw ApiException.fromDio(e);
     }
   }

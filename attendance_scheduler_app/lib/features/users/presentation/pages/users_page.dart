@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/network/api_error_message.dart';
 import '../../../../design_system/design_system.dart';
 import '../../../../i18n/app_localizations.dart';
 import '../../../auth/domain/entities/user.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../providers/users_provider.dart';
-import '../user_error_message.dart';
 import '../widgets/create_user_dialog.dart';
 import '../widgets/edit_quota_dialog.dart';
 
@@ -67,12 +67,15 @@ class UsersPage extends ConsumerWidget {
         role,
         afterSelfEdit: refreshIfSelf(id),
       ),
+      // A deleted account's token is dead: re-reading /users/me (or the
+      // list) would come back 401 and end the session as "expired". Deleting
+      // yourself is deliberate, so it is a plain logout instead.
       onDelete: (id) => _confirmDelete(
         context,
         controller,
         currentUser?.id,
         id,
-        afterSelfEdit: refreshIfSelf(id),
+        afterSelfEdit: id == currentUser?.id ? auth.logout : null,
       ),
       onEditQuota: (id) => _editQuota(
         context,
@@ -298,17 +301,18 @@ class UsersPage extends ConsumerWidget {
     if (!(ok ?? false) || !context.mounted) return;
     await _runMutation(
       context,
-      controller.delete(targetId),
+      controller.delete(targetId, reload: !isSelf),
       onSuccess: () => DsFeedback.show(context, l.text('userDeleted'), tone: DsTone.success),
       afterSelfEdit: afterSelfEdit,
     );
   }
 
   /// Runs a mutation, shows warnings if any, and surfaces backend errors
-  /// (e.g. last-admin lockout → 409) by status code, see [userErrorMessage].
+  /// (e.g. last-admin lockout → 409) by status code, see [apiErrorMessage].
   /// On success, [afterSelfEdit] (set when the admin edited their own
-  /// account) re-reads the signed-in user. Nothing is shown once [context] is
-  /// gone (page left while the request was in flight).
+  /// account) re-reads the signed-in user, or signs out after a self-delete.
+  /// Nothing is shown once [context] is gone (page left while the request
+  /// was in flight).
   Future<void> _runMutation(
     BuildContext context,
     Future<dynamic> future, {
@@ -322,7 +326,7 @@ class UsersPage extends ConsumerWidget {
       result = await future;
     } catch (e) {
       if (!context.mounted) return;
-      DsFeedback.show(context, userErrorMessage(l, e), tone: DsTone.danger);
+      DsFeedback.show(context, apiErrorMessage(l, e), tone: DsTone.danger);
       return;
     }
     if (context.mounted) {
