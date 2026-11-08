@@ -331,6 +331,7 @@ def delete(db: Session, user_id: int, acting_admin_id: int) -> None:
     )
 
     # R8 — other users' requests outlive the people who decided or joined them.
+    # Pending counterpart swaps go first; the null-out below would hide them.
     db.query(ShiftChangeRequest).filter(
         ShiftChangeRequest.counterpart_user_id == user.id,
         ShiftChangeRequest.status == LeaveStatus.pending,

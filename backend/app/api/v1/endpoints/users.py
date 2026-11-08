@@ -5,11 +5,17 @@ update and hard delete.
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, Response, status
+import logging
+
+from fastapi import APIRouter, HTTPException, Response, status
 
 from app.api.deps import ActiveUser, AdminUser, DbSession
+from app.core.i18n import t
+from app.models.audit import AuditLog
 from app.schemas.user import UserCreate, UserDirectoryEntry, UserRead, UserUpdate, UserUpdateResult
 from app.services import audit_service, user_service
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -72,16 +78,37 @@ def update_user(
 def delete_user(db: DbSession, user_id: int, admin: AdminUser) -> Response:
     """F-03 (extension) — admin hard-deletes a user; cascades history.
 
-    The audit row is written after the guards pass and before the delete
-    commits: once an admin's own row is gone, an audit row naming them as
-    actor would violate the foreign key. A self-delete is therefore recorded
-    with no actor and detail ``self``.
+    The ``user.delete`` audit row is added to the session after the guards pass
+    and is committed by ``user_service.delete`` together with the delete, so a
+    failure leaves neither the audit row nor a half-deleted user. The audit row
+    cannot follow the delete: once an admin's own row is gone, an audit row
+    naming them as actor would violate the foreign key, so a self-delete is
+    recorded with no actor and detail ``self``.
     """
     user_service.ensure_deletable(db, user_id)
     is_self = user_id == admin.id
-    audit_service.record(
-        db, None if is_self else admin.id, "user.delete", "User", user_id,
-        detail="self" if is_self else None,
+    actor_id = None if is_self else admin.id
+    detail = "self" if is_self else None
+    db.add(
+        AuditLog(
+            actor_id=actor_id, action="user.delete", entity="User",
+            entity_id=user_id, detail=detail,
+        )
     )
-    user_service.delete(db, user_id, acting_admin_id=admin.id)
+    try:
+        user_service.delete(db, user_id, acting_admin_id=admin.id)
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as exc:
+        # Fail loud like audit_service.record: nothing was committed.
+        db.rollback()
+        logger.exception(
+            "User delete with audit failed: actor=%s action=user.delete "
+            "entity=User id=%s detail=%s",
+            actor_id, user_id, detail,
+        )
+        raise HTTPException(
+            status.HTTP_500_INTERNAL_SERVER_ERROR, detail=t("audit.write_failed")
+        ) from exc
     return Response(status_code=status.HTTP_204_NO_CONTENT)
