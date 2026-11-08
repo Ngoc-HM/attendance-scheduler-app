@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.models.enums import AttendanceCode
 from app.schemas.common import ORMModel
@@ -14,7 +14,8 @@ class AttendanceUpsert(BaseModel):
     user_id: int
     work_date: date
     code: AttendanceCode
-    note: str | None = None
+    # AttendanceRecord.note is String(255).
+    note: str | None = Field(default=None, max_length=255)
 
 
 class AttendanceRead(ORMModel):
@@ -37,7 +38,8 @@ class SickCoverResult(BaseModel):
 
 class HolidayUpsert(BaseModel):
     day: date
-    name: str
+    # Holiday.name is String(128).
+    name: str = Field(max_length=128)
 
 
 class HolidayRead(ORMModel):

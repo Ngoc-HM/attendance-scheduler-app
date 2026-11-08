@@ -39,8 +39,17 @@ from app.services.leave_windows import (
 # Internal helpers
 # ---------------------------------------------------------------------------
 
-def _get_or_404(db: Session, leave_id: int) -> LeaveRequest:
-    req = db.get(LeaveRequest, leave_id)
+def _get_locked_or_404(db: Session, leave_id: int) -> LeaveRequest:
+    """Load the request with a row lock held until the caller commits
+    (``FOR UPDATE`` on PostgreSQL; SQLite ignores it). Two admins deciding
+    the same request at once are serialised: the second sees it decided."""
+    req = (
+        db.query(LeaveRequest)
+        .filter(LeaveRequest.id == leave_id)
+        .with_for_update()
+        .populate_existing()
+        .one_or_none()
+    )
     if req is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=t("leave.not_found"))
     return req
@@ -215,7 +224,7 @@ def decide(
     re-check and any flight-coverage impact — advisory only, the admin always
     decides.
     """
-    req = _get_or_404(db, leave_id)
+    req = _get_locked_or_404(db, leave_id)
 
     if req.status != LeaveStatus.pending:
         raise HTTPException(status.HTTP_409_CONFLICT, detail=t("leave.already_decided"))
@@ -253,7 +262,7 @@ def revoke(
     decision into any already-generated month: span cells still on AL become
     X; cells the admin re-coded after approval (or CD) are left as they are.
     """
-    req = _get_or_404(db, leave_id)
+    req = _get_locked_or_404(db, leave_id)
     if req.status != LeaveStatus.approved:
         raise HTTPException(
             status.HTTP_409_CONFLICT, detail=t("leave.revoke_only_approved")
