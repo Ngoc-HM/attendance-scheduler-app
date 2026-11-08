@@ -57,11 +57,12 @@ class LeavesState {
       entries.whenData((e) => e.map((x) => x.row).toList());
 }
 
+/// Starts in the loading state without fetching: [LeavesPage] calls [load]
+/// every time it is opened (and from its refresh button), so the list is
+/// never the one from the first visit of the session (D4).
 class LeavesController extends StateNotifier<LeavesState> {
   LeavesController(this._ds, this._ref)
-      : super(const LeavesState(entries: AsyncValue.loading())) {
-    load();
-  }
+      : super(const LeavesState(entries: AsyncValue.loading()));
 
   final LeavesRemoteDataSource _ds;
   final Ref _ref;
@@ -73,6 +74,7 @@ class LeavesController extends StateNotifier<LeavesState> {
   /// together with today's registration window and, for employees, their
   /// remaining annual leave.
   Future<void> load() async {
+    if (!mounted) return;
     state = state.copyWith(entries: const AsyncValue.loading());
     final window = _loadWindow();
     final balance = _loadBalance();
@@ -87,11 +89,14 @@ class LeavesController extends StateNotifier<LeavesState> {
           .map((l) => LeaveEntry(id: l.id, row: _toRow(l, userById)))
           .toList();
     });
+    final loadedWindow = await window;
+    final loadedBalance = await balance;
+    if (!mounted) return;
     state = state.copyWith(
       entries: entries,
-      window: await window,
+      window: loadedWindow,
       compDays: compDays,
-      balance: await balance,
+      balance: loadedBalance,
     );
   }
 
