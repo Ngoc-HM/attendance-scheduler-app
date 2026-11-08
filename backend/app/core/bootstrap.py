@@ -74,9 +74,10 @@ def create_tables_if_enabled() -> None:
     """Create all tables in dev (``AUTO_CREATE_TABLES``). No-op otherwise.
 
     FRESH-DB CONVENIENCE ONLY: ``create_all`` never ALTERs existing tables.
-    Schema changes are managed with Alembic (``alembic upgrade head``);
-    existing databases created this way are stamped at the baseline revision
-    (see ``alembic/versions/0001_baseline.py``).
+    Schema changes are managed with Alembic (``alembic upgrade head``). A
+    database created this way already holds the schema of the code that
+    created it: stamp that code's head (``alembic stamp head`` for the current
+    code), never the baseline ``0001``, then ``alembic upgrade head``.
     """
     if not settings.AUTO_CREATE_TABLES:
         return

@@ -5,8 +5,9 @@ Run locally with::
     uvicorn app.main:app --reload
 
 Interactive docs at ``/docs`` in dev only (disabled in staging/prod).
-Database schema is provisioned by Alembic (``alembic upgrade head``), not at
-startup.
+Database schema is provisioned by Alembic: run ``alembic upgrade head`` before
+starting new code. Only in dev, and only for a brand-new database without an
+``alembic_version`` table, does startup create the tables (``create_all``).
 
 Startup order: environment guard (refuse unsafe production settings) →
 bootstrap (tables in dev, seed admin) → autorun scheduler (draft at 00:05 from

@@ -10,8 +10,12 @@ Flutter desktop (Windows)  ──HTTPS / JWT──►  FastAPI  ──►  Postg
    feature-first /                            layered:       shared by all clients
    clean architecture                api → services → models
                                             └► scheduler/ (OR-Tools CP-SAT, §5)
-                                            └► APScheduler (monthly autorun, 00:05 on day AUTORUN_DAY+1, #9)
+                                            └► APScheduler (monthly autorun, 00:05 on day AUTORUN_DAY+1, #9;
+                                               catch-up on later days and at startup, #55)
 ```
+That is the target layout. Today the API runs in `ENVIRONMENT=dev` on a
+workstation against a shared PostgreSQL reached over Tailscale
+(`deployment-guide.md`, "The current setup").
 
 ## Backend layers (`backend/app/`)
 - `core/` — config, database, security (JWT/bcrypt), i18n (en/vi), bootstrap,
@@ -30,8 +34,10 @@ leaves  (F-05/06)┤
 holidays(F-13)  ─┤─► schedule_input_builder ─► SolverInput ─► SchedulerEngine.solve
 carry_* (F-14)  ─┘   (carry from schedule_history:                  │
                       planned cells + actuals on top, #29)           ▼
-                              persist draft ShiftAssignment + Violations (§5.6)
+              persist draft ShiftAssignment rows; the solver's violations go back
+              in the generate response only (they are NOT stored)
                                           │ regenerate: 409 if published / edited, unless force (#24)
+                                          │ GET /schedules/{id}/violations: re-check on demand (#46)
                                           │ admin override F-09, shift change, self-arrange, publish
                                           ▼
               actuals: AttendanceRecord (F-11/12) ◄─ seed / re-sync ─ published schedule (#27)
@@ -57,9 +63,14 @@ Months without a schedule pick approved leave up when they are generated.
   the window is enforced (not in dev) (#31, #32).
 - `GET /leaves/balance` — own annual-leave quota / used / pending / remaining
   (an admin may pass `user_id`) (#30).
-- `GET /attendance/me`, `GET /schedules/{year}/{month}` (published months
-  only for non-admins, at most two months ahead outside dev; a colleague's
-  legacy S is masked as X), own leave, shift-change and self-arrange requests.
+- `GET /attendance/me` (seeded rows of a month whose schedule is not
+  published are hidden, #52), `GET /schedules/{year}/{month}` (published
+  months only for non-admins, at most two months ahead outside dev; a
+  colleague's legacy S is masked as X), own leave, shift-change and
+  self-arrange requests.
+
+Every year/month parameter is bounded (year 2000–2100, month 1–12) and bad
+input answers 422, never 500 (#54).
 
 ## Scheduler engine (`scheduler/`, §5)
 - Decision vars `x[(user_id, day, code)]` bool over each person's role domain
@@ -82,7 +93,26 @@ Months without a schedule pick approved leave up when they are generated.
   (300) > A/D balance across role A (100) > premium-off fairness (30) >
   adjacent off-pairing without weekend bias (15). Role A only for the balance terms.
 - `slack_registry.py` collects slack vars → `Violation`s after solve.
-- Deterministic (`random_seed = 42`); time-limited (`SOLVER_MAX_TIME_SECONDS`).
+- **Two-phase solve** (#45): phase 1 minimises the weighted slack alone with
+  40 % of `SOLVER_MAX_TIME_SECONDS`; phase 2 bounds the slack by phase 1's
+  result, starts from phase 1's plan and minimises slack + objectives with
+  the remaining time. If phase 1 finds nothing in its share, one combined
+  solve uses what is left. `SolverOutput.status` (`optimal` / `feasible` /
+  …) and `slack_proven_minimal` tell whether the reported violations are
+  proven unavoidable.
+- **Not fully deterministic:** CP-SAT runs `SOLVER_NUM_WORKERS` workers
+  (default 8) with `random_seed = 42`. The same input gives the same plan
+  only with 1 worker and a solve that finishes inside the time limit; a run
+  stopped by the limit depends on machine speed.
+- Violations are not persisted. The generate response carries the solver's
+  list; afterwards `schedule_violation_checker` re-runs every rule over the
+  stored grid on demand (manual edit, shift change, leave decision,
+  `GET /schedules/{id}/violations`). The re-check counts only active users
+  and flags working cells of disabled users (#44). Engine, re-check and
+  month-close count the month boundary the same way: off-runs reach into the
+  previous month (`prev_codes`), an off-run holding approved leave is exempt
+  (#41), premium offs count only engine-chosen X (#42), comp consumption
+  starts at `HOLIDAY_COMP_EFFECTIVE_FROM` (#43).
 
 ## Frontend (`attendance_scheduler_app/lib/`)
 Feature-first clean architecture. `core/` (Dio client + JWT interceptor,
@@ -92,6 +122,10 @@ template; flights/leaves/schedule/attendance/reports/users follow it),
 `design_system/` (reusable `Ds*View` widgets), `i18n/` (custom en/vi,
 graceful `text(key)` fallback). Admin-only actions are hidden for other roles
 (#38); employees get their own attendance view and shift-change requests (#37).
+Admins see the month's rule violations and confirm before publishing (#46).
+Logout and session expiry reset every user-scoped provider, and a 403 that
+`GET /users/me` confirms ends the session (#56). Error toasts show the
+backend's translated `detail`, not the exception text.
 
 ## Compliance posture (§9 → `deployment-guide.md`)
 EU/Frankfurt region; sick `S` is special-category (admin-written into actual attendance only, never in the planned schedule, no
