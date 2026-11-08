@@ -7,23 +7,40 @@ separate so new layouts need no API change (spec §4.7).
 
 from __future__ import annotations
 
+from app.models.enums import UserStatus
 from app.models.user import User
 from app.scheduler.calendar_utils import month_days
 from app.services import attendance_service
 from app.services.report_table import ReportTable, UserRow, build_monthly, build_yearly
 
 
-def _user_rows(db) -> list[UserRow]:
-    users = db.query(User).order_by(User.id).all()
-    return [UserRow(user_id=u.id, name=u.full_name, role=u.role.value) for u in users]
+def _user_rows(db, ids_with_actuals: set[int]) -> list[UserRow]:
+    """Report rows (ruling R7, revised 2026-11-08).
+
+    Active users are always listed; pending sign-ups never are; a disabled
+    user is listed only when they have actuals in the reported period, so
+    the history of someone who left mid-period stays in the export.
+    """
+    users = (
+        db.query(User)
+        .filter(User.status != UserStatus.pending)
+        .order_by(User.id)
+        .all()
+    )
+    return [
+        UserRow(user_id=u.id, name=u.full_name, role=u.role.value)
+        for u in users
+        if u.status is UserStatus.active or u.id in ids_with_actuals
+    ]
 
 
 def monthly(db, year: int, month: int) -> ReportTable:
     """F-15 — person × day matrix + per-person totals for one month."""
+    grid = attendance_service.actual_records_map(db, year, month)
     return build_monthly(
-        users=_user_rows(db),
+        users=_user_rows(db, {uid for uid, _ in grid}),
         days=month_days(year, month),
-        grid=attendance_service.actual_records_map(db, year, month),
+        grid=grid,
     )
 
 
@@ -32,4 +49,5 @@ def yearly(db, year: int) -> ReportTable:
     grids = {
         m: attendance_service.actual_records_map(db, year, m) for m in range(1, 13)
     }
-    return build_yearly(users=_user_rows(db), year=year, grids_by_month=grids)
+    ids = {uid for grid in grids.values() for uid, _ in grid}
+    return build_yearly(users=_user_rows(db, ids), year=year, grids_by_month=grids)

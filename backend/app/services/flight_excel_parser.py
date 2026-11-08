@@ -8,14 +8,17 @@ Expected layout (row 1 = header, one flight per data row):
   Column E: std        — Excel time cell OR "HH:MM" string (optional, LT FRA)
 
 This module is pure I/O parsing with no DB dependency, making it unit-testable
-in isolation from SQLAlchemy.
+in isolation from SQLAlchemy. Row messages come from the i18n catalog
+(``flight.import_row_*``) in the request's language.
 """
 
 from __future__ import annotations
 
 import io
 from datetime import date, datetime, time
-from typing import Any
+from typing import Any, NamedTuple
+
+from app.core.i18n import t
 
 # ---------------------------------------------------------------------------
 # Cell value parsers
@@ -64,20 +67,42 @@ def parse_time_cell(value: Any) -> time | None:
 # Workbook row parser
 # ---------------------------------------------------------------------------
 
+# Longest cell text echoed back in an error message (keeps responses small).
+_MAX_ECHO = 40
 
-def parse_flight_workbook(raw: bytes) -> tuple[list[dict], list[str]]:
+
+class FlightParseResult(NamedTuple):
+    """Outcome of :func:`parse_flight_workbook` (unpacks as a 3-tuple)."""
+
+    rows: list[dict]
+    errors: list[str]
+    warnings: list[str]
+
+
+def _echo(value: Any) -> str:
+    """Cell value as short text for an error message."""
+    text = "" if value is None else str(value).strip()
+    return text if len(text) <= _MAX_ECHO else text[: _MAX_ECHO - 1] + "…"
+
+
+def parse_flight_workbook(raw: bytes) -> FlightParseResult:
     """Parse raw .xlsx bytes into a list of flight dicts.
 
     Args:
         raw: Raw bytes of a valid .xlsx file.
 
     Returns:
-        (parsed_rows, parse_errors) where:
-          - parsed_rows: list of dicts with keys day/flt_number/route/sta/std.
-          - parse_errors: list of human-readable row-level error strings.
+        ``(rows, errors, warnings)`` where:
+          - rows: dicts with keys day/flt_number/route/sta/std, at most one
+            per (day, flt_number) — a repeated key keeps the LAST row's data
+            at the position of its first occurrence (review B5).
+          - errors: translated row-level messages (i18n keys
+            ``flight.import_row_*`` with ``row``/``value`` parameters).
+          - warnings: translated ``flight.import_row_duplicate`` messages, one
+            per repeated row.
 
-    If parse_errors is non-empty, parsed_rows may be incomplete — callers
-    should abort the import and report the errors without committing.
+    If errors is non-empty, rows may be incomplete — callers should abort
+    the import and report the errors without committing.
     """
     import openpyxl  # local import so the module loads without openpyxl installed
 
@@ -88,7 +113,9 @@ def parse_flight_workbook(raw: bytes) -> tuple[list[dict], list[str]]:
     next(rows_iter, None)  # skip header row
 
     parse_errors: list[str] = []
-    parsed_rows: list[dict] = []
+    warnings: list[str] = []
+    by_key: dict[tuple[date, int], dict] = {}
+    first_row_of: dict[tuple[date, int], int] = {}
 
     for row_idx, row in enumerate(rows_iter, start=2):
         # Skip entirely empty rows.
@@ -104,33 +131,56 @@ def parse_flight_workbook(raw: bytes) -> tuple[list[dict], list[str]]:
         # date — required.
         try:
             day = parse_date_cell(col_date)
-        except (ValueError, TypeError) as exc:
-            parse_errors.append(f"Row {row_idx}: invalid date — {exc}")
+        except (ValueError, TypeError):
+            parse_errors.append(
+                t("flight.import_row_invalid_date").format(
+                    row=row_idx, value=_echo(col_date)
+                )
+            )
             continue
 
         # flt_number — required.
         try:
             flt_number = int(col_flt)  # type: ignore[arg-type]
         except (ValueError, TypeError):
-            parse_errors.append(f"Row {row_idx}: invalid flt_number — {col_flt!r}")
+            parse_errors.append(
+                t("flight.import_row_invalid_flt").format(
+                    row=row_idx, value=_echo(col_flt)
+                )
+            )
             continue
 
         # Optional time columns.
-        try:
-            sta = parse_time_cell(col_sta)
-            std = parse_time_cell(col_std)
-        except (ValueError, TypeError) as exc:
-            parse_errors.append(f"Row {row_idx}: invalid time — {exc}")
+        times: list[time | None] = []
+        for col_time in (col_sta, col_std):
+            try:
+                times.append(parse_time_cell(col_time))
+            except (ValueError, TypeError):
+                parse_errors.append(
+                    t("flight.import_row_invalid_time").format(
+                        row=row_idx, value=_echo(col_time)
+                    )
+                )
+                break
+        if len(times) < 2:  # noqa: PLR2004
             continue
+        sta, std = times
 
-        parsed_rows.append(
-            {
-                "day": day,
-                "flt_number": flt_number,
-                "route": str(col_route).strip() if col_route is not None else None,
-                "sta": sta,
-                "std": std,
-            }
-        )
+        key = (day, flt_number)
+        if key in by_key:
+            warnings.append(
+                t("flight.import_row_duplicate").format(
+                    row=row_idx, first_row=first_row_of[key], flt=flt_number
+                )
+            )
+        else:
+            first_row_of[key] = row_idx
+        by_key[key] = {
+            "day": day,
+            "flt_number": flt_number,
+            "route": str(col_route).strip() if col_route is not None else None,
+            "sta": sta,
+            "std": std,
+        }
 
-    return parsed_rows, parse_errors
+    return FlightParseResult(list(by_key.values()), parse_errors, warnings)
