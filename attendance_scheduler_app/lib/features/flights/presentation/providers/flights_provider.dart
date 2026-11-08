@@ -94,16 +94,20 @@ class FlightsController extends StateNotifier<FlightsState> {
   /// Admin: apply a batch of day→presets changes (which may span several
   /// months), then show [month] in the page.
   ///
+  /// The page switches to [month] only after the batch succeeded: a failed
+  /// batch rethrows and leaves the page on its month and rows, instead of
+  /// labelling the previous month's rows with the dialog's month.
+  ///
   /// [items] should contain only days whose selection CHANGED vs. the initial
   /// state — the dialog is responsible for diffing.
   Future<void> applyMonth(
     DateTime month,
     List<({DateTime day, List<int> presetIds})> items,
   ) async {
-    state = state.copyWith(month: DateTime(month.year, month.month));
     if (items.isNotEmpty) {
       await _ds.applyBatch(items);
     }
+    state = state.copyWith(month: DateTime(month.year, month.month));
     await load();
   }
 

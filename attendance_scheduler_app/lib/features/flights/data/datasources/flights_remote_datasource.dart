@@ -15,7 +15,7 @@ final flightsDataSourceProvider = Provider<FlightsRemoteDataSource>(
 /// Remote calls for Flights (F-04).
 ///
 /// Mirrors [UserManagementDataSource] style: takes a [Dio] instance, surfaces
-/// [ApiException] on failures.
+/// [ApiException] on failures carrying the backend's (localized) `detail`.
 class FlightsRemoteDataSource {
   FlightsRemoteDataSource(this._dio);
 
@@ -32,10 +32,7 @@ class FlightsRemoteDataSource {
           .map((e) => FlightDayModel.fromJson(e as Map<String, dynamic>))
           .toList();
     } on DioException catch (e) {
-      throw ApiException(
-        e.message ?? 'Failed to load flight days',
-        statusCode: e.response?.statusCode,
-      );
+      throw ApiException.fromDio(e, 'Failed to load flight days');
     }
   }
 
@@ -53,10 +50,7 @@ class FlightsRemoteDataSource {
         response.data as Map<String, dynamic>,
       );
     } on DioException catch (e) {
-      throw ApiException(
-        e.message ?? 'Failed to save flight day',
-        statusCode: e.response?.statusCode,
-      );
+      throw ApiException.fromDio(e, 'Failed to save flight day');
     }
   }
 
@@ -100,10 +94,7 @@ class FlightsRemoteDataSource {
           .map((e) => FlightPresetModel.fromJson(e as Map<String, dynamic>))
           .toList();
     } on DioException catch (e) {
-      throw ApiException(
-        e.message ?? 'Failed to load flight presets',
-        statusCode: e.response?.statusCode,
-      );
+      throw ApiException.fromDio(e, 'Failed to load flight presets');
     }
   }
 
@@ -118,10 +109,7 @@ class FlightsRemoteDataSource {
         response.data as Map<String, dynamic>,
       );
     } on DioException catch (e) {
-      throw ApiException(
-        e.message ?? 'Failed to create flight preset',
-        statusCode: e.response?.statusCode,
-      );
+      throw ApiException.fromDio(e, 'Failed to create flight preset');
     }
   }
 
@@ -139,10 +127,7 @@ class FlightsRemoteDataSource {
         response.data as Map<String, dynamic>,
       );
     } on DioException catch (e) {
-      throw ApiException(
-        e.message ?? 'Failed to update flight preset',
-        statusCode: e.response?.statusCode,
-      );
+      throw ApiException.fromDio(e, 'Failed to update flight preset');
     }
   }
 
@@ -151,10 +136,7 @@ class FlightsRemoteDataSource {
     try {
       await _dio.delete(ApiEndpoints.flightPresetById(id));
     } on DioException catch (e) {
-      throw ApiException(
-        e.message ?? 'Failed to delete flight preset',
-        statusCode: e.response?.statusCode,
-      );
+      throw ApiException.fromDio(e, 'Failed to delete flight preset');
     }
   }
 
@@ -176,10 +158,7 @@ class FlightsRemoteDataSource {
       );
       return FlightDayModel.fromJson(response.data as Map<String, dynamic>);
     } on DioException catch (e) {
-      throw ApiException(
-        e.message ?? 'Failed to apply flight presets',
-        statusCode: e.response?.statusCode,
-      );
+      throw ApiException.fromDio(e, 'Failed to apply flight presets');
     }
   }
 
@@ -208,10 +187,7 @@ class FlightsRemoteDataSource {
           .map((e) => FlightDayModel.fromJson(e as Map<String, dynamic>))
           .toList();
     } on DioException catch (e) {
-      throw ApiException(
-        e.message ?? 'Failed to apply flight presets (batch)',
-        statusCode: e.response?.statusCode,
-      );
+      throw ApiException.fromDio(e, 'Failed to apply flight presets (batch)');
     }
   }
 
