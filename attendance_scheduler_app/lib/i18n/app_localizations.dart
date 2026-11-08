@@ -417,6 +417,7 @@ class AppLocalizations {
       'ruleViolationsInMonth':
           'rule violation(s) in this month. Review them before publishing.',
       'publishWithViolationsTitle': 'Publish with rule violations?',
+      'rulesNotCheckedTitle': 'Rules not checked',
       'publishWithViolationsBody':
           'This month still breaks these rules. Publish anyway?',
       'rulesCheckFailed':
@@ -821,6 +822,7 @@ class AppLocalizations {
       'ruleViolationsInMonth':
           'vi phạm quy tắc trong tháng này. Hãy xem lại trước khi công bố.',
       'publishWithViolationsTitle': 'Công bố khi còn vi phạm quy tắc?',
+      'rulesNotCheckedTitle': 'Chưa kiểm tra được quy tắc',
       'publishWithViolationsBody':
           'Lịch tháng này vẫn vi phạm các quy tắc sau. Vẫn công bố?',
       'rulesCheckFailed':

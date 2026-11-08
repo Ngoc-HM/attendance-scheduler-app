@@ -6,6 +6,8 @@
 // offers same-role colleagues only.
 
 import 'dart:async';
+import 'dart:core';
+import 'dart:core' as core;
 
 import 'package:attendance_scheduler_app/core/network/api_exception.dart';
 import 'package:attendance_scheduler_app/core/storage/locale_storage.dart';
@@ -77,6 +79,8 @@ class _FakeScheduleDataSource extends ScheduleRemoteDataSource {
     this.decideWarnings = const [],
     this.publishError,
     this.fetchError,
+    this.violationsError,
+    this.generateError,
   }) : super(Dio());
 
   final bool julyExists;
@@ -84,6 +88,15 @@ class _FakeScheduleDataSource extends ScheduleRemoteDataSource {
   final List<ShiftChangeRequest> requests;
   final List<String> decideWarnings;
   final Object? publishError;
+
+  /// Thrown by [fetchViolations] (endpoint missing, 5xx, network).
+  final Object? violationsError;
+
+  /// Thrown by [generate].
+  final Object? generateError;
+
+  /// Holds the [override] response until completed.
+  Completer<void>? overrideGate;
 
   /// Thrown by every [fetchSchedule] call (instead of the 404 for July).
   final Object? fetchError;
@@ -98,7 +111,7 @@ class _FakeScheduleDataSource extends ScheduleRemoteDataSource {
 
   static int idFor(int month) => 600 + month;
 
-  @override
+  @core.override
   Future<MonthlySchedule> fetchSchedule(int year, int month) async {
     fetchedMonths.add(month);
     final gate = held[month];
@@ -127,13 +140,47 @@ class _FakeScheduleDataSource extends ScheduleRemoteDataSource {
     );
   }
 
-  @override
+  @core.override
   Future<List<ConstraintViolation>> fetchViolations(int scheduleId) async {
     violationCalls.add(scheduleId);
+    if (violationsError != null) throw violationsError!;
     return violations;
   }
 
-  @override
+  @core.override
+  Future<ScheduleResult> generate({
+    required int year,
+    required int month,
+    bool force = false,
+  }) async {
+    throw generateError ?? StateError('generate not stubbed');
+  }
+
+  @core.override
+  Future<ScheduleResult> override({
+    required int scheduleId,
+    required int userId,
+    required DateTime workDate,
+    required String code,
+  }) async {
+    final gate = overrideGate;
+    if (gate != null) await gate.future;
+    return ScheduleResult(
+      feasible: true,
+      violations: const [
+        ConstraintViolation(rule: 'cover', message: 'cover below minimum'),
+      ],
+      schedule: MonthlySchedule(
+        id: scheduleId,
+        year: workDate.year,
+        month: workDate.month,
+        status: ScheduleStatus.draft,
+        assignments: const [],
+      ),
+    );
+  }
+
+  @core.override
   Future<MonthlySchedule> publish(int scheduleId) async {
     if (publishError != null) throw publishError!;
     published.add(scheduleId);
@@ -147,11 +194,11 @@ class _FakeScheduleDataSource extends ScheduleRemoteDataSource {
     );
   }
 
-  @override
+  @core.override
   Future<List<ShiftChangeRequest>> fetchShiftChanges({bool all = false}) async =>
       List.of(requests);
 
-  @override
+  @core.override
   Future<ShiftChangeRequest> decideShiftChange({
     required int id,
     required String status,
@@ -384,6 +431,41 @@ void main() {
     expect(state.isLoading, isFalse);
   });
 
+  test('late_override_response_does_not_replace_the_visible_month', () async {
+    final ds = _FakeScheduleDataSource(julyExists: true);
+    final container = ProviderContainer(
+      overrides: [
+        scheduleRemoteDataSourceProvider.overrideWithValue(ds),
+        userManagementDataSourceProvider.overrideWithValue(
+          _FakeUserDataSource(),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+    final controller = container.read(scheduleControllerProvider.notifier);
+    await controller.load(2026, _june, isAdmin: true);
+
+    // The June edit is in flight when the admin moves to July.
+    ds.overrideGate = Completer<void>();
+    final edit = controller.overrideCell(
+      userId: _a1,
+      workDate: DateTime(2026, _june, 3),
+      code: 'X',
+    );
+    await controller.load(2026, _july, isAdmin: true);
+    final violationCallsBefore = ds.violationCalls.length;
+    ds.overrideGate!.complete();
+    final warnings = await edit;
+
+    expect(warnings, ['cover below minimum'], reason: 'still reported');
+    final state = container.read(scheduleControllerProvider);
+    expect(state.schedule?.id, _FakeScheduleDataSource.idFor(_july));
+    expect(state.schedule?.assignments, isNotEmpty);
+    expect(state.isMutating, isFalse);
+    expect(ds.violationCalls.length, violationCallsBefore,
+        reason: 'no re-check written for a month that is not on screen');
+  });
+
   testWidgets('publish_shows_violations_before_confirm', (tester) async {
     final ds = _FakeScheduleDataSource(
       violations: [
@@ -424,6 +506,49 @@ void main() {
 
     expect(ds.published, [_FakeScheduleDataSource.idFor(_june)]);
     expect(find.text('Schedule published.'), findsOneWidget);
+    await _drainToast(tester);
+  });
+
+  testWidgets('publish_when_rules_check_fails_says_rules_not_checked', (
+    tester,
+  ) async {
+    final ds = _FakeScheduleDataSource(
+      violationsError: const ApiException('Not Found', statusCode: 404),
+    );
+    await _pump(tester, user: _admin, ds: ds);
+
+    await tester.tap(find.text('Publish schedule'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AlertDialog), findsOneWidget);
+    expect(find.text('Rules not checked'), findsOneWidget);
+    expect(find.text('Publish with rule violations?'), findsNothing);
+    expect(
+      find.text('The rules could not be checked right now. Publish anyway?'),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.text('Publish anyway'));
+    await tester.pumpAndSettle();
+    expect(ds.published, [_FakeScheduleDataSource.idFor(_june)]);
+    await _drainToast(tester);
+  });
+
+  testWidgets('failed_generate_does_not_read_as_load_failure', (tester) async {
+    final ds = _FakeScheduleDataSource(
+      generateError: const ApiException('Solver crashed', statusCode: 500),
+    );
+    await _pump(tester, user: _admin, ds: ds);
+    await _nextMonth(tester); // July: no schedule yet (404)
+
+    await tester.tap(find.text('Generate schedule'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Generate anyway')); // no flights this month
+    await tester.pumpAndSettle();
+
+    expect(find.text('Solver crashed'), findsOneWidget, reason: 'toast');
+    expect(find.textContaining('Could not load the schedule'), findsNothing);
+    expect(find.text(_generateHint), findsOneWidget);
     await _drainToast(tester);
   });
 
@@ -536,6 +661,10 @@ void main() {
   testWidgets('swap_picker_lists_same_role_active_colleagues_only', (
     tester,
   ) async {
+    // "Active only" is enforced by the backend: GET /users/directory
+    // (user_service.list_directory) returns active users only and carries
+    // no status, so the fake directory below is already active-only and the
+    // dialog filters by role.
     final people = await _FakeUserDataSource().directory();
     await tester.pumpWidget(
       ProviderScope(

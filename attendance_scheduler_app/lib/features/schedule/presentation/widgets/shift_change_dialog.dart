@@ -46,10 +46,13 @@ class _ShiftChangeRequestDialogState
     super.dispose();
   }
 
-  /// Swap partners: colleagues of the requester's role only (the backend
-  /// refuses a cross-role swap at approval), in natural code order (T2
-  /// before T10). [ShiftChangeRequestDialog.people] is GET /users/directory,
-  /// which lists active users only.
+  /// Swap partners: colleagues of the requester's role only, in natural code
+  /// order (T2 before T10). At approval the backend checks that each
+  /// person's resulting code is requestable for their own role
+  /// (`apply_shift_change`), so a cross-role swap usually fails late there;
+  /// offering the same role only avoids that.
+  /// [ShiftChangeRequestDialog.people] is GET /users/directory, which lists
+  /// active users only.
   List<UserDirectoryEntry> get _colleagues =>
       widget.people
           .where((p) => p.id != widget.currentUserId && p.role == widget.role)

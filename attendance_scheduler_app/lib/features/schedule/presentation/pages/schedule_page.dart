@@ -212,14 +212,15 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
 
   /// Empty-roster text: a failed load names the backend detail; a month
   /// with no schedule (404) gets the admin "generate" hint (null = the
-  /// view's default) or the employee "not published" note.
+  /// view's default) or the employee "not published" note. Only a failed
+  /// load counts here: a failed generate is a toast, not "could not load".
   String? _emptyMessage(
     AppLocalizations l,
     ScheduleState state,
     bool isAdmin,
   ) {
-    final error = state.error;
-    if (error != null && state.errorStatus != 404) {
+    final error = state.loadError;
+    if (error != null && state.loadErrorStatus != 404) {
       return '${l.text('scheduleLoadFailed')} $error';
     }
     return isAdmin ? null : l.text('scheduleNotPublishedYet');
@@ -621,7 +622,9 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
     final proceed = await showDialog<bool>(
       context: context,
       builder: (context) => DsFormDialog(
-        title: l.text('publishWithViolationsTitle'),
+        title: l.text(
+          lines == null ? 'rulesNotCheckedTitle' : 'publishWithViolationsTitle',
+        ),
         width: 520,
         content: Column(
           mainAxisSize: MainAxisSize.min,

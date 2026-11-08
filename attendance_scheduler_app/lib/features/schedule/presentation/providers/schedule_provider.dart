@@ -15,7 +15,8 @@ class ScheduleState {
     this.isLoading = false,
     this.isMutating = false,
     this.error,
-    this.errorStatus,
+    this.loadError,
+    this.loadErrorStatus,
     this.lastResult,
     this.violations,
   });
@@ -30,12 +31,17 @@ class ScheduleState {
   final bool isLoading;
   final bool isMutating;
 
-  /// User-facing message: the backend `detail`, never "ApiException(...)".
+  /// Failed generate / edit / publish: the backend `detail`, never
+  /// "ApiException(...)". Shown as a toast.
   final String? error;
+
+  /// Failed [ScheduleController.load] only (backend detail), kept apart from
+  /// [error] so a failed generate never reads as "could not load".
+  final String? loadError;
 
   /// HTTP status of the failed load (404 = month not generated / not
   /// published); null when the load did not fail or never reached a server.
-  final int? errorStatus;
+  final int? loadErrorStatus;
   final ScheduleResult? lastResult; // most-recent generate result
 
   /// Admin only: hard-rule violations of [schedule] as it stands now.
@@ -53,10 +59,12 @@ class ScheduleState {
     bool? isLoading,
     bool? isMutating,
     String? error,
-    int? errorStatus,
+    String? loadError,
+    int? loadErrorStatus,
     ScheduleResult? lastResult,
     List<ConstraintViolation>? violations,
     bool clearError = false,
+    bool clearLoadError = false,
     bool clearResult = false,
     bool clearSchedule = false,
     bool clearViolations = false,
@@ -67,7 +75,10 @@ class ScheduleState {
         isLoading: isLoading ?? this.isLoading,
         isMutating: isMutating ?? this.isMutating,
         error: clearError ? null : (error ?? this.error),
-        errorStatus: clearError ? null : (errorStatus ?? this.errorStatus),
+        loadError: clearLoadError ? null : (loadError ?? this.loadError),
+        loadErrorStatus: clearLoadError
+            ? null
+            : (loadErrorStatus ?? this.loadErrorStatus),
         lastResult: clearResult ? null : (lastResult ?? this.lastResult),
         violations: clearViolations ? null : (violations ?? this.violations),
       );
@@ -100,6 +111,7 @@ class ScheduleController extends StateNotifier<ScheduleState> {
     state = state.copyWith(
       isLoading: true,
       clearError: true,
+      clearLoadError: true,
       clearSchedule: true,
       clearViolations: true,
       clearResult: true,
@@ -123,8 +135,8 @@ class ScheduleController extends StateNotifier<ScheduleState> {
       state = state.copyWith(
         isLoading: false,
         clearSchedule: true,
-        error: scheduleErrorMessage(e),
-        errorStatus: e is ApiException ? e.statusCode : null,
+        loadError: scheduleErrorMessage(e),
+        loadErrorStatus: e is ApiException ? e.statusCode : null,
       );
     }
   }
@@ -183,6 +195,7 @@ class ScheduleController extends StateNotifier<ScheduleState> {
               schedule: generated,
               lastResult: result,
               violations: result.violations,
+              clearLoadError: true,
             )
           : state.copyWith(isMutating: false, lastResult: result);
     } catch (e) {
@@ -199,7 +212,8 @@ class ScheduleController extends StateNotifier<ScheduleState> {
 
   /// Admin cell edit (F-09). Returns the recheck warnings (empty = clean);
   /// null when the call failed (error is set on the state) or the loaded
-  /// schedule is not [workDate]'s month.
+  /// schedule is not [workDate]'s month. A response that arrives after the
+  /// admin moved to another month is not written into that month's state.
   Future<List<String>?> overrideCell({
     required int userId,
     required DateTime workDate,
@@ -215,12 +229,17 @@ class ScheduleController extends StateNotifier<ScheduleState> {
         workDate: workDate,
         code: code,
       );
+      final warnings = result.violations.map((v) => v.message).toList();
+      if (state.schedule?.id != scheduleId) {
+        state = state.copyWith(isMutating: false);
+        return warnings;
+      }
       state = state.copyWith(
         isMutating: false,
         schedule: result.schedule ?? state.schedule,
       );
       await refreshViolations();
-      return result.violations.map((v) => v.message).toList();
+      return warnings;
     } catch (e) {
       state = state.copyWith(
         isMutating: false,
