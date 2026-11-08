@@ -48,17 +48,21 @@ def recheck(
     carry_comps: dict[int, int] | None = None,
     annual_off: dict[int, set[date]] | None = None,
     prev_codes: dict[int, tuple[AttendanceCode, ...]] | None = None,
+    cover_roles: dict[int, Role] | None = None,
 ) -> list[str]:
     """Run every mirrored rule over the grid; return human-readable warnings.
 
     ``prev_codes`` holds each user's previous-month codes, oldest first
     (``BoundaryState.prev_codes``), for off-runs crossing the month start.
+    ``cover_roles`` are extra users whose grid cells count towards flight
+    staffing only (no per-person rule) — e.g. the days a since-disabled user
+    really worked.
     """
     warnings: list[str] = []
     warnings += check_consecutive(grid, roles, carry_streaks, weeks)
     warnings += check_rolling_rest(grid, roles, weeks, previous_working or {})
     warnings += check_off_quota(grid, roles, weeks)
-    warnings += check_staffing(grid, roles, weeks, flight_pairs)
+    warnings += check_staffing(grid, {**(cover_roles or {}), **roles}, weeks, flight_pairs)
     warnings += check_min_a_days(grid, roles, weeks)
     warnings += check_comp_days(grid, roles, weeks, carry_comps or {})
     warnings += check_off_chain(grid, roles, weeks, annual_off or {}, prev_codes)
