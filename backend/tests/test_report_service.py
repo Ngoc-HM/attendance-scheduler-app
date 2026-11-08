@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 from openpyxl import load_workbook
 
 from app.core.database import SessionLocal
+from app.models.attendance import AttendanceRecord
 from app.models.enums import AttendanceCode, Role, UserStatus
 from app.models.user import User
 from app.services import report_service
@@ -89,7 +90,7 @@ def test_reports_require_admin(client: TestClient) -> None:
     assert client.get("/api/v1/reports/monthly/2027/12", headers=hdr).status_code == 403
 
 
-# --- R7 (B1): CSV/XLSX formula injection + active users only ---------------
+# --- R7 (B1): CSV/XLSX formula injection -------------------------------------
 
 _FORMULA_NAMES = [
     '=HYPERLINK("http://evil.example","x")',
@@ -129,35 +130,105 @@ def test_xlsx_formula_cell_is_text() -> None:
     assert ws.cell(row=len(_FORMULA_NAMES) + 2, column=1).value == "Safe Name"
 
 
-def test_reports_exclude_pending_and_disabled(client: TestClient) -> None:
-    db = SessionLocal()
-    made: list[User] = []
-    try:
-        for suffix, user_status in (
-            ("act", UserStatus.active),
-            ("pen", UserStatus.pending),
-            ("dis", UserStatus.disabled),
-        ):
-            u = User(
-                username=f"rep_status_{suffix}",
-                code=f"RS{suffix.upper()}",
-                full_name=f"Report {suffix}",
-                hashed_password="x",
-                role=Role.A,
-                status=user_status,
-            )
-            db.add(u)
-            made.append(u)
-        db.commit()
+def test_negative_number_cell_not_escaped() -> None:
+    numbers = ["-1", "+2", "-0.5", "+.5", "-1e3"]
+    table = ReportTable(
+        title="Numbers",
+        headers=["User", "Value"],
+        rows=[["N", n] for n in numbers] + [["N", "-1abc"]],
+    )
+    rows = list(csv.reader(io.StringIO(to_csv(table).decode("utf-8-sig"))))
+    assert [r[1] for r in rows[1:]] == [*numbers, "'-1abc"]
 
-        monthly_names = {r[0] for r in report_service.monthly(db, 2027, 12).rows}
-        yearly_names = {r[0] for r in report_service.yearly(db, 2027).rows}
-        for names in (monthly_names, yearly_names):
-            assert "Report act" in names
+    ws = load_workbook(io.BytesIO(to_xlsx(table))).active
+    assert [ws.cell(row=i, column=2).value for i in range(2, len(numbers) + 3)] == [
+        *numbers,
+        "'-1abc",
+    ]
+
+
+# --- R7 revised (2026-11-08): who is listed in a report ----------------------
+
+_REPORT_DAY = date(2031, 3, 10)
+
+
+def _make_user(db, suffix: str, user_status: UserStatus) -> User:
+    u = User(
+        username=f"rep_status_{suffix}",
+        code=f"RS{suffix.upper()}"[:8],
+        full_name=f"Report {suffix}",
+        hashed_password="x",
+        role=Role.A,
+        status=user_status,
+    )
+    db.add(u)
+    db.commit()
+    return u
+
+
+def _add_actual(db, user: User, day: date = _REPORT_DAY) -> None:
+    db.add(AttendanceRecord(user_id=user.id, work_date=day, code=AttendanceCode.A))
+    db.commit()
+
+
+def _cleanup(db, users: list[User]) -> None:
+    ids = [u.id for u in users]
+    db.query(AttendanceRecord).filter(AttendanceRecord.user_id.in_(ids)).delete(
+        synchronize_session=False
+    )
+    db.query(User).filter(User.id.in_(ids)).delete(synchronize_session=False)
+    db.commit()
+    db.close()
+
+
+def _monthly_names(db, year: int, month: int) -> set[str]:
+    return {r[0] for r in report_service.monthly(db, year, month).rows}
+
+
+def _yearly_names(db, year: int) -> set[str]:
+    return {r[0] for r in report_service.yearly(db, year).rows}
+
+
+def test_reports_exclude_pending_users(client: TestClient) -> None:
+    db = SessionLocal()
+    users: list[User] = []
+    try:
+        active = _make_user(db, "act", UserStatus.active)
+        pending = _make_user(db, "pen", UserStatus.pending)
+        users += [active, pending]
+        _add_actual(db, pending)  # even with actuals, pending never shows
+
+        for names in (_monthly_names(db, 2031, 3), _yearly_names(db, 2031)):
+            assert "Report act" in names  # active: always, actuals or not
             assert "Report pen" not in names
-            assert "Report dis" not in names
     finally:
-        for u in made:
-            db.delete(u)
-        db.commit()
-        db.close()
+        _cleanup(db, users)
+
+
+def test_disabled_user_with_actuals_in_period_is_included(client: TestClient) -> None:
+    db = SessionLocal()
+    users: list[User] = []
+    try:
+        disabled = _make_user(db, "diswith", UserStatus.disabled)
+        users.append(disabled)
+        _add_actual(db, disabled)  # 2031-03-10
+
+        assert "Report diswith" in _monthly_names(db, 2031, 3)
+        assert "Report diswith" in _yearly_names(db, 2031)
+        # Outside the period the actual belongs to, the user is not listed.
+        assert "Report diswith" not in _monthly_names(db, 2031, 4)
+        assert "Report diswith" not in _yearly_names(db, 2032)
+    finally:
+        _cleanup(db, users)
+
+
+def test_disabled_user_without_actuals_is_excluded(client: TestClient) -> None:
+    db = SessionLocal()
+    users: list[User] = []
+    try:
+        users.append(_make_user(db, "disnone", UserStatus.disabled))
+
+        assert "Report disnone" not in _monthly_names(db, 2031, 3)
+        assert "Report disnone" not in _yearly_names(db, 2031)
+    finally:
+        _cleanup(db, users)

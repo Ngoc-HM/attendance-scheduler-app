@@ -337,8 +337,9 @@ class TestImportExcel:
             (date(2026, 12, 7), 37),
             (date(2026, 12, 7), 36),
         ]
-        assert len(warnings) == 1
-        assert "4" in warnings[0] and "2" in warnings[0]
+        assert warnings == [
+            t("flight.import_row_duplicate").format(row=4, first_row=2, flt=37)
+        ]
 
         resp = client.post(
             f"{V}/flights/import",
