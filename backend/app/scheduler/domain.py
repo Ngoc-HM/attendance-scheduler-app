@@ -71,3 +71,10 @@ class SolverOutput:
     feasible: bool
     assignments: list[AssignmentResult] = field(default_factory=list)
     violations: list[Violation] = field(default_factory=list)
+    # "optimal" | "feasible" | "infeasible" | "unknown". "optimal" only when
+    # both solve phases (slack, then soft objectives) are proven optimal.
+    status: str = "unknown"
+    # True when the slack total (hence every reported violation count) is
+    # proven to be the smallest possible — the violations are real, not an
+    # artefact of the time limit.
+    slack_proven_minimal: bool = False

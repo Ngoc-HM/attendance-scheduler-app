@@ -80,6 +80,10 @@ class Settings(BaseSettings):
 
     # --- Scheduler engine (OR-Tools) limits --------------------------------
     SOLVER_MAX_TIME_SECONDS: float = 30.0
+    # CP-SAT search workers. Fixed (not "all cores") so a run does not depend
+    # on the machine's CPU count; with 1 the same input gives the same plan
+    # whenever the solve finishes inside the time limit.
+    SOLVER_NUM_WORKERS: int = Field(default=8, ge=1)
 
     # --- Holiday comp days (owner decision D1, 2026-11-06) ------------------
     # Working a public holiday earns one CD for every role, but only for
