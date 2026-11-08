@@ -53,6 +53,28 @@ def test_production_rejects_short_secret() -> None:
     assert any("SECRET_KEY" in e for e in s.production_config_errors())
 
 
+def _env_example_secret() -> str:
+    from pathlib import Path
+
+    example = Path(__file__).resolve().parents[1] / ".env.example"
+    for line in example.read_text(encoding="utf-8").splitlines():
+        if line.startswith("SECRET_KEY="):
+            return line.split("=", 1)[1].strip()
+    raise AssertionError("backend/.env.example has no SECRET_KEY line")
+
+
+@pytest.mark.parametrize("env", ["staging", "prod"])
+def test_production_rejects_env_example_secret_placeholder(env: str) -> None:
+    """A copied .env.example keeps its placeholder SECRET_KEY, which is long
+    enough to pass the length check — it must still be refused."""
+    placeholder = _env_example_secret()
+    assert placeholder == "please-generate-a-long-random-string"
+    s = _settings(ENVIRONMENT=env, **{**STRONG_PROD, "SECRET_KEY": placeholder})
+    assert any("SECRET_KEY" in e for e in s.production_config_errors())
+    with pytest.raises(RuntimeError, match="^Refusing to start: unsafe settings"):
+        s.validate_for_environment()
+
+
 def test_production_accepts_strong_settings_and_warns_on_risky_ones() -> None:
     s = _settings(ENVIRONMENT="prod", **STRONG_PROD, FIRST_ADMIN_RESET_ON_STARTUP=True)
     assert s.production_config_errors() == []

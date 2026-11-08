@@ -136,6 +136,78 @@ def test_ensure_database_exists_only_outside_production(
     assert bool(calls) is expected
 
 
+def _stamp(engine: Engine, revision: str) -> None:
+    with engine.begin() as conn:
+        conn.execute(text("CREATE TABLE alembic_version (version_num VARCHAR(32))"))
+        conn.execute(text("INSERT INTO alembic_version VALUES (:r)"), {"r": revision})
+
+
+def _schema_warnings(caplog: pytest.LogCaptureFixture) -> list[str]:
+    return [
+        r.getMessage() for r in caplog.records
+        if r.name == "app.core.bootstrap" and r.levelno == logging.WARNING
+    ]
+
+
+def test_schema_revision_behind_head_logs_warning(
+    fresh_engine: Engine, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """M2: a database stamped at an older revision than the code's migration
+    head gets a startup WARNING naming both (startup itself continues)."""
+    monkeypatch.setattr(bootstrap, "engine", fresh_engine)
+    _stamp(fresh_engine, "0001")
+    head = bootstrap.alembic_script_head()
+    assert head is not None and head != "0001"
+
+    with caplog.at_level(logging.INFO, logger="app.core.bootstrap"):
+        bootstrap.warn_if_schema_outdated()
+
+    warnings = _schema_warnings(caplog)
+    assert len(warnings) == 1
+    assert "0001" in warnings[0] and head in warnings[0]
+    assert "alembic upgrade head" in warnings[0]
+
+
+def test_schema_at_head_or_unmanaged_logs_nothing(
+    fresh_engine: Engine, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    monkeypatch.setattr(bootstrap, "engine", fresh_engine)
+    with caplog.at_level(logging.INFO, logger="app.core.bootstrap"):
+        # No alembic_version table (dev create_all database): nothing to compare.
+        bootstrap.warn_if_schema_outdated()
+        _stamp(fresh_engine, bootstrap.alembic_script_head() or "")
+        bootstrap.warn_if_schema_outdated()
+    assert _schema_warnings(caplog) == []
+
+
+def test_schema_check_never_blocks_startup(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A failing check (unreachable DB, missing scripts) must not stop the app."""
+    broken = create_engine("sqlite:////nonexistent-dir/never/there.db")
+    monkeypatch.setattr(bootstrap, "engine", broken)
+    try:
+        bootstrap.warn_if_schema_outdated()  # must not raise
+    finally:
+        broken.dispose()
+
+
+def test_startup_bootstrap_runs_the_schema_check(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[str] = []
+    monkeypatch.setattr(bootstrap, "ensure_database_exists", lambda: None)
+    monkeypatch.setattr(bootstrap, "create_tables_if_enabled", lambda: None)
+    monkeypatch.setattr(
+        bootstrap, "warn_if_schema_outdated", lambda: calls.append("schema"),
+        raising=False,
+    )
+    monkeypatch.setattr(bootstrap, "ensure_first_admin", lambda db: None)
+    monkeypatch.setattr(bootstrap, "ensure_default_flight_presets", lambda db: None)
+
+    bootstrap.run_startup_bootstrap()
+
+    assert calls == ["schema"]
+
+
 def test_app_logger_prints_info() -> None:
     """C4: the app.* loggers emit INFO through their own handler, so autorun
     and bootstrap messages reach the uvicorn console."""
