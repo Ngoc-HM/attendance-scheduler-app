@@ -44,6 +44,7 @@ jobs:
             backend/requirements-dev.txt
             backend/requirements.lock
       - name: Install dependencies (pinned by requirements.lock)
+        id: install
         run: pip install -r requirements-dev.txt -c requirements.lock
       - name: Lint (ruff)
         run: ruff check app tests
@@ -64,6 +65,9 @@ jobs:
           AUTO_CREATE_TABLES: "false"
         run: alembic check
       - name: Tests on PostgreSQL
+        # Still runs when `alembic check` reports drift, so that failure does
+        # not hide the suite result.
+        if: ${{ !cancelled() }}
         env:
           DATABASE_URL: postgresql+psycopg2://postgres:postgres@localhost:5432/attendance_test
           AUTO_CREATE_TABLES: "true"
@@ -71,17 +75,21 @@ jobs:
           AUTORUN_ENABLED: "false"
         run: pytest -p no:cacheprovider
       - name: Production guard smoke (must refuse dev defaults)
-        # Runs even when an earlier step failed: the guard is independent of
-        # the test results and must always be reported.
-        if: always()
+        # Runs even when tests failed (the guard is independent of them), but
+        # only when the dependencies installed: otherwise any import error
+        # would look like the guard firing.
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         env:
           ENVIRONMENT: prod
           DATABASE_URL: sqlite:///./guard.db
         run: |
-          if python -c "from app.core.config import settings; settings.validate_for_environment()"; then
+          if python -c "from app.core.config import settings; settings.validate_for_environment()" 2> guard.err; then
             echo "Guard did not fire" && exit 1
-          else
+          elif grep -q "Refusing to start: unsafe settings" guard.err; then
             echo "Guard refused unsafe defaults as expected"
+          else
+            cat guard.err
+            echo "Guard step failed for another reason" && exit 1
           fi
 
   flutter:
@@ -105,7 +113,9 @@ jobs:
 
   flutter-goldens:
     name: Flutter goldens (macOS)
-    runs-on: macos-latest
+    # Pinned image (not macos-latest): golden rendering must not drift when
+    # GitHub moves the label to a newer macOS.
+    runs-on: macos-15
     defaults:
       run:
         working-directory: attendance_scheduler_app

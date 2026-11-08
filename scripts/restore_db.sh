@@ -51,6 +51,11 @@ case "$DATABASE_URL" in
   *) echo "DATABASE_URL must be a PostgreSQL URL (postgresql://...)" >&2; exit 1 ;;
 esac
 url_rest="${DATABASE_URL#*://}"
+# A password in the query string would end up on the pg tools' command line.
+if [[ "$url_rest" == *\?* ]] && [[ "&${url_rest#*\?}" == *"&password="* ]]; then
+  echo "DATABASE_URL must not carry password= in its query string; put the password in user:password@host" >&2
+  exit 1
+fi
 url_user=""
 url_pass=""
 if [[ "$url_rest" == *@* ]]; then
