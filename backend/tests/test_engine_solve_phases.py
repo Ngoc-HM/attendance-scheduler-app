@@ -14,6 +14,7 @@ from datetime import date
 from app.core.config import settings
 from app.models.enums import Role
 from app.scheduler import PersonInput, SchedulerEngine, SolverInput
+from app.scheduler import engine as engine_module
 from app.scheduler.calendar_utils import build_weeks, month_days
 
 
@@ -79,6 +80,38 @@ def test_status_reported() -> None:
     assert out.feasible
     assert out.status == "optimal"
     assert out.slack_proven_minimal is True
+
+
+def test_zero_time_budget_reports_unknown() -> None:
+    inp = _small_instance()
+    out = SchedulerEngine(num_workers=1).solve(
+        SolverInput(**{**inp.__dict__, "max_solve_seconds": 0.0})
+    )
+
+    assert out.feasible is False
+    assert out.status == "unknown"
+    assert out.slack_proven_minimal is False
+
+
+def test_phase1_without_plan_falls_back_to_combined_solve(monkeypatch) -> None:
+    """Phase 1 gets no time at all; the combined solve uses what is left."""
+    monkeypatch.setattr(engine_module, "PHASE1_TIME_SHARE", 0.0)
+    calls: list[int] = []
+    combined = SchedulerEngine._combined_solve
+
+    def spy(self, *args, **kwargs):
+        calls.append(1)
+        return combined(self, *args, **kwargs)
+
+    monkeypatch.setattr(SchedulerEngine, "_combined_solve", spy)
+    inp = _small_instance()
+    out = SchedulerEngine(num_workers=1).solve(inp)
+
+    assert calls == [1]
+    assert out.feasible
+    assert len(out.assignments) == len(inp.days) * len(inp.people)
+    assert out.status == "feasible"
+    assert out.slack_proven_minimal is False
 
 
 def test_same_input_same_output_with_fixed_workers() -> None:
