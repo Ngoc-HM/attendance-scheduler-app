@@ -7,7 +7,9 @@ user) for the admin to act — never a bare "infeasible".
 
 from __future__ import annotations
 
-from app.models.enums import AttendanceCode, Role
+from datetime import timedelta
+
+from app.models.enums import Role
 from app.scheduler import PersonInput, SchedulerEngine, SolverInput
 from app.scheduler.calendar_utils import build_weeks, month_days
 
@@ -42,9 +44,23 @@ def test_zero_slack_when_fully_staffed() -> None:
 
 
 def test_violations_carry_rule_day_and_user_metadata() -> None:
+    # Six days worked right before the month: the rolling 7-day window that
+    # starts there already breaks "two rest days", whatever day 1 holds.
+    # (A full week of approved leave no longer does: ruling R1 exempts it.)
     days = month_days(2026, 6)[:7]
-    pinned = {d: AttendanceCode.AL for d in days}
-    out = _solve([PersonInput(1, Role.T)], days, approved_off={1: pinned})
+    worked = {days[0] - timedelta(days=n): True for n in range(1, 7)}
+    out = SchedulerEngine().solve(
+        SolverInput(
+            year=2026,
+            month=6,
+            people=[PersonInput(1, Role.T, carry_streak=6)],
+            days=days,
+            weeks=build_weeks(days),
+            flight_pairs={d: 0 for d in days},
+            previous_working={1: worked},
+            max_solve_seconds=15.0,
+        )
+    )
 
     assert out.feasible and out.violations
     v = out.violations[0]
