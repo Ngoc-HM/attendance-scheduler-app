@@ -36,6 +36,14 @@ MESSAGES: dict[str, dict[str, str]] = {
         "schedule.not_found": "Schedule not found.",
         "schedule.published_locked": "Schedule is published; regenerate requires force.",
         "schedule.has_overrides": "Schedule has manual edits; regenerate requires force.",
+        "schedule.override_date_out_of_month": "Override date must belong to the schedule month.",
+        "schedule.cell_not_found": (
+            "Schedule cell not found; a missing cell can only be added for an active user."
+        ),
+        "schedule.disabled_user_duty": (
+            "Disabled account still has a working shift in the schedule; "
+            "it does not count as cover."
+        ),
         # --- Flights (F-04) ---
         "flight.day_not_found": "Flight day not found.",
         "flight.invalid_pairs": "flight_pairs must be 0, 1 or 2.",
@@ -113,6 +121,14 @@ MESSAGES: dict[str, dict[str, str]] = {
         "schedule.not_found": "Không tìm thấy lịch.",
         "schedule.published_locked": "Lịch đã publish; tạo lại cần force.",
         "schedule.has_overrides": "Lịch có chỉnh tay; tạo lại cần force.",
+        "schedule.override_date_out_of_month": "Ngày chỉnh sửa phải thuộc tháng của lịch.",
+        "schedule.cell_not_found": (
+            "Không tìm thấy ô lịch; chỉ có thể thêm ô còn thiếu cho người dùng đang hoạt động."
+        ),
+        "schedule.disabled_user_duty": (
+            "Tài khoản đã bị vô hiệu hoá vẫn còn ca làm việc trong lịch; "
+            "ca này không được tính là người trực."
+        ),
         # --- Flights (F-04) ---
         "flight.day_not_found": "Không tìm thấy ngày bay.",
         "flight.invalid_pairs": "Số cặp chuyến bay phải là 0, 1 hoặc 2.",

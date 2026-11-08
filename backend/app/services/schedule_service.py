@@ -13,7 +13,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.i18n import t
-from app.models.enums import AttendanceCode, ScheduleStatus, SwapKind
+from app.models.enums import AttendanceCode, ScheduleStatus, SwapKind, UserStatus
 from app.models.schedule import MonthlySchedule, ShiftAssignment
 from app.models.shift_change_request import ShiftChangeRequest
 from app.models.user import User
@@ -74,6 +74,10 @@ def generate(db: Session, year: int, month: int, force: bool = False) -> Schedul
 
     Regenerating a published month, or one with manual edits, would wipe the
     edits and reset it to draft — refused (409) unless ``force`` is set.
+    A forced run over a published month also moves the actuals still as
+    seeded from the old roster (``recorded_by`` NULL) onto the new plan, so
+    neither attendance nor the next month's boundary state keeps reading the
+    replaced plan; admin-recorded actuals stay.
     """
     existing = (
         db.query(MonthlySchedule)
@@ -106,6 +110,7 @@ def generate(db: Session, year: int, month: int, force: bool = False) -> Schedul
     if not out.feasible:  # only contradictory pins / timeout (§5.6 #12)
         return ScheduleResult(feasible=False, violations=_violations(out.violations))
 
+    was_published = existing is not None and existing.status is ScheduleStatus.published
     if existing is None:
         existing = MonthlySchedule(year=year, month=month)
         db.add(existing)
@@ -123,13 +128,17 @@ def generate(db: Session, year: int, month: int, force: bool = False) -> Schedul
     db.flush()
     db.expire(existing, ["assignments"])
 
+    plan: dict[tuple[int, date], AttendanceCode] = {}
     for a in out.assignments:
         # Restore the concrete code on pinned cells: the engine plans approved
         # leave as X in the decision layer (§5.3 #5) — write the real AL/CD.
         code = inp.approved_off.get(a.user_id, {}).get(a.day, a.code)
+        plan[(a.user_id, a.day)] = code
         existing.assignments.append(
             ShiftAssignment(user_id=a.user_id, work_date=a.day, code=code)
         )
+    if was_published:
+        _resync_seeded_actuals(db, year, month, plan)
     db.commit()
     db.refresh(existing)
     return ScheduleResult(
@@ -142,7 +151,12 @@ def generate(db: Session, year: int, month: int, force: bool = False) -> Schedul
 def manual_override(
     db: Session, schedule_id: int, payload: ManualOverrideRequest
 ) -> ScheduleResult:
-    """F-09 — validate and apply an admin edit, then re-check and warn."""
+    """F-09 — validate and apply an admin edit, then re-check and warn.
+
+    R4 — a user activated after the month was generated has no row: the edit
+    creates the missing cell for an ACTIVE user (on a published month its
+    actual is seeded too). A missing cell of a pending/disabled user is 404.
+    """
     schedule = _get_by_id(db, schedule_id)
     if (
         payload.work_date.year != schedule.year
@@ -150,7 +164,7 @@ def manual_override(
     ):
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail="Override date must belong to the schedule month.",
+            detail=t("schedule.override_date_out_of_month"),
         )
     user = db.get(User, payload.user_id)
     if user is None:
@@ -165,16 +179,23 @@ def manual_override(
         ),
         None,
     )
+    created = cell is None
     if cell is None:
-        raise HTTPException(
-            status.HTTP_404_NOT_FOUND,
-            detail="Schedule cell not found.",
-        )
+        if user.status is not UserStatus.active:
+            raise HTTPException(
+                status.HTTP_404_NOT_FOUND, detail=t("schedule.cell_not_found")
+            )
+        cell = ShiftAssignment(user_id=payload.user_id, work_date=payload.work_date)
+        schedule.assignments.append(cell)
     cell.code = payload.code
     cell.is_manual_override = True
-    if schedule.status is ScheduleStatus.published:
+    published = schedule.status is ScheduleStatus.published
+    if published and not created:
         attendance_service.sync_planned_cell(db, cell.user_id, cell.work_date, cell.code)
     db.commit()
+    if published and created:
+        # The new cell has no actual yet: seed it like publishing would.
+        attendance_service.seed_from_schedule(db, schedule.year, schedule.month)
     db.refresh(schedule)
     return ScheduleResult(
         feasible=True,
@@ -183,8 +204,21 @@ def manual_override(
     )
 
 
+def violations_for(db: Session, schedule_id: int) -> list[ConstraintViolation]:
+    """C2 — the month's hard-rule check, on demand (admin view / pre-publish).
+
+    Same list a manual edit returns (``_recheck_violations``), so an autorun
+    draft's problems are visible before anyone edits or publishes it.
+    """
+    return _recheck_violations(db, _get_by_id(db, schedule_id))
+
+
 def publish(db: Session, schedule_id: int) -> MonthlySchedule:
-    """F-07 — draft → published; locks regeneration (not admin edits)."""
+    """F-07 — draft → published; locks regeneration (not admin edits).
+
+    Publishing with violations stays allowed (admin decision): the client
+    reads ``violations_for`` first and asks the admin to confirm.
+    """
     schedule = _get_by_id(db, schedule_id)
     schedule.status = ScheduleStatus.published
     db.commit()
@@ -342,24 +376,59 @@ def _violations(items) -> list[ConstraintViolation]:
     ]
 
 
+def _resync_seeded_actuals(
+    db: Session, year: int, month: int, plan: dict[tuple[int, date], AttendanceCode]
+) -> None:
+    """F11 — move still-seeded actuals of the month onto a regenerated plan.
+
+    ``sync_planned_cell`` keeps the seed rule in one place: only an actual
+    nobody recorded by hand (and never a sick day) follows the plan. Does not
+    commit.
+    """
+    for record in attendance_service.list_month(db, year, month):
+        code = plan.get((record.user_id, record.work_date))
+        if code is not None:
+            attendance_service.sync_planned_cell(
+                db, record.user_id, record.work_date, code
+            )
+
+
 def _recheck_violations(db: Session, schedule: MonthlySchedule) -> list[ConstraintViolation]:
     """Re-run every engine rule over the persisted grid (F-09 warnings).
 
     Carry values (streak, comp) come from the same effective history the
     engine used (``schedule_history``), so the recheck and the generator
     agree on the month boundary.
+
+    R4 — only ACTIVE users are checked and counted as cover. A user disabled
+    after generation keeps their cells; each working cell they still hold is
+    flagged (``disabled_user_duty``) so the admin re-plans it.
     """
     days = month_days(schedule.year, schedule.month)
     users = db.query(User).filter(User.id.in_({a.user_id for a in schedule.assignments})).all()
+    active = [u for u in users if u.status is UserStatus.active]
+    inactive_ids = {u.id for u in users if u.status is not UserStatus.active}
     grid: dict[tuple[int, date], AttendanceCode] = {
-        (a.user_id, a.work_date): a.code for a in schedule.assignments
+        (a.user_id, a.work_date): a.code
+        for a in schedule.assignments
+        if a.user_id not in inactive_ids
     }
+    inactive_duty = [
+        ConstraintViolation(
+            day=a.work_date,
+            user_id=a.user_id,
+            rule="disabled_user_duty",
+            message=f"{t('schedule.disabled_user_duty')} ({a.code.value})",
+        )
+        for a in sorted(schedule.assignments, key=lambda a: (a.work_date, a.user_id))
+        if a.user_id in inactive_ids and a.code.is_working
+    ]
     boundary = schedule_history.build_boundary_states(
-        db, users, schedule.year, schedule.month
+        db, active, schedule.year, schedule.month
     )
     warnings = recheck(
         grid=grid,
-        roles={u.id: u.role for u in users},
+        roles={u.id: u.role for u in active},
         carry_streaks={uid: state.carry_streak for uid, state in boundary.items()},
         weeks=build_weeks(days),
         flight_pairs=flight_service.flight_pairs_map(db, days),
@@ -369,4 +438,6 @@ def _recheck_violations(db: Session, schedule: MonthlySchedule) -> list[Constrai
         carry_comps={uid: state.carry_comp for uid, state in boundary.items()},
         annual_off=leave_service.annual_off_dates(db, schedule.year, schedule.month),
     )
-    return [ConstraintViolation(rule="manual_recheck", message=w) for w in warnings]
+    return inactive_duty + [
+        ConstraintViolation(rule="manual_recheck", message=w) for w in warnings
+    ]
