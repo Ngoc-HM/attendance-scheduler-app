@@ -1,10 +1,11 @@
 """Unit + integration tests for F-05/F-06 leave service.
 
 Coverage targets:
-- Classification boundary: 4 days → monthly, 5 days → annual.
-- Monthly window: open days 1–20, closed day 21.
+- Classification boundary: 5 days → monthly, more than 5 days → annual.
+- Monthly window: open days 1–AUTORUN_DAY (20), closed the day after.
 - Annual window: prior-year ok, same-year rejected.
-- Approve decrements annual_leave_balance; approved_off_map shows AL.
+- Approve keeps the stored quota; approved_off_map shows AL.
+- Annual leave quota: remaining = quota - approved days in the year (D4).
 - Overlap guard → 409.
 - Conflict ranking by carry_comp.
 """
@@ -18,7 +19,13 @@ from fastapi.testclient import TestClient
 
 from app.models.enums import LeaveStatus, LeaveType
 from app.services.leave_conflict_resolver import rank
-from app.services.leave_windows import classify, is_annual_window_open, is_monthly_window_open
+from app.services.leave_windows import (
+    annual_target_year,
+    classify,
+    is_annual_window_open,
+    is_monthly_window_open,
+    monthly_target,
+)
 
 V = "/api/v1"
 
@@ -71,6 +78,29 @@ class TestMonthlyWindow:
     def test_closed_january_target_wrong_year(self):
         assert not is_monthly_window_open(date(2026, 1, 5), target_month=1, target_year=2026)
 
+    def test_monthly_window_closes_on_autorun_day(self, monkeypatch):
+        """The window's last day is settings.AUTORUN_DAY, not a literal 20."""
+        from app.core.config import settings
+        from app.services.leave_windows import registration_last_day
+
+        monkeypatch.setattr(settings, "AUTORUN_DAY", 20)
+        assert registration_last_day() == 20
+        assert is_monthly_window_open(date(2025, 2, 20), target_month=3, target_year=2025)
+        assert not is_monthly_window_open(date(2025, 2, 21), target_month=3, target_year=2025)
+
+        monkeypatch.setattr(settings, "AUTORUN_DAY", 15)
+        assert registration_last_day() == 15
+        assert is_monthly_window_open(date(2025, 2, 15), target_month=3, target_year=2025)
+        assert not is_monthly_window_open(date(2025, 2, 16), target_month=3, target_year=2025)
+
+    def test_monthly_target_is_next_month(self):
+        assert monthly_target(date(2026, 11, 5)) == (2026, 12)
+        # The target stays next month after the window has closed.
+        assert monthly_target(date(2026, 11, 25)) == (2026, 12)
+
+    def test_monthly_target_december_rolls_into_january(self):
+        assert monthly_target(date(2026, 12, 5)) == (2027, 1)
+
 
 class TestAnnualWindow:
     def test_year_plus_one_ok(self):
@@ -85,13 +115,18 @@ class TestAnnualWindow:
         # Leave starts 2027; today is 2025 → not exactly Y+1.
         assert not is_annual_window_open(date(2025, 6, 1), leave_start_year=2027)
 
+    def test_annual_target_year_is_next_year(self):
+        today = date(2026, 11, 5)
+        assert annual_target_year(today) == 2027
+        assert is_annual_window_open(today, leave_start_year=annual_target_year(today))
+
 
 class TestConflictRank:
     """Pure ranking logic — no DB needed.
 
     Uses simple namespace objects to avoid SQLAlchemy ORM instrumentation.
-    The rank() function only reads .id, .user_id, and .created_at — no ORM
-    operations, so plain objects work perfectly.
+    The rank() function only reads request fields plus the carry_comp map the
+    caller derived from schedule_history, so plain objects work perfectly.
     """
 
     def _make_req(self, id_, user_id, created_offset_days=0):
@@ -108,41 +143,31 @@ class TestConflictRank:
             created_at=datetime(2025, 1, 1) + timedelta(days=created_offset_days),
         )
 
-    def _make_user(self, id_, carry_comp):
-        from types import SimpleNamespace
-        return SimpleNamespace(id=id_, carry_comp=carry_comp)
-
     def test_higher_carry_comp_ranks_first(self):
         req_a = self._make_req(1, user_id=1, created_offset_days=0)
         req_b = self._make_req(2, user_id=2, created_offset_days=0)
-        user_a = self._make_user(1, carry_comp=3)
-        user_b = self._make_user(2, carry_comp=1)
-        ranked = rank([req_b, req_a], {1: user_a, 2: user_b})
+        ranked = rank([req_b, req_a], {1: 3, 2: 0})
         assert ranked[0].user_id == 1  # higher carry_comp first
 
     def test_equal_carry_comp_tiebreak_by_created_at(self):
         req_a = self._make_req(1, user_id=1, created_offset_days=0)
         req_b = self._make_req(2, user_id=2, created_offset_days=1)
-        user_a = self._make_user(1, carry_comp=2)
-        user_b = self._make_user(2, carry_comp=2)
-        ranked = rank([req_b, req_a], {1: user_a, 2: user_b})
+        ranked = rank([req_b, req_a], {1: 2, 2: 2})
         assert ranked[0].id == 1  # earlier created_at wins
 
     def test_unknown_user_treated_as_zero_comp(self):
         req_a = self._make_req(1, user_id=99)  # user 99 not in map
         req_b = self._make_req(2, user_id=2)
-        user_b = self._make_user(2, carry_comp=1)
-        ranked = rank([req_a, req_b], {2: user_b})
+        ranked = rank([req_a, req_b], {2: 1})
         assert ranked[0].user_id == 2  # user_b has carry_comp=1 > 0
 
     def test_fewer_offs_already_held_in_block_ranks_first(self):
         """Criterion (b): the person with less of their weekly rest entitlement wins."""
         req_a = self._make_req(1, user_id=1)
         req_b = self._make_req(2, user_id=2)
-        users = {1: self._make_user(1, 0), 2: self._make_user(2, 0)}
         # User 1 already holds 2 approved offs in the same 7-day block (May 1–7).
         held = {1: {date(2025, 5, 5), date(2025, 5, 6)}, 2: set()}
-        ranked = rank([req_a, req_b], users, held)
+        ranked = rank([req_a, req_b], {1: 0, 2: 0}, held)
         assert ranked[0].user_id == 2
 
     def test_weekend_pairing_breaks_ties(self):
@@ -161,8 +186,8 @@ class TestConflictRank:
         fri_sat = req(2, 2, date(2025, 5, 2), date(2025, 5, 3))   # Fri–Sat
         sun_mon = req(3, 3, date(2025, 5, 4), date(2025, 5, 5))   # Sun–Mon
         midweek = req(4, 4, date(2025, 5, 6), date(2025, 5, 7))   # Tue–Wed
-        users = {i: self._make_user(i, 0) for i in range(1, 5)}
-        ranked = rank([midweek, sun_mon, fri_sat, sat_sun], users)
+        carry = {i: 0 for i in range(1, 5)}
+        ranked = rank([midweek, sun_mon, fri_sat, sat_sun], carry)
         assert [r.id for r in ranked] == [1, 2, 3, 4]
 
 
@@ -223,8 +248,9 @@ class TestLeaveEndpoints:
         finally:
             db.close()
 
-    def test_approve_keeps_informational_balance(self, client: TestClient):
-        """Current policy has no leave quota; approval keeps the info balance."""
+    def test_approve_within_quota_keeps_quota(self, client: TestClient):
+        """Approving within the quota warns nothing; the stored quota is never
+        decremented (the remaining balance is derived from approved leave)."""
         admin = self._admin_headers(client)
 
         # Create user.
@@ -240,9 +266,9 @@ class TestLeaveEndpoints:
         db_gen = get_db()
         db = next(db_gen)
         try:
-            # Set balance to 10 directly via DB.
+            # Set the quota to 10 directly via DB.
             user = db.get(User, uid)
-            user.annual_leave_balance = 10
+            user.annual_leave_quota = 10
             db.commit()
 
             # Window: submitting on day 10 of month M for month M+1.
@@ -262,9 +288,8 @@ class TestLeaveEndpoints:
             assert req_approved.status == LeaveStatus.approved
             assert warnings == []
 
-            # No leave quota/balance mutation under the current policy.
             db.refresh(user)
-            assert user.annual_leave_balance == 10
+            assert user.annual_leave_quota == 10
         finally:
             db.close()
 
@@ -272,7 +297,6 @@ class TestLeaveEndpoints:
         """approved_off_map includes AL for approved leave days in that month."""
         from app.core.database import get_db
         from app.models.enums import AttendanceCode
-        from app.models.user import User
         from app.schemas.leave import LeaveCreate
         from app.services import leave_service
 
@@ -283,11 +307,6 @@ class TestLeaveEndpoints:
         db_gen = get_db()
         db = next(db_gen)
         try:
-            # Set balance via DB directly.
-            user = db.get(User, uid)
-            user.annual_leave_balance = 20
-            db.commit()
-
             today = date(2025, 2, 5)
             payload = LeaveCreate(
                 start_date=date(2025, 3, 10),
@@ -360,3 +379,545 @@ class TestLeaveEndpoints:
             assert exc_info.value.status_code == 400
         finally:
             db.close()
+
+    def test_conflicts_rank_by_carry_from_schedule_history(self, client: TestClient):
+        """B6: conflict ranking reads carry_comp from history, not the stored column."""
+        from app.core.database import SessionLocal
+        from app.models.leave import LeaveRequest
+
+        admin = self._admin_headers(client)
+        early = _create_user(client, admin, "conflict_early").json()["id"]
+        owed = _create_user(client, admin, "conflict_owed").json()["id"]
+        # One A/D the month before earns a comp day that no month-close has
+        # persisted yet, so users.carry_comp is still 0 for both.
+        client.put(
+            f"{V}/attendance", headers=admin,
+            json={"user_id": owed, "work_date": "2031-02-10", "code": "A/D"},
+        )
+
+        db = SessionLocal()
+        try:
+            for uid in (early, owed):  # `early` submits first
+                db.add(LeaveRequest(
+                    user_id=uid, start_date=date(2031, 3, 10),
+                    end_date=date(2031, 3, 10), leave_type=LeaveType.monthly,
+                ))
+                db.flush()
+            db.commit()
+        finally:
+            db.close()
+
+        res = client.get(
+            f"{V}/leaves/conflicts", headers=admin, params={"date": "2031-03-10"}
+        )
+        assert res.status_code == 200
+        assert [e["user_id"] for e in res.json()] == [owed, early]
+
+# ---------------------------------------------------------------------------
+# B3 — caller-supplied leave_type must match the span (> 5 days is annual)
+# ---------------------------------------------------------------------------
+
+_TYPE_SPAN_MISMATCH = (
+    "Leave of 5 days or less is monthly leave; more than 5 consecutive days "
+    "must be registered as annual leave."
+)
+
+
+def _post_leave_as_new_user(client, username, start, end, leave_type):
+    admin = _bearer(_token(client, "admin", "admin123"))
+    assert _create_user(client, admin, username).status_code == 201
+    user = _bearer(_token(client, username, "secret1"))
+    return client.post(
+        f"{V}/leaves",
+        headers=user,
+        json={
+            "start_date": start.isoformat(),
+            "end_date": end.isoformat(),
+            "leave_type": leave_type,
+        },
+    )
+
+
+def test_monthly_label_on_long_span_rejected(client):
+    # 10 consecutive days labelled monthly would bypass the annual rule.
+    r = _post_leave_as_new_user(
+        client, "b3_long_monthly", date(2033, 6, 1), date(2033, 6, 10), "monthly"
+    )
+    assert r.status_code == 422
+    assert r.json()["detail"] == _TYPE_SPAN_MISMATCH
+
+
+def test_annual_label_on_short_span_rejected(client):
+    r = _post_leave_as_new_user(
+        client, "b3_short_annual", date(2033, 7, 1), date(2033, 7, 3), "annual"
+    )
+    assert r.status_code == 422
+    assert r.json()["detail"] == _TYPE_SPAN_MISMATCH
+
+
+def test_matching_label_accepted(client):
+    r = _post_leave_as_new_user(
+        client, "b3_short_monthly", date(2033, 8, 1), date(2033, 8, 3), "monthly"
+    )
+    assert r.status_code == 201
+    assert r.json()["leave_type"] == "monthly"
+
+class TestWindowBusinessClock:
+    """The window is judged on the Frankfurt business date, not the host's."""
+
+    def test_window_uses_business_timezone_date(self, client: TestClient, monkeypatch):
+        from datetime import UTC, datetime
+
+        from fastapi import HTTPException
+
+        from app.core import business_time
+        from app.core.config import settings
+        from app.core.database import get_db
+        from app.schemas.leave import LeaveCreate
+        from app.services import leave_service
+
+        monkeypatch.setattr(settings, "AUTORUN_DAY", 20)
+        monkeypatch.setattr(settings, "TIMEZONE", "Europe/Berlin")
+        admin = _bearer(_token(client, "admin", "admin123"))
+        uid = _create_user(client, admin, "window_business_clock").json()["id"]
+
+        db = next(get_db())
+        try:
+            # 22:30 UTC = 23:30 Berlin on 2026-12-20: still the last open day.
+            monkeypatch.setattr(
+                business_time, "_utcnow",
+                lambda: datetime(2026, 12, 20, 22, 30, tzinfo=UTC),
+            )
+            accepted = leave_service.create_request(
+                db, uid,
+                LeaveCreate(start_date=date(2027, 1, 4), end_date=date(2027, 1, 5)),
+                enforce_window=True,
+            )
+            assert accepted.status is LeaveStatus.pending
+
+            # 23:30 UTC = 00:30 Berlin on 2026-12-21: closed (draft is due at 00:05).
+            monkeypatch.setattr(
+                business_time, "_utcnow",
+                lambda: datetime(2026, 12, 20, 23, 30, tzinfo=UTC),
+            )
+            with pytest.raises(HTTPException) as exc_info:
+                leave_service.create_request(
+                    db, uid,
+                    LeaveCreate(start_date=date(2027, 1, 11), end_date=date(2027, 1, 12)),
+                    enforce_window=True,
+                )
+            assert exc_info.value.status_code == 400
+        finally:
+            db.close()
+
+    def test_window_closed_message_names_autorun_day(self, client: TestClient, monkeypatch):
+        from fastapi import HTTPException
+
+        from app.core.config import settings
+        from app.core.database import get_db
+        from app.schemas.leave import LeaveCreate
+        from app.services import leave_service
+
+        monkeypatch.setattr(settings, "AUTORUN_DAY", 15)
+        admin = _bearer(_token(client, "admin", "admin123"))
+        uid = _create_user(client, admin, "window_message_day").json()["id"]
+
+        db = next(get_db())
+        try:
+            with pytest.raises(HTTPException) as exc_info:
+                leave_service.create_request(
+                    db, uid,
+                    LeaveCreate(start_date=date(2025, 3, 3), end_date=date(2025, 3, 4)),
+                    today=date(2025, 2, 16),
+                    enforce_window=True,
+                )
+            assert exc_info.value.status_code == 400
+            assert "day 15" in exc_info.value.detail
+        finally:
+            db.close()
+
+
+# ---------------------------------------------------------------------------
+# B4 — approving / revoking leave writes into an already-generated schedule
+# (2039 months: nothing else in the suite touches them)
+# ---------------------------------------------------------------------------
+
+def _role_a_users(client, admin, prefix) -> list[int]:
+    """Four role-A people — enough for the engine to cover a month."""
+    ids = []
+    for i in range(1, 5):
+        r = _create_user(client, admin, f"{prefix}{i}")
+        assert r.status_code == 201, r.text
+        ids.append(r.json()["id"])
+    return ids
+
+
+def _generate(client, admin, year, month, *, publish=False) -> int:
+    res = client.post(
+        f"{V}/schedules/generate", headers=admin, json={"year": year, "month": month}
+    )
+    assert res.status_code == 200 and res.json()["feasible"] is True, res.text
+    schedule_id = res.json()["schedule"]["id"]
+    if publish:
+        res = client.post(f"{V}/schedules/{schedule_id}/publish", headers=admin)
+        assert res.status_code == 200, res.text
+    return schedule_id
+
+
+def _file_leave(client, username, start, end) -> int:
+    user = _bearer(_token(client, username, "secret1"))
+    r = client.post(
+        f"{V}/leaves",
+        headers=user,
+        json={"start_date": start.isoformat(), "end_date": end.isoformat()},
+    )
+    assert r.status_code == 201, r.text
+    return r.json()["id"]
+
+
+def _planned(client, admin, user_id, days) -> dict[str, str]:
+    """{iso day: planned code} of one user's cells on ``days`` (one month)."""
+    wanted = {d.isoformat() for d in days}
+    res = client.get(f"{V}/schedules/{days[0].year}/{days[0].month}", headers=admin)
+    return {
+        a["work_date"]: a["code"]
+        for a in res.json()["assignments"]
+        if a["user_id"] == user_id and a["work_date"] in wanted
+    }
+
+
+def _actual(client, admin, user_id, days) -> dict[str, str]:
+    """{iso day: actual code} of one user's attendance on ``days`` (one month)."""
+    wanted = {d.isoformat() for d in days}
+    rows = client.get(
+        f"{V}/attendance",
+        params={"year": days[0].year, "month": days[0].month},
+        headers=admin,
+    ).json()
+    return {
+        r["work_date"]: r["code"]
+        for r in rows
+        if r["user_id"] == user_id and r["work_date"] in wanted
+    }
+
+
+def _approve(client, admin, leave_id) -> list[str]:
+    res = client.post(
+        f"{V}/leaves/{leave_id}/decide", headers=admin, json={"status": "approved"}
+    )
+    assert res.status_code == 200, res.text
+    return res.json()["warnings"]
+
+
+def _after_approve(before: dict[str, str]) -> dict[str, str]:
+    """Approval writes AL over the span but keeps the weekly X (decision #4)."""
+    return {day: ("X" if code == "X" else "AL") for day, code in before.items()}
+
+
+def test_approve_after_generate_writes_al_into_grid(client):
+    admin = _bearer(_token(client, "admin", "admin123"))
+    users = _role_a_users(client, admin, "b4_approve_a")
+    _generate(client, admin, 2039, 3)
+    days = [date(2039, 3, d) for d in (20, 21, 22)]
+    before = _planned(client, admin, users[0], days)
+    assert set(before.values()) != {"X"}, before  # at least one cell to change
+    leave_id = _file_leave(client, "b4_approve_a1", date(2039, 3, 20), date(2039, 3, 22))
+
+    warnings = _approve(client, admin, leave_id)
+
+    assert _planned(client, admin, users[0], days) == _after_approve(before)
+    assert any("updated" in w for w in warnings)
+
+    # Someone added after generation has no cells in March: nothing changes,
+    # so there is no "schedule updated" notice.
+    assert _create_user(client, admin, "b4_approve_late").status_code == 201
+    late_id = _file_leave(client, "b4_approve_late", date(2039, 3, 20), date(2039, 3, 22))
+    assert _approve(client, admin, late_id) == []
+
+
+def test_revoke_restores_x(client):
+    """Published month: the grid AND the still-seeded actuals follow both decisions."""
+    admin = _bearer(_token(client, "admin", "admin123"))
+    users = _role_a_users(client, admin, "b4_revoke_a")
+    _generate(client, admin, 2039, 5, publish=True)
+    leave_id = _file_leave(client, "b4_revoke_a1", date(2039, 5, 14), date(2039, 5, 16))
+    days = [date(2039, 5, d) for d in (14, 15, 16)]
+    expected = _after_approve(_planned(client, admin, users[0], days))
+    assert "AL" in expected.values(), expected
+
+    _approve(client, admin, leave_id)
+    assert _planned(client, admin, users[0], days) == expected
+    assert _actual(client, admin, users[0], days) == expected
+
+    res = client.post(f"{V}/leaves/{leave_id}/revoke", headers=admin)
+    assert res.status_code == 200, res.text
+
+    assert _planned(client, admin, users[0], days) == {d.isoformat(): "X" for d in days}
+    assert _actual(client, admin, users[0], days) == {d.isoformat(): "X" for d in days}
+    assert any("updated" in w for w in res.json()["warnings"])
+
+
+def test_revoke_reverts_only_cells_still_on_leave(client):
+    """Cells the admin re-coded after approval (D, CD) survive a revoke."""
+    admin = _bearer(_token(client, "admin", "admin123"))
+    users = _role_a_users(client, admin, "b4_keep_a")
+    schedule_id = _generate(client, admin, 2039, 10)
+    leave_id = _file_leave(client, "b4_keep_a1", date(2039, 10, 8), date(2039, 10, 11))
+    _approve(client, admin, leave_id)
+    for day, code in (("2039-10-08", "D"), ("2039-10-09", "CD")):
+        res = client.post(
+            f"{V}/schedules/{schedule_id}/override", headers=admin,
+            json={"user_id": users[0], "work_date": day, "code": code},
+        )
+        assert res.status_code == 200, res.text
+
+    res = client.post(f"{V}/leaves/{leave_id}/revoke", headers=admin)
+    assert res.status_code == 200, res.text
+
+    days = [date(2039, 10, d) for d in (8, 9, 10, 11)]
+    assert _planned(client, admin, users[0], days) == {
+        "2039-10-08": "D", "2039-10-09": "CD", "2039-10-10": "X", "2039-10-11": "X",
+    }
+
+
+def test_leave_spanning_two_months_updates_only_existing_schedule(client):
+    """Review Focus 1: only July has a schedule; August is named, not created."""
+    admin = _bearer(_token(client, "admin", "admin123"))
+    users = _role_a_users(client, admin, "b4_span_a")
+    _generate(client, admin, 2039, 7)
+    leave_id = _file_leave(client, "b4_span_a1", date(2039, 7, 30), date(2039, 8, 1))
+    july = [date(2039, 7, 30), date(2039, 7, 31)]
+    expected = _after_approve(_planned(client, admin, users[0], july))
+    assert "AL" in expected.values(), expected
+
+    warnings = _approve(client, admin, leave_id)
+
+    assert _planned(client, admin, users[0], july) == expected
+    assert any("updated" in w for w in warnings)
+    assert any(w.startswith("2039-08:") for w in warnings)
+    assert client.get(f"{V}/schedules/2039/8", headers=admin).status_code == 404
+
+    # August picks the approved day up when it is generated later.
+    _generate(client, admin, 2039, 8)
+    assert _planned(client, admin, users[0], [date(2039, 8, 1)]) == {"2039-08-01": "AL"}
+
+
+def test_approve_keeps_the_weekly_off_days(client):
+    """Decision #4 / D5: leave does not replace the weekly X. Approving after
+    generation writes AL only over the non-X cells of the span, so the block
+    keeps its genuine X and the re-check reports no off-quota breach for it."""
+    admin = _bearer(_token(client, "admin", "admin123"))
+    users = _role_a_users(client, admin, "f1_keepx_a")
+    _generate(client, admin, 2042, 3)
+    me = users[0]
+
+    # A 4-day span inside one 7-day block that holds at least one of this
+    # person's X days and at least one working day.
+    plan = _planned(client, admin, me, [date(2042, 3, d) for d in range(1, 29)])
+
+    def codes(start: int) -> set[str]:
+        return {plan[date(2042, 3, start + i).isoformat()] for i in range(4)}
+
+    first = next(
+        s
+        for block_start in (1, 8, 15, 22)
+        for s in range(block_start, block_start + 4)
+        if "X" in codes(s) and codes(s) != {"X"}
+    )
+    span = [date(2042, 3, first + i) for i in range(4)]
+    block_start = date(2042, 3, (first - 1) // 7 * 7 + 1)
+    before = _planned(client, admin, me, span)
+
+    leave_id = _file_leave(client, "f1_keepx_a1", span[0], span[-1])
+    warnings = _approve(client, admin, leave_id)
+
+    assert any("updated" in w for w in warnings)
+    assert not any(
+        f"User {me}: " in w
+        and "off day(s) instead of" in w
+        and f"block starting {block_start}" in w
+        for w in warnings
+    ), warnings
+    assert _planned(client, admin, me, span) == _after_approve(before)
+
+
+def test_leave_window_status(client: TestClient, monkeypatch) -> None:
+    """Window is open days 1–AUTORUN_DAY for next month; dev never closes it."""
+    from app.core.config import settings
+    from app.services import leave_service
+    from app.services.leave_windows import registration_last_day
+
+    monkeypatch.setattr(settings, "ENVIRONMENT", "staging")
+    monkeypatch.setattr(settings, "AUTORUN_DAY", 20)
+
+    day5 = leave_service.window_status(today=date(2026, 11, 5))
+    assert day5.monthly_open is True
+    assert (day5.monthly_target_year, day5.monthly_target_month) == (2026, 12)
+    assert day5.annual_target_year == 2027
+    assert day5.closes_on_day == registration_last_day() == 20
+    assert day5.enforced is True
+
+    # Boundary: the last registration day is open, the next day is closed.
+    assert leave_service.window_status(today=date(2026, 11, 20)).monthly_open is True
+    assert leave_service.window_status(today=date(2026, 11, 21)).monthly_open is False
+    assert leave_service.window_status(today=date(2026, 11, 25)).monthly_open is False
+
+    # Dev does not enforce the window, so registration is always open.
+    monkeypatch.setattr(settings, "ENVIRONMENT", "dev")
+    dev = leave_service.window_status(today=date(2026, 11, 25))
+    assert dev.enforced is False
+    assert dev.monthly_open is True
+
+    # Wiring: any signed-in active user (not only admin) can read it.
+    admin = _bearer(_token(client, "admin", "admin123"))
+    _create_user(client, admin, "window_status_user")
+    employee = _bearer(_token(client, "window_status_user", "secret1"))
+    r = client.get(f"{V}/leaves/window", headers=employee)
+    assert r.status_code == 200
+    assert set(r.json()) == {
+        "monthly_open", "monthly_target_year", "monthly_target_month",
+        "annual_target_year", "closes_on_day", "enforced",
+    }
+    assert r.json()["enforced"] is False
+    assert r.json()["monthly_open"] is True
+
+
+def test_leave_window_status_uses_business_date(monkeypatch) -> None:
+    """Without an explicit date, the window is judged on the Frankfurt date."""
+    from datetime import UTC, datetime
+
+    from app.core import business_time
+    from app.core.config import settings
+    from app.services import leave_service
+
+    monkeypatch.setattr(settings, "ENVIRONMENT", "staging")
+    monkeypatch.setattr(settings, "AUTORUN_DAY", 20)
+    monkeypatch.setattr(settings, "TIMEZONE", "Europe/Berlin")
+
+    # 22:30 UTC = 23:30 Berlin on 2026-12-20: last open day for January.
+    monkeypatch.setattr(
+        business_time, "_utcnow", lambda: datetime(2026, 12, 20, 22, 30, tzinfo=UTC)
+    )
+    still_open = leave_service.window_status()
+    assert (still_open.monthly_target_year, still_open.monthly_target_month) == (2027, 1)
+    assert still_open.monthly_open is True
+
+    # 23:30 UTC = 00:30 Berlin on 2026-12-21: closed.
+    monkeypatch.setattr(
+        business_time, "_utcnow", lambda: datetime(2026, 12, 20, 23, 30, tzinfo=UTC)
+    )
+    assert leave_service.window_status().monthly_open is False
+
+
+# ---------------------------------------------------------------------------
+# Annual leave quota and remaining balance (owner decision D4, 2026-11-06)
+# ---------------------------------------------------------------------------
+
+def _leave(db, user_id, start, end):
+    from app.schemas.leave import LeaveCreate
+    from app.services import leave_service
+
+    return leave_service.create_request(
+        db, user_id, LeaveCreate(start_date=start, end_date=end), enforce_window=False
+    )
+
+
+def test_annual_leave_summary_counts_approved_days_in_year(client: TestClient) -> None:
+    """quota 30; approved 3 days; pending 2 days → used 3, pending 2, remaining 27."""
+    from app.core.database import get_db
+    from app.services import leave_balance, leave_service
+
+    admin = _bearer(_token(client, "admin", "admin123"))
+    uid = _create_user(client, admin, "d4_summary_user", role="T").json()["id"]
+    db = next(get_db())
+    try:
+        approved = _leave(db, uid, date(2040, 12, 20), date(2040, 12, 22))
+        leave_service.decide(db, approved.id, LeaveStatus.approved, admin_id=1)
+        _leave(db, uid, date(2040, 12, 27), date(2040, 12, 28))  # stays pending
+        rejected = _leave(db, uid, date(2040, 11, 5), date(2040, 11, 6))
+        leave_service.decide(db, rejected.id, LeaveStatus.rejected, admin_id=1)
+
+        summary = leave_balance.annual_leave_summary(db, uid, 2040)
+        assert (
+            summary.year, summary.quota, summary.used, summary.pending, summary.remaining
+        ) == (2040, 30, 3, 2, 27)
+
+        # A leave across New Year counts only its days inside each year.
+        across = _leave(db, uid, date(2040, 12, 30), date(2041, 1, 2))
+        leave_service.decide(db, across.id, LeaveStatus.approved, admin_id=1)
+        assert leave_balance.annual_leave_summary(db, uid, 2040).used == 5
+        assert leave_balance.annual_leave_summary(db, uid, 2041).used == 2
+    finally:
+        db.close()
+
+
+def test_approve_beyond_annual_quota_warns(client: TestClient) -> None:
+    """Going past the quota is allowed (admin decides) but warns; reaching it does not."""
+    from app.core.database import get_db
+    from app.core.i18n import t
+    from app.services import leave_service
+
+    admin = _bearer(_token(client, "admin", "admin123"))
+    uid = _create_user(client, admin, "d4_quota_warn_user", role="T").json()["id"]
+    assert client.patch(
+        f"{V}/users/{uid}", headers=admin, json={"annual_leave_quota": 5}
+    ).status_code == 200
+    exceeded = t("leave.balance_exceeded", "en")
+    assert exceeded == "Approving exceeds this person's annual leave quota."
+    db = next(get_db())
+    try:
+        first = _leave(db, uid, date(2040, 3, 5), date(2040, 3, 7))  # 3 of 5
+        _, warnings = leave_service.decide(db, first.id, LeaveStatus.approved, admin_id=1)
+        assert exceeded not in warnings
+
+        exact = _leave(db, uid, date(2040, 4, 2), date(2040, 4, 3))  # 5 of 5
+        _, warnings = leave_service.decide(db, exact.id, LeaveStatus.approved, admin_id=1)
+        assert exceeded not in warnings
+
+        over = _leave(db, uid, date(2040, 5, 7), date(2040, 5, 7))  # 6 of 5
+        decided, warnings = leave_service.decide(
+            db, over.id, LeaveStatus.approved, admin_id=1
+        )
+        assert decided.status is LeaveStatus.approved
+        assert exceeded in warnings
+    finally:
+        db.close()
+
+
+def test_balance_endpoint_self_and_admin(client: TestClient) -> None:
+    """Own balance 200; someone else's 403; admin may read anyone's."""
+    from app.core.business_time import business_today
+
+    admin = _bearer(_token(client, "admin", "admin123"))
+    me_id = _create_user(client, admin, "d4_balance_self", role="T").json()["id"]
+    other_id = _create_user(client, admin, "d4_balance_other", role="T").json()["id"]
+    me = _bearer(_token(client, "d4_balance_self", "secret1"))
+
+    own = client.get(f"{V}/leaves/balance", headers=me, params={"year": 2040})
+    assert own.status_code == 200
+    assert own.json() == {
+        "year": 2040, "quota": 30, "used": 0, "pending": 0, "remaining": 30,
+    }
+    explicit = client.get(
+        f"{V}/leaves/balance", headers=me, params={"user_id": me_id, "year": 2040}
+    )
+    assert explicit.json() == own.json()
+
+    # Defaults: the caller's own balance for the current business year.
+    default = client.get(f"{V}/leaves/balance", headers=me)
+    assert default.status_code == 200
+    assert default.json()["year"] == business_today().year
+
+    forbidden = client.get(
+        f"{V}/leaves/balance", headers=me, params={"user_id": other_id}
+    )
+    assert forbidden.status_code == 403
+
+    as_admin = client.get(
+        f"{V}/leaves/balance", headers=admin, params={"user_id": other_id, "year": 2040}
+    )
+    assert as_admin.status_code == 200
+    assert as_admin.json()["remaining"] == 30
+    assert client.get(
+        f"{V}/leaves/balance", headers=admin, params={"user_id": 999_999}
+    ).status_code == 404

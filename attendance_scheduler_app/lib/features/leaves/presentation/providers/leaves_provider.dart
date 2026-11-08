@@ -16,12 +16,41 @@ class LeaveEntry {
 
 /// UI state for the leaves page.
 class LeavesState {
-  const LeavesState({required this.entries});
+  const LeavesState({
+    required this.entries,
+    this.window,
+    this.compDays = 0,
+    this.balance,
+  });
 
   final AsyncValue<List<LeaveEntry>> entries;
 
-  LeavesState copyWith({AsyncValue<List<LeaveEntry>>? entries}) =>
-      LeavesState(entries: entries ?? this.entries);
+  /// Today's registration window (GET /leaves/window); null until it loads
+  /// or if it could not be fetched.
+  final LeaveWindow? window;
+
+  /// Carried comp days for the "Comp days" card — the employee's own
+  /// balance, or for the admin the total over every active user. Taken from
+  /// the users, not the leave rows, so it is right with no requests too.
+  final int compDays;
+
+  /// The employee's own annual leave this year (GET /leaves/balance, D4).
+  /// Null for the admin, whose page covers everyone, until it loads, or if
+  /// it could not be fetched.
+  final AnnualLeaveBalance? balance;
+
+  LeavesState copyWith({
+    AsyncValue<List<LeaveEntry>>? entries,
+    LeaveWindow? window,
+    int? compDays,
+    AnnualLeaveBalance? balance,
+  }) =>
+      LeavesState(
+        entries: entries ?? this.entries,
+        window: window ?? this.window,
+        compDays: compDays ?? this.compDays,
+        balance: balance ?? this.balance,
+      );
 
   /// Mapped display rows consumed by [DsLeavesView].
   AsyncValue<List<DsLeaveRowData>> get rows =>
@@ -40,18 +69,53 @@ class LeavesController extends StateNotifier<LeavesState> {
   bool get _isAdmin =>
       _ref.read(authControllerProvider).user?.isAdmin ?? false;
 
-  /// Load leaves — admin sees all (GET /leaves?all=true); others own only.
+  /// Load leaves — admin sees all (GET /leaves?all=true); others own only —
+  /// together with today's registration window and, for employees, their
+  /// remaining annual leave.
   Future<void> load() async {
     state = state.copyWith(entries: const AsyncValue.loading());
+    final window = _loadWindow();
+    final balance = _loadBalance();
+    int? compDays;
+    final entries = await AsyncValue.guard(() async {
+      final leaves = _isAdmin ? await _ds.listAll() : await _ds.listOwn();
+      final userById = await _loadUserMap();
+      compDays = userById.values
+          .where((u) => u.status == 'active')
+          .fold<int>(0, (sum, u) => sum + u.carryComp);
+      return leaves
+          .map((l) => LeaveEntry(id: l.id, row: _toRow(l, userById)))
+          .toList();
+    });
     state = state.copyWith(
-      entries: await AsyncValue.guard(() async {
-        final leaves = _isAdmin ? await _ds.listAll() : await _ds.listOwn();
-        final userById = await _loadUserMap();
-        return leaves
-            .map((l) => LeaveEntry(id: l.id, row: _toRow(l, userById)))
-            .toList();
-      }),
+      entries: entries,
+      window: await window,
+      compDays: compDays,
+      balance: await balance,
     );
+  }
+
+  /// The window only drives the banner and subtitle, so a failed fetch must
+  /// not take the leave list down with it; the server re-checks the window
+  /// on every submit anyway.
+  Future<LeaveWindow?> _loadWindow() async {
+    try {
+      return await _ds.fetchWindow();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// The signed-in employee's own balance. The admin's page aggregates every
+  /// user, where one person's balance would mislead, so it is not fetched.
+  /// Like the window, a failure only hides the card.
+  Future<AnnualLeaveBalance?> _loadBalance() async {
+    if (_isAdmin) return null;
+    try {
+      return await _ds.fetchBalance();
+    } catch (_) {
+      return null;
+    }
   }
 
   /// Submit a new leave request then reload.
@@ -90,7 +154,9 @@ class LeavesController extends StateNotifier<LeavesState> {
   }
 
   /// Admin: revoke an APPROVED leave at display [index] (owner 2026-07-17) —
-  /// balance restored server-side, request flips to rejected.
+  /// the request flips to rejected, so its days no longer count against the
+  /// annual quota (the remaining balance is derived from approved leave), and
+  /// span cells still on AL in a generated month go back to X.
   Future<List<String>> revoke(int index) async {
     final id = _idAt(index);
     if (id == null) return const [];
@@ -132,7 +198,8 @@ class LeavesController extends StateNotifier<LeavesState> {
       range: m.dateRange,
       days: m.days,
       status: m.statusDisplay,
-      carryComp: 0,
+      // Comp days the requester carries into this month (last month close).
+      carryComp: u?.carryComp ?? 0,
     );
   }
 }

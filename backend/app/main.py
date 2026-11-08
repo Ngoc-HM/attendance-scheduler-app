@@ -8,7 +8,8 @@ Interactive docs at ``/docs``. Database schema is provisioned by Alembic
 (``alembic upgrade head``), not at startup.
 
 Startup order: environment guard (refuse unsafe production settings) →
-bootstrap (tables in dev, seed admin) → day-20 autorun scheduler.
+bootstrap (tables in dev, seed admin) → autorun scheduler (draft at 00:05 on
+the day after AUTORUN_DAY).
 """
 
 from __future__ import annotations
@@ -37,7 +38,8 @@ async def lifespan(app: FastAPI):  # noqa: ANN201
         logger.warning("Configuration: %s", warning)
     # Startup: ensure tables (dev) and the seed admin exist (F-01).
     run_startup_bootstrap()
-    # Day-20 autorun: close registration + generate next month's draft (#9).
+    # Autorun (#9): the leave window closes at the end of AUTORUN_DAY; at 00:05
+    # (settings.TIMEZONE) the day after, next month's draft is generated.
     from app.services.schedule_autorun import start_scheduler
 
     scheduler = start_scheduler()

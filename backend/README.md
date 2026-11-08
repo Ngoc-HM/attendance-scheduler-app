@@ -73,6 +73,20 @@ This creates 10 active demo users with usernames `nguyenvana` through
 `nguyenvanj` and roles `T x4` / `A x6`. Re-running the tool skips existing
 usernames.
 
+### Maintenance scripts are local-only
+`scripts/seed_demo_users.py` and `scripts/reset_all_passwords.py` run only
+when `ENVIRONMENT=dev` **and** `DATABASE_URL` points at a local database
+(SQLite, or host `localhost` / `127.0.0.1` / `::1`). Anything else — a
+staging/prod environment, or a dev `.env` that points at a shared or remote
+Postgres — exits with code 2 and prints the environment and database host
+(never the password). Pass `--allow-non-dev` only when you really mean to
+touch that database.
+
+```bash
+# Every user's password becomes the given value; --password is required.
+python scripts/reset_all_passwords.py --password 'a-local-test-password'
+```
+
 ## Test & lint
 ```bash
 pytest

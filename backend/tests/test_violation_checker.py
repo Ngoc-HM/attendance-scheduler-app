@@ -42,8 +42,10 @@ def test_comp_days_shortfall_excess_and_non_a_roles() -> None:
     assert any("only 0 owed" in w for w in check_comp_days(grid, {1: Role.A}, weeks, {}))
     # Exactly owed → clean.
     assert check_comp_days(grid, {1: Role.A}, weeks, {1: 1}) == []
-    # Role T never earns comp days.
-    assert any("never earns" in w for w in check_comp_days(grid, {1: Role.T}, weeks, {}))
+    # Owner D1 (2026-11-06): every role earns CD by working a holiday, so the
+    # same owed-versus-scheduled comparison applies to role T.
+    assert any("only 0 owed" in w for w in check_comp_days(grid, {1: Role.T}, weeks, {}))
+    assert check_comp_days(grid, {1: Role.T}, weeks, {1: 1}) == []
 
 
 def test_off_chain_flags_six_off_once_and_exempts_annual_leave() -> None:

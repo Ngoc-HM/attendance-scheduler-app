@@ -62,3 +62,63 @@ class LeaveModel {
     _ => status,
   };
 }
+
+/// Registration-window state from `GET /leaves/window` (backend
+/// `LeaveWindowRead`): whether monthly leave for the target month can be
+/// filed today, and the last day of month M on which leave for M+1 may be
+/// registered. [enforced] is false in dev, where the window never closes.
+class LeaveWindow {
+  const LeaveWindow({
+    required this.monthlyOpen,
+    required this.monthlyTargetYear,
+    required this.monthlyTargetMonth,
+    required this.annualTargetYear,
+    required this.closesOnDay,
+    required this.enforced,
+  });
+
+  final bool monthlyOpen;
+  final int monthlyTargetYear;
+  final int monthlyTargetMonth;
+  final int annualTargetYear;
+  final int closesOnDay;
+  final bool enforced;
+
+  factory LeaveWindow.fromJson(Map<String, dynamic> json) => LeaveWindow(
+    monthlyOpen: json['monthly_open'] as bool,
+    monthlyTargetYear: json['monthly_target_year'] as int,
+    monthlyTargetMonth: json['monthly_target_month'] as int,
+    annualTargetYear: json['annual_target_year'] as int,
+    closesOnDay: json['closes_on_day'] as int,
+    enforced: json['enforced'] as bool,
+  );
+}
+
+/// One person's annual leave for a calendar year from `GET /leaves/balance`
+/// (backend `AnnualLeaveSummary`, owner decision D4). [used] and [pending]
+/// are approved / pending leave days in [year]; [remaining] is [quota] minus
+/// [used] and goes negative once leave was approved past the quota.
+class AnnualLeaveBalance {
+  const AnnualLeaveBalance({
+    required this.year,
+    required this.quota,
+    required this.used,
+    required this.pending,
+    required this.remaining,
+  });
+
+  final int year;
+  final int quota;
+  final int used;
+  final int pending;
+  final int remaining;
+
+  factory AnnualLeaveBalance.fromJson(Map<String, dynamic> json) =>
+      AnnualLeaveBalance(
+        year: json['year'] as int,
+        quota: json['quota'] as int,
+        used: json['used'] as int,
+        pending: json['pending'] as int,
+        remaining: json['remaining'] as int,
+      );
+}

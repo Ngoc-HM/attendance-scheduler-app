@@ -151,7 +151,7 @@ class FlightsController extends StateNotifier<FlightsState> {
         flights: flightsLabel,
         arrival: arrival,
         departure: departure,
-        status: 'Complete',
+        status: DsFlightRowData.statusComplete,
       );
     }).toList();
   }

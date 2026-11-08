@@ -1,4 +1,4 @@
-"""F-14 — carry-over math (pure) + month-close idempotency (integration)."""
+"""F-14 — carry-over math (pure) + month-close (integration)."""
 
 from __future__ import annotations
 
@@ -6,8 +6,12 @@ from datetime import date
 
 from fastapi.testclient import TestClient
 
-from app.models.enums import AttendanceCode
+from app.core.database import SessionLocal
+from app.models.enums import AttendanceCode, ScheduleStatus
+from app.models.schedule import MonthlySchedule, ShiftAssignment
+from app.models.user import User
 from app.services import carry_over_math
+from app.services.schedule_history import build_boundary_states
 
 # --- pure carry_over_math --------------------------------------------------
 
@@ -18,12 +22,41 @@ def test_comp_balance_earned_minus_consumed() -> None:
         (date(2027, 9, 3), AttendanceCode.CD),   # -1
         (date(2027, 9, 4), AttendanceCode.A),    #  0
     ]
-    assert carry_over_math.comp_balance(recs) == 1
+    assert carry_over_math.comp_balance(recs, set()) == 1
 
 
 def test_comp_balance_floors_at_zero() -> None:
     recs = [(date(2027, 9, 3), AttendanceCode.CD), (date(2027, 9, 4), AttendanceCode.CD)]
-    assert carry_over_math.comp_balance(recs) == 0
+    assert carry_over_math.comp_balance(recs, set()) == 0
+
+
+def test_working_on_holiday_earns_comp_day() -> None:
+    """Owner D1 (2026-11-06): any working code on a public holiday earns one
+    CD for every role; A/D on a holiday earns two (double + holiday)."""
+    h = {date(2026, 12, 25)}
+    assert carry_over_math.comp_balance([(date(2026, 12, 25), AttendanceCode.A)], h) == 1
+    assert carry_over_math.comp_balance([(date(2026, 12, 25), AttendanceCode.A_D)], h) == 2
+    assert carry_over_math.comp_balance([(date(2026, 12, 25), AttendanceCode.X)], h) == 0
+    assert carry_over_math.comp_balance(
+        [(date(2026, 12, 25), AttendanceCode.AD), (date(2027, 1, 4), AttendanceCode.CD)], h
+    ) == 0
+
+
+def test_holiday_comp_only_from_effective_date() -> None:
+    """Holiday work earns CD only from ``effective_from`` on (no retroactive
+    lump of back-owed CDs); A/D earning is never date-gated."""
+    h = {date(2026, 10, 25), date(2026, 12, 25)}
+    before = [(date(2026, 10, 25), AttendanceCode.A)]
+    after = [(date(2026, 12, 25), AttendanceCode.A)]
+    effective = date(2026, 11, 6)
+    assert carry_over_math.comp_balance(before, h, effective) == 0
+    assert carry_over_math.comp_balance(after, h, effective) == 1
+    assert carry_over_math.comp_balance(before, h, None) == 1
+    assert carry_over_math.comp_balance(after, h, None) == 1
+    # A/D before the effective date still earns its own CD (holiday part not).
+    assert carry_over_math.comp_balance(
+        [(date(2026, 10, 25), AttendanceCode.A_D)], h, effective
+    ) == 1
 
 
 def test_premium_off_counts_weekend_and_holiday_x() -> None:
@@ -76,3 +109,48 @@ def test_close_month_is_idempotent(client: TestClient) -> None:
 
     summary = client.get("/api/v1/calculations/summary", headers=admin).json()
     assert summary[str(uid)]["carry_comp"] == 2
+
+
+def test_close_month_equals_schedule_history(client: TestClient) -> None:
+    """B6: month-close persists exactly what the scheduler derives from history."""
+    admin = _admin(client)
+    res = client.post("/api/v1/users", headers=admin,
+                      json={"username": "calc_hist_a", "password": "pass123",
+                            "full_name": "Calc Hist A", "role": "A"})
+    uid = res.json()["id"]
+    client.put("/api/v1/attendance", headers=admin,
+               json={"user_id": uid, "work_date": "2048-11-03", "code": "A/D"})
+
+    # Month end is still only planned (no actuals yet): X on Saturday 28th,
+    # then A on 29-30. An actual-only close would ignore these cells.
+    db = SessionLocal()
+    try:
+        schedule = (
+            db.query(MonthlySchedule).filter_by(year=2048, month=11).one_or_none()
+        )
+        if schedule is None:
+            schedule = MonthlySchedule(
+                year=2048, month=11, status=ScheduleStatus.published
+            )
+            db.add(schedule)
+            db.flush()
+        for day, code in ((28, AttendanceCode.X), (29, AttendanceCode.A),
+                          (30, AttendanceCode.A)):
+            db.add(ShiftAssignment(schedule_id=schedule.id, user_id=uid,
+                                   work_date=date(2048, 11, day), code=code))
+        db.commit()
+    finally:
+        db.close()
+
+    closed = client.post("/api/v1/calculations/2048/11/close", headers=admin)
+    assert closed.status_code == 200
+
+    db = SessionLocal()
+    try:
+        user = db.get(User, uid)
+        state = build_boundary_states(db, [user], 2048, 12)[uid]
+        assert user.carry_comp == state.carry_comp == 1
+        assert user.carry_streak == state.carry_streak == 2
+        assert user.carry_premium_off == state.carry_premium_off == 1
+    finally:
+        db.close()

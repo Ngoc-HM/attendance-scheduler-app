@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../core/constants/shift_codes.dart';
 import '../i18n/app_localizations.dart';
@@ -101,21 +102,20 @@ class DsLoginView extends StatelessWidget {
   }
 }
 
-class DsRegisterView<T> extends StatelessWidget {
+/// Self-registration form. No role field: the admin assigns the role when
+/// approving the pending account (F-03).
+class DsRegisterView extends StatelessWidget {
   const DsRegisterView({
     super.key,
     required this.formKey,
     required this.usernameController,
     required this.fullNameController,
     required this.passwordController,
-    required this.role,
-    required this.roleOptions,
     required this.title,
     required this.subtitle,
     required this.usernameLabel,
     required this.fullNameLabel,
     required this.passwordLabel,
-    required this.roleLabel,
     required this.submitLabel,
     required this.backLabel,
     required this.minThreeMessage,
@@ -123,7 +123,6 @@ class DsRegisterView<T> extends StatelessWidget {
     required this.minSixMessage,
     required this.languageCode,
     required this.onLanguageChanged,
-    required this.onRoleChanged,
     required this.onSubmit,
     required this.onBack,
     this.error,
@@ -134,14 +133,11 @@ class DsRegisterView<T> extends StatelessWidget {
   final TextEditingController usernameController;
   final TextEditingController fullNameController;
   final TextEditingController passwordController;
-  final T role;
-  final List<DsSelectOption<T>> roleOptions;
   final String title;
   final String subtitle;
   final String usernameLabel;
   final String fullNameLabel;
   final String passwordLabel;
-  final String roleLabel;
   final String submitLabel;
   final String backLabel;
   final String minThreeMessage;
@@ -149,7 +145,6 @@ class DsRegisterView<T> extends StatelessWidget {
   final String minSixMessage;
   final String languageCode;
   final ValueChanged<String> onLanguageChanged;
-  final ValueChanged<T> onRoleChanged;
   final VoidCallback onSubmit;
   final VoidCallback onBack;
   final String? error;
@@ -193,21 +188,6 @@ class DsRegisterView<T> extends StatelessWidget {
               validator: (value) =>
                   (value == null || value.length < 6) ? minSixMessage : null,
             ),
-            const SizedBox(height: DsSpacing.x4),
-            DsSelectField<T>(
-              label: roleLabel,
-              value: role,
-              items: [
-                for (final option in roleOptions)
-                  DropdownMenuItem(
-                    value: option.value,
-                    child: Text(option.label),
-                  ),
-              ],
-              onChanged: (value) {
-                if (value != null) onRoleChanged(value);
-              },
-            ),
             if (error != null) ...[
               const SizedBox(height: DsSpacing.x4),
               DsInlineAlert(
@@ -238,10 +218,12 @@ class DsScheduleView extends StatelessWidget {
     required this.rows,
     required this.onPreviousMonth,
     required this.onNextMonth,
-    required this.onGenerate,
-    required this.onPublish,
+    this.onGenerate,
+    this.onPublish,
     this.flightLabels = const {},
     this.onCellTap,
+    this.isRowTappable,
+    this.emptyMessage,
   });
 
   final DateTime month;
@@ -249,12 +231,21 @@ class DsScheduleView extends StatelessWidget {
   final Map<int, String> flightLabels; // day-of-month → FLT codes for the roster
   final VoidCallback onPreviousMonth;
   final VoidCallback onNextMonth;
-  final VoidCallback onGenerate;
-  final VoidCallback onPublish;
 
-  /// Admin cell edit (F-09): tapped (person row, 0-based day index). Null →
-  /// read-only roster (employee views).
+  /// Admin roster actions; each button renders only when its callback is set.
+  final VoidCallback? onGenerate;
+  final VoidCallback? onPublish;
+
+  /// Cell tap: (person row, 0-based day index) — admin edit (F-09) or an
+  /// employee's own shift-change request. Null → read-only roster.
   final void Function(DsRosterRowData row, int dayIndex)? onCellTap;
+
+  /// Limits [onCellTap] to the rows it returns true for; the other rows'
+  /// cells stay inert (no ripple). Null → every row is tappable.
+  final bool Function(DsRosterRowData row)? isRowTappable;
+
+  /// Empty-roster message; defaults to the admin "generate one" hint.
+  final String? emptyMessage;
 
   @override
   Widget build(BuildContext context) {
@@ -271,16 +262,18 @@ class DsScheduleView extends StatelessWidget {
       title: l.text('scheduleTitle'),
       subtitle: l.text('scheduleSubtitle'),
       actions: [
-        DsSecondaryButton(
-          label: l.text('publishSchedule'),
-          icon: Icons.publish_outlined,
-          onPressed: onPublish,
-        ),
-        DsPrimaryButton(
-          label: l.text('generateSchedule'),
-          icon: Icons.auto_awesome_outlined,
-          onPressed: onGenerate,
-        ),
+        if (onPublish != null)
+          DsSecondaryButton(
+            label: l.text('publishSchedule'),
+            icon: Icons.publish_outlined,
+            onPressed: onPublish,
+          ),
+        if (onGenerate != null)
+          DsPrimaryButton(
+            label: l.text('generateSchedule'),
+            icon: Icons.auto_awesome_outlined,
+            onPressed: onGenerate,
+          ),
       ],
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -340,7 +333,7 @@ class DsScheduleView extends StatelessWidget {
                 if (rows.isEmpty)
                   _DsRosterEmptyState(
                     title: l.text('scheduleEmptyTitle'),
-                    message: l.text('scheduleEmptyMessage'),
+                    message: emptyMessage ?? l.text('scheduleEmptyMessage'),
                   )
                 else
                   _DsRosterTable(
@@ -349,6 +342,7 @@ class DsScheduleView extends StatelessWidget {
                     days: days,
                     flightLabels: flightLabels,
                     onCellTap: onCellTap,
+                    isRowTappable: isRowTappable,
                   ),
               ],
             ),
@@ -370,6 +364,7 @@ class _DsRosterTable extends StatelessWidget {
     required this.days,
     this.flightLabels = const {},
     this.onCellTap,
+    this.isRowTappable,
   });
 
   final DateTime month;
@@ -377,6 +372,7 @@ class _DsRosterTable extends StatelessWidget {
   final int days;
   final Map<int, String> flightLabels; // day-of-month → FLT codes
   final void Function(DsRosterRowData row, int dayIndex)? onCellTap;
+  final bool Function(DsRosterRowData row)? isRowTappable;
 
   static const double _dayColW = 40;
   static const double _wdColW = 48;
@@ -512,7 +508,10 @@ class _DsRosterTable extends StatelessWidget {
             SizedBox(
               width: personW,
               child: InkWell(
-                onTap: onCellTap != null && i < row.shifts.length
+                onTap:
+                    onCellTap != null &&
+                        i < row.shifts.length &&
+                        (isRowTappable?.call(row) ?? true)
                     ? () => onCellTap!(row, i)
                     : null,
                 borderRadius: BorderRadius.circular(6),
@@ -985,7 +984,9 @@ class _FlightsTable extends StatelessWidget {
             Text(row.departure, style: DsType.tableCell),
             DsBadge(
               label: l.statusLabel(row.status),
-              tone: row.status == 'Complete' ? DsTone.success : DsTone.warning,
+              tone: row.status == DsFlightRowData.statusComplete
+                  ? DsTone.success
+                  : DsTone.warning,
             ),
           ],
       ],
@@ -1056,6 +1057,9 @@ class DsLeavesView extends StatelessWidget {
     this.onReject,
     this.onRevoke,
     this.registrationOpen = true,
+    this.closesOnDay,
+    required this.compDays,
+    this.annualLeaveRemaining,
   });
 
   final List<DsLeaveRowData> rows;
@@ -1069,19 +1073,34 @@ class DsLeavesView extends StatelessWidget {
   /// Admin: revoke a previously APPROVED leave (owner 2026-07-17).
   final ValueChanged<int>? onRevoke;
 
-  /// Whether the monthly registration window (day 1–20) is currently open —
-  /// drives the banner so it never claims "open" on day 21+.
+  /// Whether the monthly registration window (day 1–[closesOnDay]) is
+  /// currently open — drives the banner so it never claims "open" after it
+  /// closed.
   final bool registrationOpen;
+
+  /// Last day of month M on which leave for M+1 may be registered (backend
+  /// `closes_on_day`). Null while unknown → no subtitle rather than a guess.
+  final int? closesOnDay;
+
+  /// "Comp days" card value. Given explicitly: summing [rows] would show 0
+  /// for someone with no requests and count a person once per request.
+  final int compDays;
+
+  /// "Annual leave left" card value (quota minus approved days this year).
+  /// Null → no card (admin view, or the balance could not be loaded);
+  /// negative once leave was approved past the quota.
+  final int? annualLeaveRemaining;
 
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
     final pending = rows.where((row) => row.status == 'Pending').length;
     final approved = rows.where((row) => row.status == 'Approved').length;
-    final carry = rows.fold<int>(0, (sum, row) => sum + row.carryComp);
+    final day = closesOnDay;
+    final annualLeft = annualLeaveRemaining;
     return DsPage(
       title: l.text('leaveRequests'),
-      subtitle: l.text('leaveSubtitle'),
+      subtitle: day == null ? null : l.leaveSubtitle(day),
       actions: [
         DsSecondaryButton(
           label: l.text('requestAnnualLeave'),
@@ -1113,10 +1132,17 @@ class DsLeavesView extends StatelessWidget {
               ),
               DsMetricCard(
                 label: l.text('compDays'),
-                value: '$carry',
+                value: '$compDays',
                 icon: Icons.event_repeat_outlined,
                 tone: DsTone.primary,
               ),
+              if (annualLeft != null)
+                DsMetricCard(
+                  label: l.text('annualLeaveRemaining'),
+                  value: '$annualLeft',
+                  icon: Icons.beach_access_outlined,
+                  tone: annualLeft < 0 ? DsTone.danger : DsTone.primary,
+                ),
             ],
           ),
           const SizedBox(height: DsSpacing.x6),
@@ -1268,8 +1294,8 @@ class DsAttendanceView extends StatelessWidget {
     required this.rows,
     required this.onPreviousMonth,
     required this.onNextMonth,
-    required this.onUpdate,
-    required this.onHolidays,
+    this.onUpdate,
+    this.onHolidays,
     this.onCloseMonth,
   });
 
@@ -1277,10 +1303,12 @@ class DsAttendanceView extends StatelessWidget {
   final List<DsAttendanceRowData> rows;
   final VoidCallback onPreviousMonth;
   final VoidCallback onNextMonth;
-  final VoidCallback onUpdate;
-  final VoidCallback onHolidays;
 
-  /// If non-null an admin "Close month" toolbar action is shown (F-14).
+  /// Admin toolbar actions — each button is shown only when its callback is
+  /// non-null, so an employee viewing their own month sees none of them:
+  /// record attendance / sick cover, public holidays, close month (F-14).
+  final VoidCallback? onUpdate;
+  final VoidCallback? onHolidays;
   final VoidCallback? onCloseMonth;
 
   @override
@@ -1302,16 +1330,18 @@ class DsAttendanceView extends StatelessWidget {
             icon: Icons.lock_clock_outlined,
             onPressed: onCloseMonth!,
           ),
-        DsSecondaryButton(
-          label: l.text('publicHolidays'),
-          icon: Icons.event_outlined,
-          onPressed: onHolidays,
-        ),
-        DsPrimaryButton(
-          label: l.text('updateAttendance'),
-          icon: Icons.edit_outlined,
-          onPressed: onUpdate,
-        ),
+        if (onHolidays != null)
+          DsSecondaryButton(
+            label: l.text('publicHolidays'),
+            icon: Icons.event_outlined,
+            onPressed: onHolidays,
+          ),
+        if (onUpdate != null)
+          DsPrimaryButton(
+            label: l.text('updateAttendance'),
+            icon: Icons.edit_outlined,
+            onPressed: onUpdate,
+          ),
       ],
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1381,7 +1411,13 @@ class DsAttendanceView extends StatelessWidget {
                           ),
                           const SizedBox(height: DsSpacing.x2),
                           Text(
-                            l.text('attendanceEmptyMessage'),
+                            // The admin hint points at "Update attendance",
+                            // which a read-only (employee) view does not have.
+                            l.text(
+                              onUpdate != null
+                                  ? 'attendanceEmptyMessage'
+                                  : 'myAttendanceEmptyMessage',
+                            ),
                             textAlign: TextAlign.center,
                             style: const TextStyle(color: DsColors.textMuted),
                           ),
@@ -1548,6 +1584,7 @@ class DsUsersView extends StatelessWidget {
     required this.onEnable,
     required this.onChangeRole,
     this.onDelete,
+    this.onEditQuota,
     this.error,
   });
 
@@ -1567,6 +1604,9 @@ class DsUsersView extends StatelessWidget {
   /// Hard-delete (with cascade) — optional so callers without permission can
   /// omit it and the action button is hidden.
   final ValueChanged<int>? onDelete;
+
+  /// Edit the user's annual leave quota (D4); null hides the action.
+  final ValueChanged<int>? onEditQuota;
 
   @override
   Widget build(BuildContext context) {
@@ -1642,6 +1682,7 @@ class DsUsersView extends StatelessWidget {
                 onEnable: onEnable,
                 onChangeRole: onChangeRole,
                 onDelete: onDelete,
+                onEditQuota: onEditQuota,
               ),
             ),
         ],
@@ -1660,6 +1701,7 @@ class _UsersTable extends StatelessWidget {
     required this.onEnable,
     required this.onChangeRole,
     this.onDelete,
+    this.onEditQuota,
   });
 
   final List<DsUserRowData> users;
@@ -1668,6 +1710,7 @@ class _UsersTable extends StatelessWidget {
   final ValueChanged<int> onEnable;
   final void Function(int id, String role) onChangeRole;
   final ValueChanged<int>? onDelete;
+  final ValueChanged<int>? onEditQuota;
 
   @override
   Widget build(BuildContext context) {
@@ -1701,70 +1744,59 @@ class _UsersTable extends StatelessWidget {
                 _ => DsTone.neutral,
               },
             ),
-            // Actions cell: approve / disable+change-role / enable
-            switch (user.status) {
-              'pending' => Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _ActionButton(
-                    label: l.approve,
-                    tone: DsTone.success,
-                    onPressed: () => onApprove(user.id),
-                  ),
-                  if (onDelete != null) ...[
-                    const SizedBox(width: DsSpacing.x2),
+            // Actions cell: the status action(s) — approve / change-role +
+            // disable / enable — then edit quota and delete; wraps if cramped.
+            Wrap(
+              spacing: DsSpacing.x2,
+              runSpacing: DsSpacing.x1,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                ...switch (user.status) {
+                  'pending' => [
                     _ActionButton(
-                      label: l.text('delete'),
-                      tone: DsTone.danger,
-                      onPressed: () => onDelete!(user.id),
+                      label: l.approve,
+                      tone: DsTone.success,
+                      onPressed: () => onApprove(user.id),
                     ),
                   ],
-                ],
-              ),
-              // Active users can be disabled AND have their role changed
-              // (e.g. promoted to admin `M`); both actions wrap if cramped.
-              'active' => Wrap(
-                spacing: DsSpacing.x2,
-                runSpacing: DsSpacing.x1,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  _RoleChangeMenu(
-                    currentRole: user.role,
-                    onSelected: (role) => onChangeRole(user.id, role),
-                  ),
-                  _ActionButton(
-                    label: l.disable,
-                    tone: DsTone.danger,
-                    onPressed: () => onDisable(user.id),
-                  ),
-                  if (onDelete != null)
-                    _ActionButton(
-                      label: l.text('delete'),
-                      tone: DsTone.danger,
-                      onPressed: () => onDelete!(user.id),
+                  // Active users can be disabled AND have their role changed
+                  // (e.g. promoted to admin `M`).
+                  'active' => [
+                    _RoleChangeMenu(
+                      currentRole: user.role,
+                      onSelected: (role) => onChangeRole(user.id, role),
                     ),
-                ],
-              ),
-              // Disabled (or any other non-pending, non-active status).
-              _ => Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
+                    _ActionButton(
+                      label: l.disable,
+                      tone: DsTone.danger,
+                      onPressed: () => onDisable(user.id),
+                    ),
+                  ],
+                  // Disabled (or any other non-pending, non-active status).
+                  _ => [
+                    _ActionButton(
+                      label: l.enable,
+                      tone: DsTone.primary,
+                      onPressed: () => onEnable(user.id),
+                    ),
+                  ],
+                },
+                // Every status: a pending account can be set up before
+                // approval, a disabled one before re-enabling.
+                if (onEditQuota != null)
                   _ActionButton(
-                    label: l.enable,
+                    label: l.text('editAnnualLeaveQuota'),
                     tone: DsTone.primary,
-                    onPressed: () => onEnable(user.id),
+                    onPressed: () => onEditQuota!(user.id),
                   ),
-                  if (onDelete != null) ...[
-                    const SizedBox(width: DsSpacing.x2),
-                    _ActionButton(
-                      label: l.text('delete'),
-                      tone: DsTone.danger,
-                      onPressed: () => onDelete!(user.id),
-                    ),
-                  ],
-                ],
-              ),
-            },
+                if (onDelete != null)
+                  _ActionButton(
+                    label: l.text('delete'),
+                    tone: DsTone.danger,
+                    onPressed: () => onDelete!(user.id),
+                  ),
+              ],
+            ),
           ],
       ],
     );
@@ -1902,6 +1934,10 @@ class DsCreateUserDialog<T> extends StatelessWidget {
     required this.minThreeMessage,
     required this.requiredMessage,
     required this.minSixMessage,
+    required this.quotaController,
+    required this.quotaLabel,
+    required this.quotaHint,
+    required this.quotaInvalidMessage,
     this.error,
     this.loading = false,
   });
@@ -1910,6 +1946,13 @@ class DsCreateUserDialog<T> extends StatelessWidget {
   final TextEditingController usernameController;
   final TextEditingController fullNameController;
   final TextEditingController passwordController;
+
+  /// Optional annual leave quota in days (0–365); empty keeps the server
+  /// default.
+  final TextEditingController quotaController;
+  final String quotaLabel;
+  final String quotaHint;
+  final String quotaInvalidMessage;
   final T role;
   final List<DsSelectOption<T>> roleOptions;
   final ValueChanged<T> onRoleChanged;
@@ -1975,6 +2018,14 @@ class DsCreateUserDialog<T> extends StatelessWidget {
                 if (value != null) onRoleChanged(value);
               },
             ),
+            const SizedBox(height: DsSpacing.x4),
+            DsAnnualLeaveQuotaField(
+              controller: quotaController,
+              label: quotaLabel,
+              hint: quotaHint,
+              invalidMessage: quotaInvalidMessage,
+              optional: true,
+            ),
             if (error != null) ...[
               const SizedBox(height: DsSpacing.x4),
               DsInlineAlert(
@@ -1994,6 +2045,43 @@ class DsCreateUserDialog<T> extends StatelessWidget {
           loading: loading,
         ),
       ],
+    );
+  }
+}
+
+/// Annual leave quota input: whole days per calendar year, 0–365 (owner
+/// decision D4). Empty passes validation only when [optional] (the server
+/// default then applies).
+class DsAnnualLeaveQuotaField extends StatelessWidget {
+  const DsAnnualLeaveQuotaField({
+    super.key,
+    required this.controller,
+    required this.label,
+    required this.invalidMessage,
+    this.hint,
+    this.optional = false,
+  });
+
+  final TextEditingController controller;
+  final String label;
+  final String invalidMessage;
+  final String? hint;
+  final bool optional;
+
+  @override
+  Widget build(BuildContext context) {
+    return DsTextField(
+      controller: controller,
+      label: label,
+      hint: hint,
+      keyboardType: TextInputType.number,
+      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+      validator: (value) {
+        final text = value?.trim() ?? '';
+        if (text.isEmpty) return optional ? null : invalidMessage;
+        final days = int.tryParse(text);
+        return (days == null || days < 0 || days > 365) ? invalidMessage : null;
+      },
     );
   }
 }

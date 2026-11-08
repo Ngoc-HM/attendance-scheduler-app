@@ -1,5 +1,99 @@
 # Project Changelog
 
+## 2026-11-07 — Final-review fixes
+
+- Approving leave after generation keeps the person's weekly X days as X; only
+  the other span days become AL, so the block keeps its genuine off days and
+  the re-check stays clean (#28, #4).
+- Employees may request only their regular working or off codes (A: A/D/X,
+  T/F: AD/X, M: O/D/X); AL, CD, A/D, T, B and S are refused with 422
+  `swap.code_not_requestable`, also for either cell of a swap at approval. The
+  Flutter request picker offers the same list (#40).
+- Maintenance scripts run only with `ENVIRONMENT=dev` and a local database
+  (`app/core/script_guard.py`); `reset_all_passwords.py` requires `--password`
+  (#33).
+- Deleting an admin reattributes the actuals they recorded to the acting
+  admin; seeded-actual syncs never overwrite S (#39).
+- `schedule.generate` audit detail records `force=True/False`; the autorun job
+  id is `autorun`.
+- Flutter: the regenerate confirmation says employees lose access until the
+  month is published again; the approve dialog never preselects M; the
+  annual-leave picker uses the server's annual target year; the schedule
+  goldens are pinned to June 2026 (`SchedulePage.initialMonth`).
+- Gates: backend 291 pytest tests pass, `ruff check app tests scripts` and
+  `mypy app` clean; Flutter `analyze` clean, 65 tests pass including the 3
+  goldens (rendered on macOS; Ubuntu CI not yet verified).
+
+## 2026-11-07 — Review remediation (owner decisions 2026-11-06)
+
+Fixes the findings of the 2026-11-06 full-project review (B1–B10, C1–C11) and
+implements the owner's decisions D1 and D4. D5/D8 keep the code as it was;
+D6 and D7 stay open. Decisions #24–#38 and the customer notes are in
+`design-decisions.md`.
+
+### Scheduling
+- Holidays stay working days; working one earns +1 CD for **every role**
+  from `HOLIDAY_COMP_EFFECTIVE_FROM` (default 2026-11-06). CD is now in the
+  T/F/M solver domains; self-arrange cannot set CD (decisions #5, #13).
+- Regenerating a published or hand-edited month returns 409 unless `force`;
+  the client asks before forcing (#24).
+- Carry values (comp days, streak, premium offs) come from one source,
+  `schedule_history`, for the engine, re-check, leave-conflict ranking and
+  month-close; the stored streak is used only for users with no history (#29).
+- The ≤5-consecutive-OFF rule in the engine counts CD as well as X (#34).
+- Autorun runs at 00:05 in `TIMEZONE` on day `AUTORUN_DAY + 1` (was 02:00 on
+  day 20) and reads `business_today()`; `AUTORUN_DAY` is limited to 1–27 (#9, #31).
+
+### Leave
+- A `leave_type` that disagrees with the span is refused (422) (#26).
+- Approving writes AL into already-generated months; revoking returns to X
+  only the cells still on AL (#28).
+- Annual leave quota per user (migration `0008` adds `annual_leave_quota`,
+  drops `annual_leave_balance`; default `ANNUAL_LEAVE_DEFAULT_DAYS` = 30,
+  placeholder); `GET /leaves/balance`; approving past the quota only warns (#30).
+- `GET /leaves/window` exposes the live registration window; the window-closed
+  error names the real last day (#31, #32).
+
+### Attendance
+- Override, shift change, self-arrange and leave decisions on a published month
+  update still-seeded actuals; re-publish re-syncs them (#27).
+- Recently-sick forced cover looks back 30 days across month boundaries (#35).
+
+### Accounts / security
+- Self-registration has no role: pending accounts get T and the admin assigns
+  the role at approval, which works only on pending accounts (#25).
+- `GET /users/directory` lists active users' id, code and role for any signed-in
+  user (#32).
+- `reset_all_passwords.py` and `seed_demo_users.py` refuse to run outside
+  `ENVIRONMENT=dev` unless `--allow-non-dev` (#33; tightened to "dev and a
+  local database" in the final-review fixes above).
+
+### UI (Flutter)
+- Session restore at start-up; the token is kept when the server is
+  unreachable (#36).
+- Employees: own attendance view, shift-change requests from their own roster
+  cells with a requests panel, colleagues shown by code, live leave window,
+  comp days and annual leave left (#37).
+- Admin-only actions (Generate/Publish, cell edits, holidays, attendance
+  update, month-close) hidden for other roles; the cell editor offers only the
+  role's planned codes, never S (#38).
+- Admins set the annual leave quota on create and edit it on the Users page.
+- Hard-coded English strings moved to the en/vi catalogs.
+
+### Quality gates
+- Backend: 239 pytest tests pass (was 188), `ruff check app tests scripts` and
+  `mypy app` clean.
+- Flutter: `flutter analyze` no issues; `flutter test` 60 tests pass,
+  including the 3 goldens refreshed for the signed-out roster (no
+  Generate/Publish, neutral "not published yet" message);
+  `test/failures/` removed from git and ignored.
+
+### Docs
+- `design-decisions.md` (#2/#3/#5/#7/#9/#10/#13 amended — D2 and D3 recorded as
+  settled, #24–#38 added, open questions rewritten), README status, codebase summary, system architecture, code
+  standards (fail-loud audit, business dates), `DESIGN/README.md` (which design
+  docs apply to this app).
+
 ## 2026-09-03 — Review remediation (Codex + Claude audit)
 
 Closes every code-fixable finding of the 2026-09-03 review; customer-side

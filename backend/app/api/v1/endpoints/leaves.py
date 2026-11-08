@@ -7,10 +7,18 @@ from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query, status
 
-from app.api.deps import ActiveUser, AdminUser, DbSession
+from app.api.deps import ActiveUser, AdminUser, DbSession, ensure_self_or_admin
+from app.core.business_time import business_today
 from app.models.enums import LeaveStatus
-from app.schemas.leave import ConflictEntry, LeaveCreate, LeaveDecision, LeaveRead
-from app.services import audit_service, leave_service
+from app.schemas.leave import (
+    AnnualLeaveSummary,
+    ConflictEntry,
+    LeaveCreate,
+    LeaveDecision,
+    LeaveRead,
+    LeaveWindowRead,
+)
+from app.services import audit_service, leave_balance, leave_service
 
 router = APIRouter()
 
@@ -37,7 +45,7 @@ def request_leave(
     payload: LeaveCreate,
     current_user: ActiveUser,
 ):
-    """F-05/F-06 — register leave (monthly < 5 days, or annual >= 5 days)."""
+    """F-05/F-06 — register leave (monthly <= 5 days, or annual > 5 days)."""
     return leave_service.create_request(db, current_user.id, payload)
 
 
@@ -45,6 +53,32 @@ def request_leave(
 def pending_leaves(db: DbSession, _admin: AdminUser):
     """Admin queue: pending requests ordered by submission time."""
     return leave_service.list_pending(db)
+
+
+# Declared before the /{leave_id}/... routes.
+@router.get("/window", response_model=LeaveWindowRead)
+def leave_window(_user: ActiveUser):
+    """Whether monthly registration is open today, and for which month."""
+    return leave_service.window_status()
+
+
+@router.get("/balance", response_model=AnnualLeaveSummary)
+def leave_balance_summary(
+    db: DbSession,
+    current_user: ActiveUser,
+    year: Annotated[int | None, Query(ge=1, le=9999)] = None,
+    user_id: int | None = None,
+):
+    """Annual leave quota, used, pending and remaining days (D4).
+
+    Defaults to the caller's own balance for the current business year; only
+    an admin may read someone else's.
+    """
+    target_id = current_user.id if user_id is None else user_id
+    ensure_self_or_admin(current_user, target_id)
+    return leave_balance.annual_leave_summary(
+        db, target_id, business_today().year if year is None else year
+    )
 
 
 @router.get("/conflicts", response_model=list[ConflictEntry])
@@ -97,8 +131,8 @@ def decide_leave(
 def revoke_leave(db: DbSession, leave_id: int, admin: AdminUser):
     """Admin revokes a previously APPROVED leave (owner 2026-07-17).
 
-    Restores the balance and rejects the request; warns when an
-    already-generated month still shows the leave until regenerated.
+    Rejects the request and writes X back into any already-generated month
+    of the span.
     """
     revoked, warnings = leave_service.revoke(db, leave_id, admin.id)
     audit_service.record(db, admin.id, "leave.revoked", "LeaveRequest",

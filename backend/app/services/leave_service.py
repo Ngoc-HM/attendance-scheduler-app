@@ -3,7 +3,10 @@
 Implements:
 - create_request: window validation, classification, overlap guard, persist.
 - list_for_user / list_all / list_pending: query helpers.
-- decide / revoke: approve, reject or revoke (no quota; advisory warnings only).
+- window_status: registration-window state for the client.
+- decide / revoke: approve, reject or revoke; the decision is written into any
+  already-generated month, with advisory warnings (incl. the annual quota —
+  see leave_balance).
 - approved_off_map: scheduler input — approved requests → {user_id: {date: AL}}.
 - conflicts_for_date: returns ranked competing requests for a given date.
 """
@@ -15,14 +18,22 @@ from datetime import date, timedelta
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.core.business_time import business_today
 from app.core.config import settings
 from app.core.i18n import t
 from app.models.enums import AttendanceCode, LeaveStatus, LeaveType, UserStatus
 from app.models.leave import LeaveRequest
 from app.models.user import User
-from app.schemas.leave import LeaveCreate
-from app.services import leave_conflict_resolver
-from app.services.leave_windows import classify, is_annual_window_open, is_monthly_window_open
+from app.schemas.leave import LeaveCreate, LeaveWindowRead
+from app.services import leave_balance, leave_conflict_resolver, schedule_history
+from app.services.leave_windows import (
+    annual_target_year,
+    classify,
+    is_annual_window_open,
+    is_monthly_window_open,
+    monthly_target,
+    registration_last_day,
+)
 
 # ---------------------------------------------------------------------------
 # Internal helpers
@@ -74,10 +85,11 @@ def create_request(
     Parameters
     ----------
     today:
-        Injection point for tests; defaults to date.today().
+        Injection point for tests; defaults to the business date in
+        ``settings.TIMEZONE`` (the same clock the autorun uses).
     """
     if today is None:
-        today = date.today()
+        today = business_today()
     if enforce_window is None:
         # Development must allow rapid end-to-end testing without waiting for a
         # calendar window. Staging/production keep the business cutoff.
@@ -90,9 +102,15 @@ def create_request(
     if end < start:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=t("leave.invalid_range"))
 
-    # 2. Honor caller-supplied leave_type when provided (two distinct UI flows);
-    # fall back to span-based classification otherwise.
-    leave_type = payload.leave_type or classify(start, end)
+    # 2. The span decides the bucket (> 5 consecutive days is annual). A
+    # caller-supplied leave_type (two distinct UI flows) must agree with it,
+    # otherwise a long leave labelled monthly would dodge the annual rule.
+    leave_type = classify(start, end)
+    if payload.leave_type is not None and payload.leave_type is not leave_type:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=t("leave.type_span_mismatch"),
+        )
 
     # 3. Window enforcement.
     if enforce_window:
@@ -100,7 +118,9 @@ def create_request(
             if not is_monthly_window_open(today, start.month, start.year):
                 raise HTTPException(
                     status.HTTP_400_BAD_REQUEST,
-                    detail=t("leave.window_closed_monthly"),
+                    detail=t("leave.window_closed_monthly").format(
+                        day=registration_last_day()
+                    ),
                 )
         else:
             # Annual: submission must be in the calendar year before the leave's start year.
@@ -154,35 +174,71 @@ def list_pending(db: Session) -> list[LeaveRequest]:
     )
 
 
+def window_status(today: date | None = None) -> LeaveWindowRead:
+    """Registration-window state the client shows on the leave page.
+
+    The rules live in ``leave_windows``; this only assembles them. Mirrors
+    ``create_request``: judged on the business date, and dev never closes
+    the window.
+    """
+    if today is None:
+        today = business_today()
+    target_year, target_month = monthly_target(today)
+    enforced = settings.ENVIRONMENT != "dev"
+    return LeaveWindowRead(
+        monthly_open=(
+            not enforced or is_monthly_window_open(today, target_month, target_year)
+        ),
+        monthly_target_year=target_year,
+        monthly_target_month=target_month,
+        annual_target_year=annual_target_year(today),
+        closes_on_day=registration_last_day(),
+        enforced=enforced,
+    )
+
+
 def decide(
     db: Session, leave_id: int, new_status: LeaveStatus, admin_id: int
 ) -> tuple[LeaveRequest, list[str]]:
     """Admin approve or reject a leave request.
 
-    There is NO leave quota/balance (owner 2026-07-18): the only registration
-    rule is the timing window (≤5 days = monthly window; >5 days must be filed
-    the previous year). Approving simply flips the status. Idempotent
-    re-decision → 409.
+    Registration is bound by the timing window (≤5 days = monthly window;
+    >5 days must be filed the previous year). Each user has an annual leave
+    quota (owner D4, 2026-11-06; see leave_balance): approving past it is
+    allowed but adds the ``leave.balance_exceeded`` warning — the quota never
+    blocks a decision. Idempotent re-decision → 409.
 
-    Returns (request, warnings): warnings surface an already-generated month
-    (stale schedule) and any flight-coverage impact — advisory only, the admin
-    always decides.
+    An approval is written as AL into any already-generated month of the span,
+    except over the person's X cells: leave does not replace the weekly off
+    days (decision #4), so those stay X.
+    Returns (request, warnings): warnings report that schedule update with its
+    re-check and any flight-coverage impact — advisory only, the admin always
+    decides.
     """
     req = _get_or_404(db, leave_id)
 
     if req.status != LeaveStatus.pending:
         raise HTTPException(status.HTTP_409_CONFLICT, detail=t("leave.already_decided"))
 
+    # D4: judge the annual quota while the request is still pending (its own
+    # days are not yet counted as approved); the warning is appended below.
+    over_quota = new_status == LeaveStatus.approved and leave_balance.exceeds_quota(db, req)
+    # Status first: the schedule re-check must already see this leave approved.
+    req.status = new_status
     warnings: list[str] = []
     if new_status == LeaveStatus.approved:
-        if _overlaps_generated_schedule(db, req):
-            warnings.append(t("leave.schedule_stale"))
+        warnings += _write_into_schedule(
+            db, req, AttendanceCode.AL, skip=AttendanceCode.X
+        )
         # Approving must never silently break flight coverage — check every
         # day of the span against the 1A+1D / 1A+2D demand and warn (admin
         # still decides; never a hard block).
         warnings.extend(_staffing_warnings(db, req))
 
-    req.status = new_status
+    # D4: approving past the annual leave quota is allowed but flagged.
+    if over_quota:
+        warnings.append(t("leave.balance_exceeded"))
+
     db.commit()
     db.refresh(req)
     return req, warnings
@@ -193,9 +249,9 @@ def revoke(
 ) -> tuple[LeaveRequest, list[str]]:
     """Admin revokes a previously APPROVED leave (owner decision 2026-07-17).
 
-    Flips the request back to rejected and — like approval — warns when the
-    span overlaps an already-generated month (that schedule still shows the
-    leave until the admin regenerates it).
+    Flips the request back to rejected and — like approval — writes the
+    decision into any already-generated month: span cells still on AL become
+    X; cells the admin re-coded after approval (or CD) are left as they are.
     """
     req = _get_or_404(db, leave_id)
     if req.status != LeaveStatus.approved:
@@ -203,11 +259,10 @@ def revoke(
             status.HTTP_409_CONFLICT, detail=t("leave.revoke_only_approved")
         )
 
-    warnings: list[str] = []
-    if _overlaps_generated_schedule(db, req):
-        warnings.append(t("leave.schedule_stale"))
-
     req.status = LeaveStatus.rejected
+    warnings = _write_into_schedule(
+        db, req, AttendanceCode.X, only_if=AttendanceCode.AL
+    )
     db.commit()
     db.refresh(req)
     return req, warnings
@@ -275,29 +330,20 @@ def _staffing_warnings(db: Session, req: LeaveRequest) -> list[str]:
     return warnings
 
 
-def _overlaps_generated_schedule(db: Session, req: LeaveRequest) -> bool:
-    """True when any month of the leave span already has a schedule row.
+def _write_into_schedule(
+    db: Session,
+    req: LeaveRequest,
+    code: AttendanceCode,
+    only_if: AttendanceCode | None = None,
+    skip: AttendanceCode | None = None,
+) -> list[str]:
+    """Put the decision into already-generated months of the span (B4)."""
+    from app.services import schedule_service  # local: it imports this module
 
-    The schedule only consumes approved leave at GENERATE time, so approving
-    afterwards leaves the existing (draft or published) grid stale — the
-    admin must regenerate that month for the leave to appear.
-    """
-    from app.models.schedule import MonthlySchedule  # local: avoid cycle
-
-    months: set[tuple[int, int]] = set()
-    day = req.start_date
-    while day <= req.end_date:
-        months.add((day.year, day.month))
-        day += timedelta(days=1)
-    for year, month in months:
-        exists = (
-            db.query(MonthlySchedule.id)
-            .filter(MonthlySchedule.year == year, MonthlySchedule.month == month)
-            .first()
-        )
-        if exists is not None:
-            return True
-    return False
+    return schedule_service.apply_leave_span(
+        db, req.user_id, req.start_date, req.end_date, code,
+        only_if=only_if, skip=skip,
+    )
 
 
 def approved_off_map(
@@ -378,7 +424,9 @@ def conflicts_for_date(
 ) -> list[LeaveRequest]:
     """Return ranked competing requests (pending + approved) for a given date.
 
-    Uses leave_conflict_resolver.rank with carry_comp look-up.
+    Uses leave_conflict_resolver.rank with carry_comp derived by
+    schedule_history for the contested month — the same values the scheduler
+    uses, so no month-close is needed for the ranking to be current.
     """
     requests = (
         db.query(LeaveRequest)
@@ -394,7 +442,12 @@ def conflicts_for_date(
 
     user_ids = {r.user_id for r in requests}
     users = db.query(User).filter(User.id.in_(user_ids)).all()
-    users_by_id = {u.id: u for u in users}
+    carry = {
+        uid: s.carry_comp
+        for uid, s in schedule_history.build_boundary_states(
+            db, users, target_date.year, target_date.month
+        ).items()
+    }
 
     # Criterion 2 input: off days these users ALREADY hold (approved) around
     # the contested date — one month either side covers every 7-day block a
@@ -418,4 +471,4 @@ def conflicts_for_date(
             approved_off_by_user.setdefault(req.user_id, set()).add(day)
             day += timedelta(days=1)
 
-    return leave_conflict_resolver.rank(requests, users_by_id, approved_off_by_user)
+    return leave_conflict_resolver.rank(requests, carry, approved_off_by_user)

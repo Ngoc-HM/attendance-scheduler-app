@@ -49,6 +49,30 @@ class LeavesRemoteDataSource {
     }
   }
 
+  /// GET /leaves/window — today's registration window (any active user).
+  Future<LeaveWindow> fetchWindow() async {
+    try {
+      final response = await _dio.get(ApiEndpoints.leavesWindow);
+      return LeaveWindow.fromJson(response.data as Map<String, dynamic>);
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e, 'Failed to load the leave window');
+    }
+  }
+
+  /// GET /leaves/balance — the signed-in user's annual leave quota and what
+  /// is left of it in [year] (the server defaults to the current year).
+  Future<AnnualLeaveBalance> fetchBalance({int? year}) async {
+    try {
+      final response = await _dio.get(
+        ApiEndpoints.leaveBalance,
+        queryParameters: {'year': ?year},
+      );
+      return AnnualLeaveBalance.fromJson(response.data as Map<String, dynamic>);
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e, 'Failed to load the annual leave balance');
+    }
+  }
+
   /// POST /leaves — submit a leave request.
   Future<LeaveModel> create({
     required DateTime startDate,

@@ -9,18 +9,23 @@ the just-sick person is forced to cover if a later colleague also goes sick.
 from __future__ import annotations
 
 import calendar
-from datetime import date
+from datetime import date, timedelta
 
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.i18n import t
 from app.models.attendance import AttendanceRecord
-from app.models.enums import AttendanceCode, Role
+from app.models.enums import AttendanceCode, Role, ScheduleStatus
 from app.models.schedule import MonthlySchedule, ShiftAssignment
 from app.models.user import User
 from app.schemas.attendance import AttendanceRead, AttendanceUpsert, SickCoverResult
 from app.services import role_code_validation, sick_backfill
+
+# §6 recently-sick memory: an S within this many days before the new sick day
+# makes that person the forced A/D cover — a rolling window, so a sickness on
+# the last days of one month still counts early the next month.
+RECENTLY_SICK_LOOKBACK_DAYS = 30
 
 
 def _month_bounds(year: int, month: int) -> tuple[date, date]:
@@ -66,10 +71,12 @@ def upsert(db: Session, payload: AttendanceUpsert, recorded_by: int) -> Attendan
 
 
 def seed_from_schedule(db: Session, year: int, month: int) -> int:
-    """Copy a published schedule's cells into actuals (only missing ones).
+    """Copy a schedule's cells into actuals as the admin's starting point.
 
-    Gives the admin a starting point to adjust; never overwrites an existing
-    actual record. Returns the number of cells seeded.
+    Missing actuals are inserted. On a PUBLISHED schedule, actuals still as
+    seeded (``recorded_by`` NULL) are re-synced to the roster, so publishing a
+    regenerated month refreshes them (B5). An admin-recorded actual is never
+    overwritten. Returns the number of cells inserted.
     """
     schedule = (
         db.query(MonthlySchedule)
@@ -79,17 +86,46 @@ def seed_from_schedule(db: Session, year: int, month: int) -> int:
     if schedule is None:
         return 0
 
-    existing = {(r.user_id, r.work_date) for r in list_month(db, year, month)}
+    existing = {(r.user_id, r.work_date): r for r in list_month(db, year, month)}
+    resync = schedule.status is ScheduleStatus.published
     seeded = 0
     for a in schedule.assignments:
-        if (a.user_id, a.work_date) in existing:
-            continue
-        db.add(
-            AttendanceRecord(user_id=a.user_id, work_date=a.work_date, code=a.code)
-        )
-        seeded += 1
+        cell = existing.get((a.user_id, a.work_date))
+        if cell is None:
+            db.add(
+                AttendanceRecord(user_id=a.user_id, work_date=a.work_date, code=a.code)
+            )
+            seeded += 1
+        elif resync:
+            _follow_plan(cell, a.code)
     db.commit()
     return seeded
+
+
+def sync_planned_cell(
+    db: Session, user_id: int, work_date: date, code: AttendanceCode
+) -> bool:
+    """Carry an edit of a PUBLISHED roster cell into its seeded actual (B5).
+
+    Only an actual nobody recorded by hand (``recorded_by`` NULL, i.e. left as
+    ``seed_from_schedule`` wrote it) follows the plan; an admin-recorded cell
+    always wins. Does not commit. Returns True when the actual was updated.
+    """
+    cell = _get_cell(db, user_id, work_date)
+    return cell is not None and _follow_plan(cell, code)
+
+
+def _follow_plan(cell: AttendanceRecord, code: AttendanceCode) -> bool:
+    """Set a still-seeded actual (``recorded_by`` NULL) to the planned code.
+
+    A sick day (S) never follows the plan, whoever recorded it: the planned
+    grid can never hold S (§9.1), so an S actual is always a real record —
+    e.g. one whose recorder was deleted before decision #39 kept it attributed.
+    """
+    if cell.recorded_by is not None or cell.code is AttendanceCode.S:
+        return False
+    cell.code = code
+    return True
 
 
 def actual_records_map(
@@ -121,8 +157,7 @@ def handle_sick(db: Session, payload: AttendanceUpsert, recorded_by: int) -> Sic
         sick_user_id=payload.user_id,
         day_codes=self_day_codes(db, day),
         roles=_roles(db),
-        recently_sick=_recently_sick(db, year=day.year, month=day.month, before=day,
-                                     exclude=payload.user_id),
+        recently_sick=_recently_sick(db, before=day, exclude=payload.user_id),
         month_ad_counts=_month_ad_counts(db, day.year, day.month),
     )
     if proposal is None:
@@ -173,16 +208,17 @@ def _roles(db: Session) -> dict[int, Role]:
     return {u.id: u.role for u in db.query(User).all()}
 
 
-def _recently_sick(
-    db: Session, year: int, month: int, before: date, exclude: int
-) -> list[int]:
-    """User ids with an S earlier this month, most recent first (§6)."""
-    first, _ = _month_bounds(year, month)
+def _recently_sick(db: Session, before: date, exclude: int) -> list[int]:
+    """User ids with an S in the 30 days before ``before``, most recent first (§6).
+
+    The window rolls across month boundaries (not "since the 1st").
+    """
+    since = before - timedelta(days=RECENTLY_SICK_LOOKBACK_DAYS)
     rows = (
         db.query(AttendanceRecord)
         .filter(
             AttendanceRecord.code == AttendanceCode.S,
-            AttendanceRecord.work_date >= first,
+            AttendanceRecord.work_date >= since,
             AttendanceRecord.work_date < before,
             AttendanceRecord.user_id != exclude,
         )

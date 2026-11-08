@@ -81,8 +81,8 @@ class AttendanceCode(enum.StrEnum):
 class LeaveType(enum.StrEnum):
     """Leave registration buckets (F-05 / F-06)."""
 
-    monthly = "monthly"  # < 5 consecutive days — registered each month
-    annual = "annual"    # >= 5 consecutive days — registered as annual leave
+    monthly = "monthly"  # ≤ 5 consecutive days — registered each month
+    annual = "annual"    # > 5 consecutive days — registered as annual leave
 
 
 class LeaveStatus(enum.StrEnum):

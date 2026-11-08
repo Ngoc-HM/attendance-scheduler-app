@@ -26,7 +26,7 @@ from app.models.self_arrange_request import SelfArrangeRequest
 from app.models.shift_change_request import ShiftChangeRequest
 from app.models.time_clock import TimeClockEntry
 from app.models.user import User
-from app.schemas.user import UserCreate, UserUpdate
+from app.schemas.user import RegisterRequest, UserCreate, UserUpdate
 
 
 def next_user_code(db: Session, role: Role) -> str:
@@ -90,15 +90,21 @@ def _persist_new(db: Session, payload: UserCreate, status_: UserStatus) -> User:
         status=status_,
         code=next_user_code(db, payload.role),
     )
+    # Unset → the model default (ANNUAL_LEAVE_DEFAULT_DAYS) applies on insert.
+    if payload.annual_leave_quota is not None:
+        user.annual_leave_quota = payload.annual_leave_quota
     db.add(user)
     db.commit()
     db.refresh(user)
     return user
 
 
-def register(db: Session, payload: UserCreate) -> User:
-    """F-01 — self-registration; created ``pending`` until an admin approves."""
-    return _persist_new(db, payload, UserStatus.pending)
+def register(db: Session, payload: RegisterRequest) -> User:
+    """F-01 — self-registration; created ``pending`` with role ``T`` until an
+    admin approves it and assigns the real role (F-03)."""
+    return _persist_new(
+        db, UserCreate(**payload.model_dump(), role=Role.T), UserStatus.pending
+    )
 
 
 def create(db: Session, payload: UserCreate) -> User:
@@ -106,9 +112,20 @@ def create(db: Session, payload: UserCreate) -> User:
     return _persist_new(db, payload, UserStatus.active)
 
 
-def approve(db: Session, user_id: int) -> User:
-    """F-01 — activate a pending account."""
+def approve(db: Session, user_id: int, role: Role) -> User:
+    """F-01/F-03 — activate a pending account with the role the admin assigns.
+
+    Only ``pending`` accounts qualify (409 otherwise), so approval is never a
+    second role-change path: active/disabled users change role via
+    :func:`update`, which carries the admin and fixed-team guards. A role
+    change reallocates the code for the new role (the old one is never reused).
+    """
     user = _get_or_404(db, user_id)
+    if user.status is not UserStatus.pending:
+        raise HTTPException(status.HTTP_409_CONFLICT, detail=t("user.not_pending"))
+    if role != user.role:
+        user.role = role
+        user.code = next_user_code(db, role)
     user.status = UserStatus.active
     db.commit()
     db.refresh(user)
@@ -137,6 +154,32 @@ def _ensure_last_admin_preserved(
         raise HTTPException(
             status.HTTP_409_CONFLICT, detail=t("user.last_admin_lockout")
         )
+
+
+def _recorder_after_delete(db: Session, user: User, acting_admin_id: int) -> int:
+    """Who the deleted user's recorded actuals are attributed to (#39).
+
+    Normally the admin doing the delete. An admin deleting their own account
+    hands them to another active admin instead — one always exists, because
+    the last-admin guard has already run.
+    """
+    if acting_admin_id != user.id:
+        return acting_admin_id
+    other = (
+        db.query(User.id)
+        .filter(
+            User.id != user.id,
+            User.role == Role.M,
+            User.status == UserStatus.active,
+        )
+        .order_by(User.id)
+        .first()
+    )
+    if other is None:  # unreachable after the last-admin guard
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, detail=t("user.last_admin_lockout")
+        )
+    return int(other[0])
 
 
 def _ensure_last_admin_survives_delete(db: Session, user: User) -> None:
@@ -173,7 +216,8 @@ def _fixed_team_warning(
 
 
 def update(db: Session, user_id: int, payload: UserUpdate) -> tuple[User, list[str]]:
-    """F-03 — admin edits profile/role/status (and optionally resets password).
+    """F-03 — admin edits profile/role/status/annual leave quota (and
+    optionally resets the password).
 
     Returns ``(user, warnings)``. Hard guard: last admin lockout.
     Soft warning: emptying the fixed team.
@@ -214,19 +258,25 @@ def update(db: Session, user_id: int, payload: UserUpdate) -> tuple[User, list[s
     if payload.password is not None:
         user.hashed_password = get_password_hash(payload.password)
 
+    if payload.annual_leave_quota is not None:
+        user.annual_leave_quota = payload.annual_leave_quota
+
     db.commit()
     db.refresh(user)
     return user, warnings
 
 
-def delete(db: Session, user_id: int) -> None:
+def delete(db: Session, user_id: int, acting_admin_id: int) -> None:
     """Hard delete a user and cascade their historical rows.
 
     Cascade order avoids FK violations on SQLite/Postgres:
     1. Audit logs that *point at* this user keep their row but null ``actor_id``
        so the audit trail of OTHER users is not lost.
-    2. Attendance records ``recorded_by`` is nulled; rows owned by this user
-       are deleted (they describe the user's own day).
+    2. Attendance rows this user RECORDED (as admin) are reattributed to the
+       acting admin (decision #39): a NULL ``recorded_by`` means "still as
+       seeded from the roster", and roster edits would then overwrite those
+       real actuals. Rows owned by this user are deleted (they describe the
+       user's own day).
     3. Leave / shift / self-arrange / shift-change / time-clock rows owned by
        this user are deleted.
     4. The ``User`` row itself is removed.
@@ -243,7 +293,8 @@ def delete(db: Session, user_id: int) -> None:
     db.query(AttendanceRecord).filter(
         AttendanceRecord.recorded_by == user.id
     ).update(
-        {AttendanceRecord.recorded_by: None}, synchronize_session=False
+        {AttendanceRecord.recorded_by: _recorder_after_delete(db, user, acting_admin_id)},
+        synchronize_session=False,
     )
     db.query(AttendanceRecord).filter(AttendanceRecord.user_id == user.id).delete(
         synchronize_session=False
@@ -277,3 +328,13 @@ def delete(db: Session, user_id: int) -> None:
 
 def list_users(db: Session) -> list[User]:
     return db.query(User).order_by(User.id).all()
+
+
+def list_directory(db: Session) -> list[User]:
+    """Active users ordered by code, for the employee-visible code directory."""
+    return (
+        db.query(User)
+        .filter(User.status == UserStatus.active)
+        .order_by(User.code)
+        .all()
+    )

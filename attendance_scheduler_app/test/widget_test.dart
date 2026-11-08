@@ -1,11 +1,24 @@
 // Smoke test: the app boots and lands on the login screen.
 
 import 'package:attendance_scheduler_app/app.dart';
+import 'package:attendance_scheduler_app/core/storage/token_storage.dart';
 import 'package:attendance_scheduler_app/design_system/design_system.dart';
 import 'package:attendance_scheduler_app/i18n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+/// No stored session. The app reads the secure store at boot (session
+/// restore); its platform channel never answers inside a widget test.
+class _EmptyTokenStorage extends TokenStorage {
+  @override
+  Future<String?> read() async => null;
+}
+
+Widget _signedOutApp() => ProviderScope(
+  overrides: [tokenStorageProvider.overrideWithValue(_EmptyTokenStorage())],
+  child: const AttendanceSchedulerApp(),
+);
 
 void main() {
   test('English and Vietnamese contain the same localization keys', () {
@@ -13,9 +26,7 @@ void main() {
   });
 
   testWidgets('App boots to the login screen', (WidgetTester tester) async {
-    await tester.pumpWidget(
-      const ProviderScope(child: AttendanceSchedulerApp()),
-    );
+    await tester.pumpWidget(_signedOutApp());
     await tester.pumpAndSettle();
 
     expect(find.text('Log in'), findsNWidgets(2));
@@ -25,9 +36,7 @@ void main() {
   testWidgets('English is default and Vietnamese can be selected', (
     WidgetTester tester,
   ) async {
-    await tester.pumpWidget(
-      const ProviderScope(child: AttendanceSchedulerApp()),
-    );
+    await tester.pumpWidget(_signedOutApp());
     await tester.pumpAndSettle();
 
     expect(find.text('Use your approved account to continue.'), findsOneWidget);

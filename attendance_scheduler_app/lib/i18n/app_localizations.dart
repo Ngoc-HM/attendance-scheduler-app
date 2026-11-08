@@ -52,6 +52,9 @@ class AppLocalizations {
       'status': 'Status',
       'actions': 'Actions',
       'approve': 'Approve',
+      'approveRoleMessage':
+          'Choose the role for this account before activating it. '
+          'The account code follows the chosen role.',
       'disable': 'Disable',
       'enable': 'Enable',
       'changeRole': 'Change role',
@@ -112,7 +115,9 @@ class AppLocalizations {
       'excelFileHint': 'Excel files up to 10 MB',
       'chooseFile': 'Choose file',
       'leaveRequests': 'Leave requests',
-      'leaveSubtitle': 'Leave registration is unrestricted in development',
+      'leaveSubtitle':
+          'Monthly leave: register by day {day} of the previous month. '
+          'Annual leave: register the year before.',
       'requestMonthlyLeave': 'Request monthly leave',
       'requestAnnualLeave': 'Request annual leave',
       'pending': 'Pending',
@@ -120,18 +125,19 @@ class AppLocalizations {
       'rejected': 'Rejected',
       'active': 'Active',
       'disabled': 'Disabled',
-      'complete': 'Complete',
       'review': 'Review',
-      'ready': 'Ready',
       'compDays': 'Comp days',
       'registrationOpen': 'Registration open',
       'shortLeaveMessage':
-          'Monthly leave is under 5 consecutive days. Longer leave uses the annual request.',
-      'monthlyLeaveHint': 'Monthly leave is under 5 consecutive days.',
-      'annualLeaveHint': 'Annual leave is 5 or more consecutive days, limited to the next year (Y+1).',
+          'Monthly leave is 5 consecutive days or fewer. Longer leave uses the annual request.',
+      'monthlyLeaveHint': 'Monthly leave is 5 consecutive days or fewer.',
+      'annualLeaveHint': 'Annual leave is more than 5 consecutive days, limited to the next year (Y+1).',
+      'leaveTypeSpanMismatch':
+          'Leave of 5 days or less is monthly leave; more than 5 consecutive days must be registered as annual leave.',
 
       'leaveWindowHint':
-          'Development mode: leave dates are not restricted by registration windows.',
+          'Monthly leave: register during the previous month. '
+          'Annual leave: register the year before.',
       'requests': 'Requests',
       'type': 'Type',
       'dates': 'Dates',
@@ -206,7 +212,6 @@ class AppLocalizations {
       // --- Phase 09 wiring: flights / leaves / reports / schedule / attendance
       'addFlightDay': 'Add flight day',
       'addHoliday': 'Add holiday',
-      'adminOnlyAction': 'This action requires admin privileges.',
       'allYear': 'Full year',
       'attendanceUpdated': 'Attendance updated.',
       'autoAssignCover': 'Auto-assign A/D cover',
@@ -227,6 +232,12 @@ class AppLocalizations {
       'noHolidaysYet': 'No holidays yet.',
       'noPendingShiftChanges': 'No pending shift-change requests.',
       'pendingShiftChanges': 'Pending shift-change requests',
+      'myShiftChangeRequests': 'My shift-change requests',
+      'noShiftChangeRequests':
+          'No requests yet. Tap one of your own cells in the roster to request a change.',
+      'shiftChangeSubmitted': 'Shift-change request submitted.',
+      'shiftChangesLoadFailed': 'Could not load your shift-change requests.',
+      'shiftCodeColumn': 'Code',
       'pickDate': 'Pick a date',
       'reportSavedTo': 'Report saved to',
       'requestShiftChange': 'Request shift change',
@@ -237,9 +248,6 @@ class AppLocalizations {
       'scheduleGenerated': 'Schedule generated.',
       'ruleWarnings': 'rule warning(s).',
       'scheduleInfeasible': 'No valid schedule could be found.',
-      'regenerateTitle': 'Regenerate schedule?',
-      'regenerateWarning':
-          'This schedule is published. Regenerating will rearrange the whole month and overwrite it. Continue?',
       'regenerate': 'Regenerate',
       'scheduleNotPublishedYet':
           'The schedule for this month is not published yet.',
@@ -325,6 +333,11 @@ class AppLocalizations {
           'roster will contain no flight duties (A/D) and may be wrong. '
           'Enter flights first, or generate anyway?',
       'generateAnyway': 'Generate anyway',
+      'regenerateConfirmTitle': 'Regenerate schedule?',
+      'regenerateConfirmBody':
+          'This schedule is published or has manual edits. Regenerating will '
+          'discard the manual edits and return the schedule to draft. '
+          'Employees lose access to this month until it is published again.',
       // --- Admin cell edit (F-09 UI, owner 2026-07-17) ---
       'editCell': 'Edit cell',
       'cellSaved': 'Cell saved.',
@@ -334,8 +347,8 @@ class AppLocalizations {
       // --- Leave window banner (audit fix 2026-07-17) ---
       'registrationClosed': 'Monthly registration closed',
       'registrationClosedMessage':
-          'Monthly-leave registration is open from day 1 to day 20 (for the '
-          'next month). Annual leave (5+ days) is registered during the '
+          'Registration of monthly leave for next month has closed for this '
+          'month. Annual leave (more than 5 days) is registered during the '
           'previous year.',
       // --- Revoke approval (owner 2026-07-17) ---
       'revokeApproval': 'Revoke approval',
@@ -380,6 +393,23 @@ class AppLocalizations {
       'carryComp': 'Comp days',
       'carryStreak': 'Working streak',
       'carryPremiumOff': 'Premium off',
+      // --- My attendance, leave window, i18n cleanup (review 2026-11-06) ---
+      'navMyAttendance': 'My attendance',
+      'myAttendanceEmptyMessage':
+          'No records for this month yet. They appear once the roster is '
+          'published.',
+      'userFallback': 'ID {id}',
+      'selectYearMonthFirst': 'Select a year and month first.',
+      'selectYearFirst': 'Select a year first.',
+      'statusReady': 'Ready',
+      'statusComplete': 'Complete',
+      // --- Annual leave quota (owner decision D4, 2026-11-06) ---
+      'annualLeaveRemaining': 'Annual leave left',
+      'annualLeaveQuota': 'Annual leave quota',
+      'annualLeaveQuotaHint': 'Days per year — leave empty for the default',
+      'annualLeaveQuotaInvalid': 'Enter a whole number from 0 to 365.',
+      'editAnnualLeaveQuota': 'Edit leave quota',
+      'annualLeaveQuotaUpdated': 'Annual leave quota updated.',
     },
     'vi': {
       'appTitle': 'Xếp lịch & Chấm công',
@@ -417,6 +447,9 @@ class AppLocalizations {
       'status': 'Trạng thái',
       'actions': 'Thao tác',
       'approve': 'Phê duyệt',
+      'approveRoleMessage':
+          'Chọn vai trò cho tài khoản trước khi kích hoạt. '
+          'Mã tài khoản sẽ theo vai trò được chọn.',
       'disable': 'Vô hiệu hóa',
       'enable': 'Kích hoạt',
       'changeRole': 'Đổi vai trò',
@@ -477,7 +510,9 @@ class AppLocalizations {
       'excelFileHint': 'Tệp Excel tối đa 10 MB',
       'chooseFile': 'Chọn tệp',
       'leaveRequests': 'Đăng ký nghỉ',
-      'leaveSubtitle': 'Môi trường dev không giới hạn thời gian đăng ký',
+      'leaveSubtitle':
+          'Nghỉ tháng: đăng ký chậm nhất đến hết ngày {day} của tháng trước. '
+          'Nghỉ phép năm: đăng ký từ năm trước.',
       'requestMonthlyLeave': 'Đăng ký nghỉ tháng',
       'requestAnnualLeave': 'Đăng ký nghỉ phép năm',
       'pending': 'Chờ duyệt',
@@ -485,18 +520,19 @@ class AppLocalizations {
       'rejected': 'Đã từ chối',
       'active': 'Đang hoạt động',
       'disabled': 'Đã vô hiệu hóa',
-      'complete': 'Hoàn tất',
       'review': 'Cần rà soát',
-      'ready': 'Sẵn sàng',
       'compDays': 'Ngày nghỉ bù',
       'registrationOpen': 'Đang mở đăng ký',
       'shortLeaveMessage':
-          'Nghỉ hàng tháng dưới 5 ngày liên tục. Nghỉ dài hơn dùng đăng ký phép năm.',
-      'monthlyLeaveHint': 'Nghỉ hàng tháng dưới 5 ngày liên tục.',
-      'annualLeaveHint': 'Nghỉ phép năm từ 5 ngày liên tục trở lên, chỉ được đăng ký năm sau (Y+1).',
+          'Nghỉ hàng tháng từ 5 ngày liên tục trở xuống. Nghỉ dài hơn dùng đăng ký phép năm.',
+      'monthlyLeaveHint': 'Nghỉ hàng tháng từ 5 ngày liên tục trở xuống.',
+      'annualLeaveHint': 'Nghỉ phép năm trên 5 ngày liên tục, chỉ được đăng ký năm sau (Y+1).',
+      'leaveTypeSpanMismatch':
+          'Nghỉ từ 5 ngày trở xuống là nghỉ tháng; trên 5 ngày liên tục phải đăng ký nghỉ phép năm.',
 
       'leaveWindowHint':
-          'Môi trường dev: không giới hạn ngày đăng ký nghỉ.',
+          'Nghỉ tháng: đăng ký trong tháng trước. '
+          'Nghỉ phép năm: đăng ký từ năm trước.',
       'requests': 'Yêu cầu',
       'type': 'Loại',
       'dates': 'Thời gian',
@@ -571,7 +607,6 @@ class AppLocalizations {
       // --- Phase 09 wiring: flights / leaves / reports / schedule / attendance
       'addFlightDay': 'Thêm ngày bay',
       'addHoliday': 'Thêm ngày lễ',
-      'adminOnlyAction': 'Thao tác này cần quyền quản trị.',
       'allYear': 'Cả năm',
       'attendanceUpdated': 'Đã cập nhật chấm công.',
       'autoAssignCover': 'Tự gán người bù ca A/D',
@@ -592,6 +627,12 @@ class AppLocalizations {
       'noHolidaysYet': 'Chưa có ngày lễ nào.',
       'noPendingShiftChanges': 'Không có yêu cầu đổi ca chờ duyệt.',
       'pendingShiftChanges': 'Yêu cầu đổi ca chờ duyệt',
+      'myShiftChangeRequests': 'Yêu cầu đổi ca của tôi',
+      'noShiftChangeRequests':
+          'Chưa có yêu cầu nào. Nhấn vào một ô của bạn trên lịch để yêu cầu đổi ca.',
+      'shiftChangeSubmitted': 'Đã gửi yêu cầu đổi ca.',
+      'shiftChangesLoadFailed': 'Không thể tải các yêu cầu đổi ca của bạn.',
+      'shiftCodeColumn': 'Mã ca',
       'pickDate': 'Chọn ngày',
       'reportSavedTo': 'Báo cáo đã lưu tại',
       'requestShiftChange': 'Yêu cầu đổi ca',
@@ -602,9 +643,6 @@ class AppLocalizations {
       'scheduleGenerated': 'Đã tạo lịch.',
       'ruleWarnings': 'cảnh báo quy tắc.',
       'scheduleInfeasible': 'Không tìm được lời giải hợp lệ cho lịch.',
-      'regenerateTitle': 'Tạo lại lịch?',
-      'regenerateWarning':
-          'Lịch này đã công bố. Tạo lại sẽ sắp xếp lại toàn bộ tháng và ghi đè lịch hiện tại. Tiếp tục?',
       'regenerate': 'Tạo lại',
       'scheduleNotPublishedYet': 'Lịch tháng này chưa được công bố.',
       'schedulePublished': 'Đã công bố lịch.',
@@ -689,6 +727,11 @@ class AppLocalizations {
           'không có ca bay (A/D) và có thể sai sót. Nên nhập lịch bay '
           'trước, hoặc vẫn tạo lịch?',
       'generateAnyway': 'Vẫn tạo lịch',
+      'regenerateConfirmTitle': 'Tạo lại lịch?',
+      'regenerateConfirmBody':
+          'Lịch đã publish hoặc đã chỉnh tay. Tạo lại sẽ xoá chỉnh tay và '
+          'đưa lịch về nháp. Nhân viên sẽ không xem được lịch tháng này '
+          'cho đến khi lịch được công bố lại.',
       // --- Admin cell edit (F-09 UI, owner 2026-07-17) ---
       'editCell': 'Sửa ô lịch',
       'cellSaved': 'Đã lưu ô lịch.',
@@ -698,8 +741,8 @@ class AppLocalizations {
       // --- Leave window banner (audit fix 2026-07-17) ---
       'registrationClosed': 'Đã đóng đăng ký nghỉ tháng',
       'registrationClosedMessage':
-          'Đăng ký nghỉ tháng mở từ ngày 1 đến ngày 20 (cho tháng kế tiếp). '
-          'Nghỉ phép năm (từ 5 ngày) đăng ký trong năm trước.',
+          'Tháng này đã hết hạn đăng ký nghỉ cho tháng kế tiếp. '
+          'Nghỉ phép năm (trên 5 ngày) đăng ký trong năm trước.',
       // --- Revoke approval (owner 2026-07-17) ---
       'revokeApproval': 'Hủy duyệt',
       'revokeConfirmMessage':
@@ -741,6 +784,22 @@ class AppLocalizations {
       'carryComp': 'Ngày bù',
       'carryStreak': 'Chuỗi ngày làm',
       'carryPremiumOff': 'Nghỉ premium',
+      // --- My attendance, leave window, i18n cleanup (review 2026-11-06) ---
+      'navMyAttendance': 'Chấm công của tôi',
+      'myAttendanceEmptyMessage':
+          'Tháng này chưa có bản ghi. Chấm công sẽ hiện khi lịch được công bố.',
+      'userFallback': 'ID {id}',
+      'selectYearMonthFirst': 'Vui lòng chọn năm và tháng.',
+      'selectYearFirst': 'Vui lòng chọn năm.',
+      'statusReady': 'Sẵn sàng',
+      'statusComplete': 'Hoàn tất',
+      // --- Annual leave quota (owner decision D4, 2026-11-06) ---
+      'annualLeaveRemaining': 'Phép năm còn lại',
+      'annualLeaveQuota': 'Định mức phép năm',
+      'annualLeaveQuotaHint': 'Số ngày mỗi năm — để trống để dùng mặc định',
+      'annualLeaveQuotaInvalid': 'Nhập số nguyên từ 0 đến 365.',
+      'editAnnualLeaveQuota': 'Sửa định mức phép',
+      'annualLeaveQuotaUpdated': 'Đã cập nhật định mức phép năm.',
     },
   };
 
@@ -869,11 +928,11 @@ class AppLocalizations {
     'active' => text('active'),
     'pending' => text('pending'),
     'disabled' => text('disabled'),
-    'complete' => text('complete'),
+    'complete' => text('statusComplete'),
     'review' => text('review'),
     'approved' => text('approved'),
     'rejected' => text('rejected'),
-    'ready' => text('ready'),
+    'ready' => text('statusReady'),
     _ => status,
   };
 
@@ -909,6 +968,14 @@ class AppLocalizations {
   /// "Close March 2026?" (F-14).
   String closeMonthConfirmTitle(DateTime month) =>
       text('closeMonthConfirmTitle').replaceAll('{month}', monthYear(month));
+
+  /// Leave page subtitle with the live window's last registration day.
+  String leaveSubtitle(int closesOnDay) =>
+      text('leaveSubtitle').replaceAll('{day}', '$closesOnDay');
+
+  /// "ID 7" — a row whose user is not in the loaded directory.
+  String userFallback(int userId) =>
+      text('userFallback').replaceAll('{id}', '$userId');
 
   static String _two(int value) => value.toString().padLeft(2, '0');
 }

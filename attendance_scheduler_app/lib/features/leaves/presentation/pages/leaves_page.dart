@@ -51,8 +51,12 @@ class LeavesPage extends ConsumerWidget {
         onRevoke: isAdmin
             ? (index) => _confirmRevoke(context, ref, ctrl, index, l)
             : null,
-        // Development mode: registration is intentionally always open.
-        registrationOpen: true,
+        // Live window (GET /leaves/window). Unknown → assume open; the
+        // server still rejects a submit outside the window.
+        registrationOpen: state.window?.monthlyOpen ?? true,
+        closesOnDay: state.window?.closesOnDay,
+        compDays: state.compDays,
+        annualLeaveRemaining: state.balance?.remaining,
       ),
     );
   }
@@ -171,10 +175,20 @@ class LeavesPage extends ConsumerWidget {
     final startCtrl = TextEditingController();
     final endCtrl = TextEditingController();
 
+    // The real registration rule, with the live closing day once known.
+    final window = ref.read(leavesControllerProvider).window;
+    final closesOnDay = window?.closesOnDay;
+    final windowHint = closesOnDay == null
+        ? l.text('leaveWindowHint')
+        : l.leaveSubtitle(closesOnDay);
+
     final now = DateTime.now();
     final firstAllowed = DateTime(2000);
-    final annualFirst = DateTime(now.year + 1, 1, 1);
-    final annualLast = DateTime(now.year + 1, 12, 31);
+    // Annual leave is filed for the server's target year (business date in
+    // TIMEZONE); the device year + 1 is only the fallback before it loads.
+    final annualYear = window?.annualTargetYear ?? now.year + 1;
+    final annualFirst = DateTime(annualYear, 1, 1);
+    final annualLast = DateTime(annualYear, 12, 31);
 
     String fmtDate(DateTime d) =>
         '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
@@ -198,7 +212,7 @@ class LeavesPage extends ConsumerWidget {
             children: [
               // Registration-window guidance (matches backend leave_windows).
               Text(
-                l.text('leaveWindowHint'),
+                windowHint,
                 style: Theme.of(ctx).textTheme.bodySmall,
               ),
               const SizedBox(height: DsSpacing.x3),
@@ -310,11 +324,32 @@ class LeavesPage extends ConsumerWidget {
                   DsFeedback.show(ctx, l.fieldRequired, tone: DsTone.warning);
                   return;
                 }
+                // The span decides the type (> 5 consecutive days is annual)
+                // and the backend rejects a mismatch, so warn up front. UTC
+                // dates keep a DST change inside the range from losing a day;
+                // a reversed range is left to the backend's invalid-range error.
+                final start = startDate!;
+                final end = endDate!;
+                final days = DateTime.utc(end.year, end.month, end.day)
+                        .difference(
+                          DateTime.utc(start.year, start.month, start.day),
+                        )
+                        .inDays +
+                    1;
+                if (days > 0 &&
+                    ((isAnnual && days <= 5) || (!isAnnual && days > 5))) {
+                  DsFeedback.show(
+                    ctx,
+                    l.text('leaveTypeSpanMismatch'),
+                    tone: DsTone.warning,
+                  );
+                  return;
+                }
                 final ctrl = ref.read(leavesControllerProvider.notifier);
                 try {
                   await ctrl.submitRequest(
-                    startDate: startDate!,
-                    endDate: endDate!,
+                    startDate: start,
+                    endDate: end,
                     leaveType: isAnnual ? 'annual' : 'monthly',
                     note: noteCtrl.text.trim().isEmpty
                         ? null

@@ -29,6 +29,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "auth.forbidden_other_user": "You may only access your own data.",
         "user.not_found": "User not found.",
         "user.username_taken": "That username is already taken.",
+        "user.not_pending": "Only a pending account can be approved.",
         "user.last_admin_lockout": "You cannot remove or disable the last remaining admin.",
         "user.fixed_team_empty": "No active fixed-team members will remain after this change.",
         "schedule.infeasible": "No valid schedule could be found.",
@@ -43,17 +44,20 @@ MESSAGES: dict[str, dict[str, str]] = {
         "flight.preset_not_found": "Flight preset not found.",
         # --- Leaves (F-05/F-06) ---
         "leave.not_found": "Leave request not found.",
-        "leave.window_closed_monthly": "Monthly leave registration is open from day 1 to day 20 of the previous month.",
+        "leave.window_closed_monthly": "Monthly leave registration is open from day 1 to day {day} of the previous month.",
         "leave.window_closed_annual": "Annual leave can only be registered for the next year (Y+1).",
         "leave.already_decided": "This leave request was already decided.",
         "leave.overlap": "An overlapping leave request already exists.",
         "leave.invalid_range": "End date must not be before start date.",
-        "leave.schedule_stale": "This leave overlaps a month whose schedule was already generated — regenerate that month so the leave appears in it.",
+        "leave.type_span_mismatch": "Leave of 5 days or less is monthly leave; more than 5 consecutive days must be registered as annual leave.",
+        "leave.schedule_applied": "The already-generated schedule was updated with this decision; review the warnings.",
+        "leave.schedule_not_generated": "no schedule yet — this decision applies when the month is generated.",
         "leave.revoke_only_approved": "Only an approved leave can be revoked.",
         "leave.staffing_impossible": "flights CANNOT be covered — too few group-A staff remain that day.",
         "leave.staffing_short_ordinary": (
             "not enough role-A staff for ordinary A and D coverage that day."
         ),
+        "leave.balance_exceeded": "Approving exceeds this person's annual leave quota.",
         # --- Shift changes (decision #8) ---
         "swap.not_found": "Shift-change request not found.",
         "swap.own_cell_only": "You can only request changes for your own scheduled day.",
@@ -61,6 +65,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "swap.counterpart_required": "A colleague must be selected for a swap request.",
         "swap.code_required": "A requested code is required for a change request.",
         "swap.no_schedule": "There is no schedule for that date yet.",
+        "swap.code_not_requestable": "Employees may only request their regular working or off codes.",
         # --- Attendance / holidays (F-10..F-13) ---
         "attendance.not_found": "Attendance record not found.",
         "holiday.not_found": "Holiday not found.",
@@ -97,6 +102,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "auth.forbidden_other_user": "Bạn chỉ được truy cập dữ liệu của chính mình.",
         "user.not_found": "Không tìm thấy người dùng.",
         "user.username_taken": "Tên đăng nhập đã tồn tại.",
+        "user.not_pending": "Chỉ duyệt được tài khoản đang chờ duyệt.",
         "user.last_admin_lockout": "Không thể hạ quyền hoặc vô hiệu hoá admin cuối cùng.",
         "user.fixed_team_empty": "Sẽ không còn thành viên fixed team nào đang hoạt động sau thay đổi này.",
         "schedule.infeasible": "Không tìm được lời giải hợp lệ cho lịch.",
@@ -111,17 +117,20 @@ MESSAGES: dict[str, dict[str, str]] = {
         "flight.preset_not_found": "Không tìm thấy preset chuyến bay.",
         # --- Leaves (F-05/F-06) ---
         "leave.not_found": "Không tìm thấy đơn nghỉ.",
-        "leave.window_closed_monthly": "Đăng ký nghỉ tháng mở từ ngày 1 đến ngày 20 của tháng trước.",
+        "leave.window_closed_monthly": "Đăng ký nghỉ tháng mở từ ngày 1 đến ngày {day} của tháng trước.",
         "leave.window_closed_annual": "Nghỉ phép năm chỉ được đăng ký cho năm sau (Y+1).",
         "leave.already_decided": "Đơn nghỉ này đã được quyết định.",
         "leave.overlap": "Đã tồn tại đơn nghỉ trùng thời gian.",
         "leave.invalid_range": "Ngày kết thúc không được trước ngày bắt đầu.",
-        "leave.schedule_stale": "Ngày nghỉ này trùng tháng đã tạo lịch — cần tạo lại lịch tháng đó để ngày nghỉ được cập nhật.",
+        "leave.type_span_mismatch": "Nghỉ từ 5 ngày trở xuống là nghỉ tháng; trên 5 ngày liên tục phải đăng ký nghỉ phép năm.",
+        "leave.schedule_applied": "Lịch đã tạo được cập nhật theo quyết định này; hãy xem các cảnh báo.",
+        "leave.schedule_not_generated": "chưa có lịch — quyết định này sẽ được áp dụng khi tạo lịch tháng đó.",
         "leave.revoke_only_approved": "Chỉ hủy được đơn nghỉ đã duyệt.",
         "leave.staffing_impossible": "KHÔNG thể phủ chuyến bay — nhóm A còn lại quá ít người ngày này.",
         "leave.staffing_short_ordinary": (
             "không đủ nhân sự role A để phủ ca A và D thông thường trong ngày."
         ),
+        "leave.balance_exceeded": "Duyệt đơn này vượt định mức phép năm của nhân sự.",
         # --- Shift changes (decision #8) ---
         "swap.not_found": "Không tìm thấy yêu cầu đổi ca.",
         "swap.own_cell_only": "Chỉ được yêu cầu đổi ca cho ngày làm của chính mình.",
@@ -129,6 +138,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "swap.counterpart_required": "Cần chọn đồng nghiệp để hoán đổi ca.",
         "swap.code_required": "Cần chọn mã ca muốn đổi.",
         "swap.no_schedule": "Chưa có lịch cho ngày này.",
+        "swap.code_not_requestable": "Nhân viên chỉ được yêu cầu mã ca làm hoặc nghỉ thông thường.",
         # --- Attendance / holidays (F-10..F-13) ---
         "attendance.not_found": "Không tìm thấy bản ghi chấm công.",
         "holiday.not_found": "Không tìm thấy ngày lễ.",

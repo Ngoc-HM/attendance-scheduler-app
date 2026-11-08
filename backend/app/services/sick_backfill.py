@@ -4,9 +4,9 @@ When someone reports sick (S) on a day they held a flight shift, that shift
 must be covered by a colleague taking an A/D double shift (§6). Candidate
 selection, in priority order:
 
-1. RECENTLY-SICK RULE (§6): whoever was sick earlier this month and is now
-   working a single flight shift that day is FORCED to take the A/D cover
-   (most recent sickness first).
+1. RECENTLY-SICK RULE (§6): whoever was sick in the previous 30 days (across
+   month boundaries) and is now working a single flight shift that day is
+   FORCED to take the A/D cover (most recent sickness first).
 2. Otherwise: the working fixed-group member with the fewest A/D doubles so
    far this month (fairness), tie-broken by user id (determinism).
 
@@ -48,8 +48,8 @@ def pick_candidate(
     """Choose who takes the A/D cover for ``sick_user_id``'s dropped shift.
 
     ``day_codes``: that day's code per user (actuals, falling back to plan).
-    ``recently_sick``: user ids with an earlier S this month, most recent
-    first. ``month_ad_counts``: A/D doubles already worked this month.
+    ``recently_sick``: user ids with an S in the previous 30 days, most
+    recent first. ``month_ad_counts``: A/D doubles already worked this month.
     """
     candidates = [
         uid

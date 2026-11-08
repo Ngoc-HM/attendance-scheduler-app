@@ -54,10 +54,13 @@ def generate_schedule(
 
     Always returns a complete draft plus any rule Violations for the admin to
     resolve (§5.6 — always-feasible slack architecture, decision #2).
+    409 when the month is published or has manual edits and ``force`` is unset.
     """
     result = schedule_service.generate(db, payload.year, payload.month, payload.force)
+    # The force flag is part of the trail: a forced run drops manual edits
+    # and un-publishes the month.
     audit_service.record(db, admin.id, "schedule.generate", "MonthlySchedule",
-                         detail=f"{payload.year}-{payload.month:02d}")
+                         detail=f"{payload.year}-{payload.month:02d} force={payload.force}")
     return result
 
 

@@ -8,6 +8,7 @@ import '../../../auth/domain/entities/user.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../providers/users_provider.dart';
 import '../widgets/create_user_dialog.dart';
+import '../widgets/edit_quota_dialog.dart';
 
 class UsersPage extends ConsumerWidget {
   const UsersPage({super.key});
@@ -39,7 +40,11 @@ class UsersPage extends ConsumerWidget {
         context: context,
         builder: (_) => CreateUserDialog(),
       ),
-      onApprove: controller.approve,
+      onApprove: (id) => _confirmApprove(
+        context,
+        controller,
+        users.firstWhere((user) => user.id == id),
+      ),
       onDisable: (id) =>
           _confirmSelfOrAdmin(context, controller, currentUser?.id, id, (ctrl) {
         return ctrl.setStatus(id, 'disabled');
@@ -56,7 +61,96 @@ class UsersPage extends ConsumerWidget {
         role,
       ),
       onDelete: (id) => _confirmDelete(context, controller, currentUser?.id, id),
+      onEditQuota: (id) => _editQuota(
+        context,
+        controller,
+        users.firstWhere((user) => user.id == id),
+      ),
     );
+  }
+
+  /// Sets one person's annual leave quota (D4). Migrated accounts all start
+  /// at the default, so this is how the admin applies each person's figure.
+  Future<void> _editQuota(
+    BuildContext context,
+    UsersController controller,
+    User user,
+  ) async {
+    final l = AppLocalizations.of(context);
+    final quota = await showDialog<int>(
+      context: context,
+      builder: (_) => EditQuotaDialog(
+        username: user.username,
+        quota: user.annualLeaveQuota,
+      ),
+    );
+    if (quota == null || !context.mounted) return;
+    await _runMutation(
+      context,
+      controller.setAnnualLeaveQuota(user.id, quota),
+      onWarnings: _showWarnings,
+      onSuccess: () => DsFeedback.show(
+        context,
+        l.text('annualLeaveQuotaUpdated'),
+        tone: DsTone.success,
+      ),
+    );
+  }
+
+  /// Approval assigns the role (F-03): self-registration cannot pick one, so
+  /// the admin chooses it here, starting from the account's current role —
+  /// except admin (M), which is never preselected: such an account starts on
+  /// T, and granting admin rights takes an explicit pick. The backend
+  /// reassigns the code if the role changes. Errors (e.g. last-admin lockout)
+  /// are shown like any other mutation.
+  Future<void> _confirmApprove(
+    BuildContext context,
+    UsersController controller,
+    User user,
+  ) async {
+    final l = AppLocalizations.of(context);
+    var selected = user.role == UserRole.m ? UserRole.t : user.role;
+    final role = await showDialog<UserRole>(
+      context: context,
+      builder: (dialogContext) => DsFormDialog(
+        title: '${l.approve}: ${user.username}',
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(l.text('approveRoleMessage')),
+            const SizedBox(height: DsSpacing.x4),
+            DsSelectField<UserRole>(
+              label: l.role,
+              value: selected,
+              items: [
+                for (final option in UserRole.values)
+                  DropdownMenuItem(
+                    value: option,
+                    child: Text(l.roleLabel(option.apiValue)),
+                  ),
+              ],
+              // The field shows the pick itself; only remember it here.
+              onChanged: (picked) {
+                if (picked != null) selected = picked;
+              },
+            ),
+          ],
+        ),
+        actions: [
+          DsTextAction(
+            label: l.cancel,
+            onPressed: () => Navigator.of(dialogContext).pop(),
+          ),
+          DsPrimaryButton(
+            label: l.approve,
+            onPressed: () => Navigator.of(dialogContext).pop(selected),
+          ),
+        ],
+      ),
+    );
+    if (role == null || !context.mounted) return;
+    await _runMutation(context, controller.approve(user.id, role));
   }
 
   /// Confirm before changing a role: the backend reassigns the account code to

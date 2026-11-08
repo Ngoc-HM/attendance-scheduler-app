@@ -8,6 +8,7 @@ class ApiEndpoints {
   static const String register = '/auth/register';
   static const String me = '/users/me';
   static const String users = '/users';
+  static const String usersDirectory = '/users/directory';
   static String userById(int id) => '/users/$id';
   static String approveUser(int id) => '/auth/users/$id/approve';
 
@@ -23,6 +24,8 @@ class ApiEndpoints {
   // Leaves (F-05, F-06)
   static const String leaves = '/leaves';
   static const String leavesPending = '/leaves/pending';
+  static const String leavesWindow = '/leaves/window';
+  static const String leaveBalance = '/leaves/balance'; // ?year=&user_id=
   static String leaveDecide(int id) => '/leaves/$id/decide';
   static String leaveRevoke(int id) => '/leaves/$id/revoke';
   static const String leaveConflicts = '/leaves/conflicts'; // ?date=YYYY-MM-DD

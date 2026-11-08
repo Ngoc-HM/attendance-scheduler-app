@@ -7,7 +7,7 @@ shift-changes are saved and re-checked (warnings do not discard the edit).
 
 from __future__ import annotations
 
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session, selectinload
@@ -26,6 +26,7 @@ from app.schemas.schedule import (
     ScheduleResult,
 )
 from app.services import (
+    attendance_service,
     flight_service,
     leave_service,
     role_code_validation,
@@ -69,16 +70,36 @@ def get(db: Session, year: int, month: int, include_draft: bool) -> MonthlySched
 
 
 def generate(db: Session, year: int, month: int, force: bool = False) -> ScheduleResult:
-    """F-07 — build the monthly schedule via the CP-SAT engine (§5)."""
+    """F-07 — build the monthly schedule via the CP-SAT engine (§5).
+
+    Regenerating a published month, or one with manual edits, would wipe the
+    edits and reset it to draft — refused (409) unless ``force`` is set.
+    """
     existing = (
         db.query(MonthlySchedule)
         .filter(MonthlySchedule.year == year, MonthlySchedule.month == month)
         .one_or_none()
     )
-    # Testing mode (owner 2026-07-01): admin may regenerate freely — no lock on
-    # published schedules or manual overrides. Regenerating resets to draft.
-    # ``force`` is kept in the signature for API compatibility but no longer gates.
-    _ = force
+    if existing is not None and not force:
+        if existing.status is ScheduleStatus.published:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT, detail=t("schedule.published_locked")
+            )
+        # Query, not ``existing.assignments``: loading the collection here would
+        # leave stale cells in the session ahead of the delete/re-insert below.
+        has_overrides = (
+            db.query(ShiftAssignment.id)
+            .filter(
+                ShiftAssignment.schedule_id == existing.id,
+                ShiftAssignment.is_manual_override.is_(True),
+            )
+            .first()
+            is not None
+        )
+        if has_overrides:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT, detail=t("schedule.has_overrides")
+            )
 
     inp = schedule_input_builder.build(db, year, month)
     out = SchedulerEngine().solve(inp)
@@ -151,6 +172,8 @@ def manual_override(
         )
     cell.code = payload.code
     cell.is_manual_override = True
+    if schedule.status is ScheduleStatus.published:
+        attendance_service.sync_planned_cell(db, cell.user_id, cell.work_date, cell.code)
     db.commit()
     db.refresh(schedule)
     return ScheduleResult(
@@ -165,10 +188,9 @@ def publish(db: Session, schedule_id: int) -> MonthlySchedule:
     schedule = _get_by_id(db, schedule_id)
     schedule.status = ScheduleStatus.published
     db.commit()
-    # Published assignments become the initial actual-attendance baseline.
-    # Existing actual edits are never overwritten by the seeding service.
-    from app.services import attendance_service
-
+    # Published assignments become the actual-attendance baseline: missing
+    # actuals are seeded and still-seeded ones re-synced (re-publish after a
+    # regenerate); admin-recorded actuals are never overwritten.
     attendance_service.seed_from_schedule(db, schedule.year, schedule.month)
     db.refresh(schedule)
     return schedule
@@ -197,6 +219,7 @@ def apply_shift_change(db: Session, req: ShiftChangeRequest) -> list[str]:
     if mine is None:
         raise HTTPException(status.HTTP_409_CONFLICT, detail=t("swap.no_schedule"))
 
+    changed = [mine]
     if req.kind is SwapKind.change_code:
         requester = db.get(User, req.requester_id)
         if requester is None:
@@ -206,7 +229,9 @@ def apply_shift_change(db: Session, req: ShiftChangeRequest) -> list[str]:
                 status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="A requested code is required for a code change.",
             )
-        role_code_validation.validate_planned(requester.role, req.requested_code)
+        # Re-checked here too: a request filed before the rule existed must
+        # not slip an AL/CD/admin code through approval.
+        role_code_validation.validate_requestable(requester.role, req.requested_code)
         mine.code = req.requested_code
         mine.is_manual_override = True
     else:  # swap_with — exchange the two users' codes for that date
@@ -221,13 +246,84 @@ def apply_shift_change(db: Session, req: ShiftChangeRequest) -> list[str]:
         counterpart = db.get(User, req.counterpart_user_id)
         if requester is None or counterpart is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail=t("user.not_found"))
-        role_code_validation.validate_planned(requester.role, theirs.code)
-        role_code_validation.validate_planned(counterpart.role, mine.code)
+        # Each person's resulting code must be one they could request: a swap
+        # must not hand over leave (AL), a comp day (CD) or an admin code.
+        role_code_validation.validate_requestable(requester.role, theirs.code)
+        role_code_validation.validate_requestable(counterpart.role, mine.code)
         mine.code, theirs.code = theirs.code, mine.code
         mine.is_manual_override = theirs.is_manual_override = True
+        changed.append(theirs)
 
+    if schedule.status is ScheduleStatus.published:
+        for cell in changed:
+            attendance_service.sync_planned_cell(db, cell.user_id, cell.work_date, cell.code)
     db.commit()
     return [f"{v.rule}: {v.message}" for v in _recheck_violations(db, schedule)]
+
+
+def apply_leave_span(
+    db: Session,
+    user_id: int,
+    start: date,
+    end: date,
+    code: AttendanceCode,
+    *,
+    only_if: AttendanceCode | None = None,
+    skip: AttendanceCode | None = None,
+) -> list[str]:
+    """B4 — write a leave decision (AL approve / X revoke) into generated months.
+
+    Regenerating would wipe manual edits, so the user's cells in every month
+    of the span that already has a schedule get the code directly (published
+    months also move their still-seeded actuals). ``only_if`` limits the write
+    to cells currently holding that code: revoke passes AL, so a cell the
+    admin re-coded after approval (or a CD) stays. ``skip`` leaves cells
+    holding that code alone: approve passes X, so the weekly off days stay X
+    (leave does not replace them, decision #4). A month without a schedule
+    needs nothing: it reads approved leave when generated. Returns [] when no
+    cell changed; otherwise the ``leave.schedule_applied`` notice, a note per
+    month not generated yet, then each changed month's re-check warnings.
+    Does not commit.
+    """
+    span = [start + timedelta(days=i) for i in range((end - start).days + 1)]
+    days = set(span)
+    updated: list[MonthlySchedule] = []
+    not_generated: list[str] = []
+    for year, month in sorted({(d.year, d.month) for d in span}):
+        schedule = (
+            db.query(MonthlySchedule)
+            .options(selectinload(MonthlySchedule.assignments))
+            .filter(MonthlySchedule.year == year, MonthlySchedule.month == month)
+            .one_or_none()
+        )
+        if schedule is None:
+            not_generated.append(f"{year}-{month:02d}: {t('leave.schedule_not_generated')}")
+            continue
+        changed = [
+            cell
+            for cell in schedule.assignments
+            if cell.user_id == user_id
+            and cell.work_date in days
+            and cell.code is not code
+            and (only_if is None or cell.code is only_if)
+            and (skip is None or cell.code is not skip)
+        ]
+        for cell in changed:
+            cell.code = code
+            if schedule.status is ScheduleStatus.published:
+                attendance_service.sync_planned_cell(db, user_id, cell.work_date, code)
+        if changed:
+            updated.append(schedule)
+    if not updated:
+        return []
+    db.flush()  # a later month's re-check reads the edited earlier month
+    warnings = [t("leave.schedule_applied"), *not_generated]
+    for schedule in updated:
+        warnings += [
+            f"{schedule.year}-{schedule.month:02d}: {v.message}"
+            for v in _recheck_violations(db, schedule)
+        ]
+    return warnings
 
 
 # --- internals -------------------------------------------------------------

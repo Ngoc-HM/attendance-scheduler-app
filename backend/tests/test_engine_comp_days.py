@@ -35,8 +35,7 @@ def _count(grid, uid, days, code) -> int:
 
 
 def test_owed_comp_days_are_auto_scheduled() -> None:
-    """carry_comp=3, no flights → solver grants exactly 3 CD, no shortfall.
-    CD is role-A only (owner decision 2026-06-26)."""
+    """carry_comp=3, no flights → solver grants exactly 3 CD, no shortfall."""
     days = month_days(2026, 7)
     people = [PersonInput(1, Role.A, carry_comp=3)]
     out = _solve(people, days)
@@ -56,8 +55,7 @@ def test_no_comp_debt_means_no_cd() -> None:
 
 
 def test_cd_is_on_top_of_weekly_off_quota() -> None:
-    """CD does not consume the 2 X/week quota — each full week still has 2 X.
-    Uses role A (the only role that can earn CD)."""
+    """CD does not consume the 2 X/week quota — each full week still has 2 X."""
     days = month_days(2026, 7)
     people = [PersonInput(1, Role.A, carry_comp=2)]
     out = _solve(people, days)
@@ -72,7 +70,7 @@ def test_cd_is_on_top_of_weekly_off_quota() -> None:
 
 def test_cd_counts_as_rest_not_work() -> None:
     """A CD day breaks the working streak: no consecutive-work violation fires
-    even when the owed comp rest sits next to working days. Role A only."""
+    even when the owed comp rest sits next to working days."""
     days = month_days(2026, 7)
     people = [PersonInput(1, Role.A, carry_comp=4)]
     out = _solve(people, days)
@@ -81,17 +79,18 @@ def test_cd_counts_as_rest_not_work() -> None:
     assert not [v for v in out.violations if v.rule.startswith("max_consecutive")]
 
 
-def test_role_t_carry_comp_ignored_no_cd_assigned() -> None:
-    """Role T has no CD var — carry_comp is irrelevant; solver assigns AD/X only."""
+def test_role_t_owed_cd_is_scheduled() -> None:
+    """Owner D1 (2026-11-06): holiday work earns CD for every role, so a role-T
+    person owed 1 comp day gets exactly 1 CD; every other cell is AD or X."""
     days = month_days(2026, 7)
-    people = [PersonInput(1, Role.T, carry_comp=3)]
+    people = [PersonInput(1, Role.T, carry_comp=1)]
     out = _solve(people, days)
 
     assert out.feasible and not out.violations
-    # No CD ever appears for role T.
-    assert _count(_grid(out), 1, days, AttendanceCode.CD) == 0
-    allowed = {AttendanceCode.AD, AttendanceCode.X}
-    assert all(a.code in allowed for a in out.assignments)
+    grid = _grid(out)
+    assert _count(grid, 1, days, AttendanceCode.CD) == 1
+    others = {AttendanceCode.AD, AttendanceCode.X}
+    assert all(grid[(1, d)] in others for d in days if grid[(1, d)] is not AttendanceCode.CD)
 
 
 def test_comp_days_yield_to_flight_staffing() -> None:

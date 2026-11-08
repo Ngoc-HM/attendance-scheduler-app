@@ -145,7 +145,7 @@ def export_user_data(db: Session, user_id: int) -> dict[str, Any]:
             user,
             (
                 "id", "username", "code", "full_name", "role", "status",
-                "annual_leave_balance", "carry_comp", "carry_streak",
+                "annual_leave_quota", "carry_comp", "carry_streak",
                 "carry_premium_off", "created_at", "updated_at",
             ),
         ),

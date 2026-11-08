@@ -26,12 +26,11 @@ class AuthRemoteDataSource {
   }
 
   /// POST /auth/register — self-registration (F-01). Account stays `pending`
-  /// until an admin approves it.
+  /// until an admin approves it; the admin assigns the role then (F-03).
   Future<UserModel> register({
     required String username,
     required String fullName,
     required String password,
-    required String role,
   }) async {
     final response = await _dio.post(
       ApiEndpoints.register,
@@ -39,7 +38,6 @@ class AuthRemoteDataSource {
         'username': username,
         'full_name': fullName,
         'password': password,
-        'role': role,
       },
     );
     return UserModel.fromJson(response.data as Map<String, dynamic>);

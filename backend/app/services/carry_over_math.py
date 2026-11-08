@@ -4,7 +4,10 @@ Carry values are recomputed ABSOLUTELY from the actual-record history so a
 re-run of the close is idempotent (decision in phase 07): never ``+=`` against
 the stored value.
 
-    carry_comp        = A/D earned − CD consumed over history          (floor 0)
+    carry_comp        = CD earned − CD consumed over history           (floor 0)
+                        earned: each A/D, plus each working day on a
+                        public holiday from the effective date on, for
+                        every role (owner D1 2026-11-06)
     carry_streak      = trailing working-day run of the closed month   (§5.5)
     carry_premium_off = OFF (X) days on Sat/Sun/holiday over history    (#6)
 """
@@ -24,9 +27,25 @@ _WORK = {
 }
 
 
-def comp_balance(records: list[tuple[date, AttendanceCode]]) -> int:
-    """Outstanding comp days: each A/D earns 1 CD; each CD code consumes 1."""
-    earned = sum(1 for _, c in records if c is AttendanceCode.A_D)
+def comp_balance(
+    records: list[tuple[date, AttendanceCode]],
+    holidays: set[date],
+    effective_from: date | None = None,
+) -> int:
+    """Outstanding comp days, the same rule for every role.
+
+    Each A/D earns 1 CD; any working code on a public holiday earns 1 more
+    (so A/D on a holiday earns 2); each CD code consumes 1. Holiday earning
+    starts at ``effective_from`` (``None`` = no cut-off) so it is never
+    applied retroactively; A/D earning is not date-gated.
+    """
+    earned = sum(1 for _, c in records if c is AttendanceCode.A_D) + sum(
+        1
+        for d, c in records
+        if c.is_working
+        and d in holidays
+        and (effective_from is None or d >= effective_from)
+    )
     consumed = sum(1 for _, c in records if c is AttendanceCode.CD)
     return max(0, earned - consumed)
 

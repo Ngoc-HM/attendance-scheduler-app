@@ -21,7 +21,6 @@ import '../../features/users/presentation/pages/users_page.dart';
 const _adminOnlyPaths = {
   AppRoute.flights,
   AppRoute.flightPresets,
-  AppRoute.attendance,
   AppRoute.reports,
   AppRoute.users,
 };
@@ -56,6 +55,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       if (user == null) {
         return _publicPaths.contains(path) ? null : AppRoute.login;
       }
+      // Signed in (login or a restored session): login/register are done.
+      if (_publicPaths.contains(path)) return AppRoute.schedule;
       if (user.isAdmin) return null;
       if (_adminOnlyPaths.contains(path)) return AppRoute.schedule;
       if (path == AppRoute.selfArrange && !user.role.canSelfArrange) {

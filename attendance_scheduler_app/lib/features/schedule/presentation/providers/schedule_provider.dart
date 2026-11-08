@@ -1,8 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/network/api_exception.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../../users/data/user_management_datasource.dart';
-import '../../../auth/domain/entities/user.dart';
 import '../../data/datasources/schedule_remote_datasource.dart';
 import '../../domain/entities/schedule_entities.dart';
 
@@ -11,7 +11,7 @@ import '../../domain/entities/schedule_entities.dart';
 class ScheduleState {
   const ScheduleState({
     this.schedule,
-    this.users = const [],
+    this.people = const [],
     this.isLoading = false,
     this.isMutating = false,
     this.error,
@@ -19,7 +19,10 @@ class ScheduleState {
   });
 
   final MonthlySchedule? schedule;
-  final List<User> users; // id→name map source (admin only)
+
+  /// id → code/role source for the roster columns (people are shown by
+  /// their confidential code, never by name).
+  final List<UserDirectoryEntry> people;
   final bool isLoading;
   final bool isMutating;
   final String? error;
@@ -27,7 +30,7 @@ class ScheduleState {
 
   ScheduleState copyWith({
     MonthlySchedule? schedule,
-    List<User>? users,
+    List<UserDirectoryEntry>? people,
     bool? isLoading,
     bool? isMutating,
     String? error,
@@ -37,7 +40,7 @@ class ScheduleState {
   }) =>
       ScheduleState(
         schedule: schedule ?? this.schedule,
-        users: users ?? this.users,
+        people: people ?? this.people,
         isLoading: isLoading ?? this.isLoading,
         isMutating: isMutating ?? this.isMutating,
         error: clearError ? null : (error ?? this.error),
@@ -53,20 +56,18 @@ class ScheduleController extends StateNotifier<ScheduleState> {
   final ScheduleRemoteDataSource _ds;
   final UserManagementDataSource _userDs;
 
+  /// Loads the month and the people behind its columns. GET /users is
+  /// admin-only, so employees read the name-free GET /users/directory.
   Future<void> load(int year, int month, {bool isAdmin = false}) async {
     state = state.copyWith(isLoading: true, clearError: true);
     try {
-      final futures = <Future>[
+      final results = await Future.wait<Object>([
         _ds.fetchSchedule(year, month),
-        if (isAdmin) _userDs.list(),
-      ];
-      final results = await Future.wait(futures);
-      final schedule = results[0] as MonthlySchedule;
-      final users =
-          (isAdmin && results.length > 1) ? results[1] as List<User> : <User>[];
+        isAdmin ? _allUsers() : _directoryOrEmpty(),
+      ]);
       state = state.copyWith(
-        schedule: schedule,
-        users: users,
+        schedule: results[0] as MonthlySchedule,
+        people: results[1] as List<UserDirectoryEntry>,
         isLoading: false,
       );
     } catch (e) {
@@ -74,6 +75,25 @@ class ScheduleController extends StateNotifier<ScheduleState> {
     }
   }
 
+  /// Admin view: every account (pending/disabled too), reduced to code + role.
+  Future<List<UserDirectoryEntry>> _allUsers() async => [
+    for (final u in await _userDs.list())
+      UserDirectoryEntry(id: u.id, code: u.code, role: u.role),
+  ];
+
+  /// Employee view: the directory only supplies column codes (rows fall back
+  /// to "ID n"), so its failure must not hide the published roster.
+  Future<List<UserDirectoryEntry>> _directoryOrEmpty() async {
+    try {
+      return await _userDs.directory();
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  /// Rethrows the backend's 409 (month published or manually edited, needs
+  /// [force]) so the page can confirm with the admin and retry; every other
+  /// failure lands in [ScheduleState.error].
   Future<void> generate(int year, int month, {bool force = false}) async {
     state = state.copyWith(isMutating: true, clearError: true, clearResult: true);
     try {
@@ -84,6 +104,10 @@ class ScheduleController extends StateNotifier<ScheduleState> {
         lastResult: result,
       );
     } catch (e) {
+      if (e is ApiException && e.statusCode == 409) {
+        state = state.copyWith(isMutating: false);
+        rethrow;
+      }
       state = state.copyWith(isMutating: false, error: e.toString());
     }
   }

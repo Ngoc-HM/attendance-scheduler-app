@@ -3,8 +3,8 @@
 Actual attendance wins over the planned schedule for the same user/day.  When
 an actual row is still missing (normal while next month's draft is generated),
 the planned assignment is the best available fact.  This lets the next month
-honour A/D compensation and month-boundary rest rules without requiring a
-manual "close month" step first.
+honour compensation (A/D, and holiday work for every role) and month-boundary
+rest rules without requiring a manual "close month" step first.
 """
 
 from __future__ import annotations
@@ -15,8 +15,9 @@ from datetime import date, timedelta
 
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.models.attendance import AttendanceRecord
-from app.models.enums import AttendanceCode, Role
+from app.models.enums import AttendanceCode
 from app.models.holiday import Holiday
 from app.models.schedule import ShiftAssignment
 from app.models.user import User
@@ -95,12 +96,14 @@ def build_boundary_states(
             if uid == user.id
         )
 
-        # Only role A earns/consumes automatic compensation.  Stored carry is a
-        # fallback for legacy databases where old schedule/actual rows are absent.
-        if user.role is Role.A:
-            carry_comp = comp_balance(records) if records else user.carry_comp
-        else:
-            carry_comp = 0
+        # Every role earns compensation (A/D, or working a public holiday from
+        # HOLIDAY_COMP_EFFECTIVE_FROM on) and consumes it with CD.  Stored carry
+        # is a fallback for legacy databases where old rows are absent.
+        carry_comp = (
+            comp_balance(records, holidays, settings.HOLIDAY_COMP_EFFECTIVE_FROM)
+            if records
+            else user.carry_comp
+        )
 
         # Premium-off fairness input (decision #6), same history-first rule.
         carry_premium_off = (
@@ -108,13 +111,16 @@ def build_boundary_states(
         )
 
         # Count a genuinely contiguous run ending on the previous month's last
-        # calendar day. Missing history falls back to the legacy stored scalar.
+        # calendar day. Only a user with NO history at all falls back to the
+        # legacy stored scalar; with history, a missing cell (e.g. on the
+        # cutoff day) is an unknown day treated as rest, so it breaks the run.
+        # Never reading the stored value back for such users keeps month-close
+        # from re-writing a stale streak forever.
         carry_streak = 0
-        cursor = cutoff
-        last_code = grid.get((user.id, cursor))
-        if last_code is None:
+        if not records:
             carry_streak = max(0, user.carry_streak)
         else:
+            cursor = cutoff
             while True:
                 code = grid.get((user.id, cursor))
                 if code is None or not code.is_working:
@@ -130,8 +136,8 @@ def build_boundary_states(
             if code is not None:
                 previous_working[day] = code.is_working
             else:
-                # Legacy fallback can reconstruct the known trailing work run;
-                # unknown older days are treated as rest rather than invented work.
+                # The no-history fallback reconstructs the stored trailing work
+                # run; any other unknown day is rest rather than invented work.
                 previous_working[day] = carry_streak > 0 and day >= streak_start
 
         states[user.id] = BoundaryState(

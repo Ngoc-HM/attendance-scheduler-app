@@ -33,6 +33,10 @@ class DsFlightRowData {
     required this.status,
   });
 
+  /// [status] code of a fully planned day; shown via `statusLabel`
+  /// (i18n key `statusComplete`).
+  static const String statusComplete = 'complete';
+
   final DateTime date;
   final int flightPairs;
   final String flights;
@@ -96,6 +100,10 @@ class DsReportRowData {
     required this.updated,
     required this.status,
   });
+
+  /// [status] code of a saved export; shown via `statusLabel` (i18n key
+  /// `statusReady`).
+  static const String statusReady = 'ready';
 
   final String name;
   final String period;
