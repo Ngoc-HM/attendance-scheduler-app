@@ -201,8 +201,11 @@ def test_republish_resyncs_untouched_seeded_actuals(client: TestClient) -> None:
             json={"user_id": u, "work_date": day, "code": "T"},
         )
         assert res.status_code == 200, res.text
-    # Draft edits stay out of the actuals until the month is published again.
-    assert _actual(client, admin, u, "2028-10-15")["code"] == regenerated
+    # I1 — a draft edit moves the still-seeded actual at once (the next
+    # month's boundary reads it); /attendance/me hides it until re-published.
+    # The admin-recorded actual keeps its code.
+    assert _actual(client, admin, u, "2028-10-15")["code"] == "T"
+    assert _actual(client, admin, u, "2028-10-16")["code"] == "B"
 
     pub = client.post(f"{V}/schedules/{sid}/publish", headers=admin)
     assert pub.status_code == 200, pub.text

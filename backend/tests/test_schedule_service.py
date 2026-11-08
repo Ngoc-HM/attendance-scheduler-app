@@ -512,7 +512,8 @@ def test_force_regenerate_hides_draft_seeded_actuals_from_employee(
     from app.core.config import settings
 
     monkeypatch.setattr(settings, "SOLVER_MAX_TIME_SECONDS", 5.0)
-    yr, mo = 2052, 5
+    # 2064-05: test_schedule_history publishes 2052-05 earlier in the run.
+    yr, mo = 2064, 5
     admin = _admin_headers(client)
     users = [_make_user(client, admin, f"draftleak_a{i}", "A") for i in (1, 2, 3, 4)]
     me = users[0]["id"]
@@ -698,3 +699,242 @@ def test_recheck_flags_disabled_user_ad_cells(client: TestClient) -> None:
         assert f"2052-03: {message}" in lines
         line = next(x for x in lines if message in x)
         assert line.count(str(duty_day)) == 1
+
+
+# --- Final review fixes (I1, I2, M1) -----------------------------------------
+
+
+def _seed_actuals(cells: dict[tuple[int, date], str]) -> None:
+    """Insert actuals as ``seed_from_schedule`` would (``recorded_by`` NULL)."""
+    from app.core.database import SessionLocal
+    from app.models.attendance import AttendanceRecord
+    from app.models.enums import AttendanceCode
+
+    with SessionLocal() as db:
+        for (user_id, day), code in cells.items():
+            db.add(
+                AttendanceRecord(
+                    user_id=user_id, work_date=day, code=AttendanceCode(code)
+                )
+            )
+        db.commit()
+
+
+def _actual(user_id: int, day: date) -> str | None:
+    from app.core.database import SessionLocal
+    from app.models.attendance import AttendanceRecord
+
+    with SessionLocal() as db:
+        row = (
+            db.query(AttendanceRecord)
+            .filter(AttendanceRecord.user_id == user_id, AttendanceRecord.work_date == day)
+            .one_or_none()
+        )
+        return None if row is None else row.code.value
+
+
+def test_force_regenerate_then_override_reaches_next_month_boundary(
+    client: TestClient, monkeypatch
+) -> None:
+    """I1 — after a forced regenerate the month is a draft, but its actuals
+    are still the seeded copies of the plan: an admin edit of the draft must
+    move them too, or next month's boundary keeps reading the replaced code.
+    A further regenerate of the (draft) month resyncs them as well."""
+    import calendar
+
+    from app.core.config import settings
+    from app.core.database import SessionLocal
+    from app.models.attendance import AttendanceRecord
+    from app.models.enums import AttendanceCode
+    from app.models.user import User
+    from app.services import schedule_history
+
+    monkeypatch.setattr(settings, "SOLVER_MAX_TIME_SECONDS", 5.0)
+    yr, mo = 2063, 1
+    last_day = date(yr, mo, calendar.monthrange(yr, mo)[1])
+    admin = _admin_headers(client)
+    users = [_make_user(client, admin, f"i1sync_a{i}", "A") for i in (1, 2, 3, 4)]
+    ids = {x["id"] for x in users}
+
+    gen = _generate(client, admin, yr, mo)
+    assert gen.status_code == 200 and gen.json()["feasible"] is True, gen.text
+    schedule_id = gen.json()["schedule"]["id"]
+    pub = client.post(f"{V}/schedules/{schedule_id}/publish", headers=admin)
+    assert pub.status_code == 200, pub.text
+
+    regen = _generate(client, admin, yr, mo, force=True)
+    assert regen.status_code == 200 and regen.json()["feasible"] is True, regen.text
+    assert regen.json()["schedule"]["status"] == "draft"
+    u = users[0]["id"]
+
+    def _boundary():  # noqa: ANN202
+        with SessionLocal() as db:
+            return schedule_history.build_boundary_states(
+                db, [db.get(User, u)], yr, mo + 1
+            )[u]
+
+    # Whatever the solver planned, make the seeded actual of the last day a
+    # working code, so the edit below has something to move.
+    with SessionLocal() as db:
+        db.query(AttendanceRecord).filter(
+            AttendanceRecord.user_id == u, AttendanceRecord.work_date == last_day
+        ).update({"code": AttendanceCode.A})
+        db.commit()
+    assert _boundary().prev_codes[-1] is AttendanceCode.A
+
+    res = client.post(
+        f"{V}/schedules/{schedule_id}/override", headers=admin,
+        json={"user_id": u, "work_date": last_day.isoformat(), "code": "X"},
+    )
+    assert res.status_code == 200, res.text
+    assert _actual(u, last_day) == "X"
+    state = _boundary()
+    assert state.prev_codes[-1] is AttendanceCode.X
+    assert state.previous_working[last_day] is False
+
+    # A stale seeded actual on the draft month follows the next regenerate.
+    stale_day = date(yr, mo, 3)
+    with SessionLocal() as db:
+        db.query(AttendanceRecord).filter(
+            AttendanceRecord.user_id == u, AttendanceRecord.work_date == stale_day
+        ).update({"code": AttendanceCode.O_D})
+        db.commit()
+    regen = _generate(client, admin, yr, mo, force=True)
+    assert regen.status_code == 200 and regen.json()["feasible"] is True, regen.text
+    plan = {
+        (a["user_id"], a["work_date"]): a["code"]
+        for a in regen.json()["schedule"]["assignments"]
+    }
+    rows = client.get(
+        f"{V}/attendance", params={"year": yr, "month": mo}, headers=admin
+    ).json()
+    mine = [r for r in rows if r["user_id"] in ids]
+    assert mine
+    for row in mine:
+        assert row["code"] == plan[(row["user_id"], row["work_date"])], row
+
+
+def test_draft_edits_move_seeded_actuals(client: TestClient) -> None:
+    """I1 — leave decisions and approved shift changes on a DRAFT month move
+    its still-seeded actuals (left over from an earlier publication)."""
+    from app.core.database import SessionLocal
+    from app.models.enums import AttendanceCode, SwapKind
+    from app.models.shift_change_request import ShiftChangeRequest
+    from app.services import schedule_service
+
+    admin = _admin_headers(client)
+    user = _make_user(client, admin, "i1draft_t1", "T")
+    uid = user["id"]
+    yr, mo = 2063, 3
+    leave_day, change_day = date(yr, mo, 5), date(yr, mo, 7)
+    _db_schedule(yr, mo, _month_cells(yr, mo, [uid], code="AD"))
+    _seed_actuals({(uid, leave_day): "AD", (uid, change_day): "AD"})
+
+    with SessionLocal() as db:
+        schedule_service.apply_leave_span(
+            db, uid, leave_day, leave_day, AttendanceCode.AL
+        )
+        db.commit()
+    assert _actual(uid, leave_day) == "AL"
+
+    with SessionLocal() as db:
+        req = ShiftChangeRequest(
+            requester_id=uid, work_date=change_day, kind=SwapKind.change_code,
+            requested_code=AttendanceCode.X,
+        )
+        schedule_service.apply_shift_change(db, req)
+        db.commit()
+    assert _actual(uid, change_day) == "X"
+
+
+def test_disabled_user_past_cells_still_count_as_cover(
+    client: TestClient, monkeypatch
+) -> None:
+    """I2 — a user disabled on the 15th really worked the days before: those
+    cells stay normal cover and are not flagged; only cells from business
+    today on are flagged and no longer count."""
+    from datetime import UTC, datetime
+
+    from app.core import business_time
+
+    monkeypatch.setattr(
+        business_time, "_utcnow", lambda: datetime(2063, 5, 15, 10, 0, tzinfo=UTC)
+    )
+    admin = _admin_headers(client)
+    a1 = _make_user(client, admin, "i2past_a1", "A")
+    a2 = _make_user(client, admin, "i2past_a2", "A")
+    past_day, today, future_day = date(2063, 5, 10), date(2063, 5, 15), date(2063, 5, 20)
+    cells = _month_cells(2063, 5, [a1["id"], a2["id"]])
+    for day in (past_day, today, future_day):
+        res = client.put(
+            f"{V}/flights/days", headers=admin,
+            json={"day": day.isoformat(), "flight_pairs": 1},
+        )
+        assert res.status_code in (200, 201), res.text
+        cells[(a1["id"], day)] = "A/D"  # a1 alone covers the day's pair
+    schedule_id = _db_schedule(2063, 5, cells)
+    res = client.patch(
+        f"{V}/users/{a1['id']}", headers=admin, json={"status": "disabled"}
+    )
+    assert res.status_code == 200, res.text
+
+    res = client.get(f"{V}/schedules/{schedule_id}/violations", headers=admin)
+    assert res.status_code == 200, res.text
+    items = res.json()
+
+    flagged = [
+        (v["day"], v["user_id"]) for v in items if v["rule"] == "disabled_user_duty"
+    ]
+    assert flagged == [
+        (today.isoformat(), a1["id"]), (future_day.isoformat(), a1["id"])
+    ]
+
+    def _short(day: date) -> bool:
+        return any(
+            "short flight coverage" in v["message"] and str(day) in v["message"]
+            for v in items
+        )
+
+    assert not _short(past_day)
+    assert _short(today) and _short(future_day)
+    # Per-person rules still never report the disabled user.
+    assert not any(f"User {a1['id']}:" in v["message"] for v in items)
+
+
+def test_resync_seeded_actuals_query_count_is_flat(client: TestClient) -> None:
+    """M1 — the regenerate resync reuses the month's loaded rows: the number
+    of statements does not grow with the number of actuals."""
+    from sqlalchemy import event
+
+    from app.core.database import SessionLocal, engine
+    from app.models.enums import AttendanceCode
+    from app.services import schedule_service
+
+    admin = _admin_headers(client)
+    u1 = _make_user(client, admin, "m1flat_t1", "T")["id"]
+    u2 = _make_user(client, admin, "m1flat_t2", "T")["id"]
+    yr, mo = 2063, 7
+
+    def _count_resync(user_ids: list[int]) -> int:
+        plan = {key: AttendanceCode.AD for key in _month_cells(yr, mo, user_ids)}
+        statements: list[str] = []
+
+        def _on_execute(_conn, _cursor, statement, *_args):  # noqa: ANN001, ANN202
+            statements.append(statement)
+
+        with SessionLocal() as db:
+            event.listen(engine, "before_cursor_execute", _on_execute)
+            try:
+                schedule_service._resync_seeded_actuals(db, yr, mo, plan)
+                db.flush()
+            finally:
+                event.remove(engine, "before_cursor_execute", _on_execute)
+            db.rollback()
+        return len([s for s in statements if s.lstrip().upper().startswith("SELECT")])
+
+    _seed_actuals(_month_cells(yr, mo, [u1]))
+    one_user = _count_resync([u1])
+    _seed_actuals(_month_cells(yr, mo, [u2]))
+    two_users = _count_resync([u1, u2])
+    assert one_user == two_users
+    assert two_users <= 2

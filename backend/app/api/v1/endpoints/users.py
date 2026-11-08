@@ -109,6 +109,6 @@ def delete_user(db: DbSession, user_id: int, admin: AdminUser) -> Response:
             actor_id, user_id, detail,
         )
         raise HTTPException(
-            status.HTTP_500_INTERNAL_SERVER_ERROR, detail=t("audit.write_failed")
+            status.HTTP_500_INTERNAL_SERVER_ERROR, detail=t("user.delete_failed")
         ) from exc
     return Response(status_code=status.HTTP_204_NO_CONTENT)

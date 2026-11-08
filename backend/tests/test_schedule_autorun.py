@@ -1,6 +1,7 @@
 """Autorun catch-up and diagnostics (review C4).
 
-The months used here (2036-2037) are touched by no other test file.
+The months used here (2036-2037, 2044-05..2044-09) are touched by no other
+test file.
 """
 
 from __future__ import annotations
@@ -153,6 +154,10 @@ def test_scheduler_tolerates_late_wakeup_and_checks_at_startup(
     """The daily job still fires when the host wakes up within an hour of
     00:05, and a startup check covers longer outages."""
     calls: list[str] = []
+    monkeypatch.setattr(
+        schedule_autorun, "maybe_draft_current_month", lambda: calls.append("current"),
+        raising=False,
+    )
     monkeypatch.setattr(schedule_autorun, "maybe_run_autorun", lambda: calls.append("run"))
 
     scheduler = start_scheduler(check_on_startup=False)
@@ -171,8 +176,85 @@ def test_scheduler_tolerates_late_wakeup_and_checks_at_startup(
     assert scheduler is not None
     try:
         deadline = time.monotonic() + 10
-        while not calls and time.monotonic() < deadline:
+        while len(calls) < 2 and time.monotonic() < deadline:
             time.sleep(0.05)
     finally:
         scheduler.shutdown(wait=True)
-    assert calls == ["run"]
+    # M3: the check drafts a missing CURRENT month first, then next month.
+    assert calls == ["current", "run"]
+
+
+# --- Final review fixes (M3, M4); months 2044-05..2044-09 -------------------
+
+
+def test_check_drafts_missing_current_month(
+    client: TestClient, autorun_on: None
+) -> None:
+    """M3 — a host that was off across the whole run window (or a fresh
+    install) has no schedule for the CURRENT month: the startup / catch-up
+    check drafts it, on any day, and never regenerates it once present."""
+    assert not _schedule_exists(2044, 5)
+    assert schedule_autorun.maybe_draft_current_month(date(2044, 5, 3)) is True
+    assert _schedule_exists(2044, 5)
+    assert schedule_autorun.maybe_draft_current_month(date(2044, 5, 4)) is False
+
+
+def test_current_month_check_respects_autorun_switch(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(settings, "AUTORUN_ENABLED", False)
+    assert schedule_autorun.maybe_draft_current_month(date(2044, 9, 3)) is False
+    assert not _schedule_exists(2044, 9)
+
+
+def test_autorun_job_checks_current_then_next_month(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[str] = []
+    monkeypatch.setattr(
+        schedule_autorun, "maybe_draft_current_month", lambda: calls.append("current"),
+        raising=False,
+    )
+    monkeypatch.setattr(schedule_autorun, "maybe_run_autorun", lambda: calls.append("next"))
+    schedule_autorun._run_autorun_job()
+    assert calls == ["current", "next"]
+
+
+def test_autorun_lost_race_logs_info_not_error(
+    client: TestClient,
+    autorun_on: None,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """M4 — another backend inserted the month while this one was solving:
+    the unique key (uq_schedule_year_month) rejects the second insert. That
+    is "already exists", an INFO line, not a failure."""
+    from app.services import schedule_input_builder
+
+    real_build = schedule_input_builder.build
+
+    def build_then_lose_race(db, year, month):  # noqa: ANN001, ANN202
+        inp = real_build(db, year, month)
+        other = SessionLocal()
+        try:
+            other.add(MonthlySchedule(year=year, month=month))
+            other.commit()
+        finally:
+            other.close()
+        return inp
+
+    monkeypatch.setattr(schedule_input_builder, "build", build_then_lose_race)
+    with caplog.at_level(logging.INFO, logger=LOGGER):
+        assert maybe_run_autorun(date(2044, 6, 21)) is False
+
+    ours = [r for r in caplog.records if r.name == LOGGER]
+    assert not any(r.levelno >= logging.ERROR for r in ours), [
+        r.getMessage() for r in ours
+    ]
+    assert any(
+        r.levelno == logging.INFO
+        and "2044-07" in r.getMessage()
+        and "already exists" in r.getMessage()
+        for r in ours
+    )
+    assert _schedule_exists(2044, 7)

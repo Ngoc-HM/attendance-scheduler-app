@@ -19,6 +19,9 @@ from sqlalchemy.engine.url import make_url
 # Dev-only defaults. ``validate_for_environment`` refuses to start a
 # staging/prod process that still carries them.
 _DEFAULT_SECRET_KEY = "CHANGE_ME_dev_only_secret"
+# Placeholder shipped in backend/.env.example: long enough for the length
+# check, so it is refused by value.
+_PLACEHOLDER_SECRET_KEYS = {_DEFAULT_SECRET_KEY, "please-generate-a-long-random-string"}
 _DEFAULT_ADMIN_PASSWORD = "admin123"
 _DEFAULT_DATABASE_URL = "postgresql+psycopg2://postgres:postgres@localhost:5432/attendance"
 _MIN_SECRET_LENGTH = 32
@@ -135,10 +138,14 @@ class Settings(BaseSettings):
         if not self.is_production:
             return []
         errors: list[str] = []
-        if self.SECRET_KEY == _DEFAULT_SECRET_KEY or len(self.SECRET_KEY) < _MIN_SECRET_LENGTH:
+        if (
+            self.SECRET_KEY in _PLACEHOLDER_SECRET_KEYS
+            or len(self.SECRET_KEY) < _MIN_SECRET_LENGTH
+        ):
             errors.append(
                 f"SECRET_KEY must be a random string of at least {_MIN_SECRET_LENGTH} "
-                "characters (it still holds the dev default or is too short)"
+                "characters (it still holds the dev default or the .env.example "
+                "placeholder, or is too short)"
             )
         if (
             self.FIRST_ADMIN_PASSWORD == _DEFAULT_ADMIN_PASSWORD

@@ -62,7 +62,10 @@ def purge_before(
     floor = _months_before(today, settings.retention_floor_months)
     if cutoff > floor:
         raise HTTPException(
-            status.HTTP_400_BAD_REQUEST, detail=t("compliance.retention_too_short")
+            status.HTTP_400_BAD_REQUEST,
+            detail=t("compliance.retention_too_short").format(
+                months=settings.retention_floor_months
+            ),
         )
 
     cutoff_dt = datetime.combine(cutoff, time.min)

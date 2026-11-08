@@ -143,7 +143,7 @@ def seed_from_schedule(db: Session, year: int, month: int) -> int:
             )
             seeded += 1
         else:
-            _follow_plan(cell, a.code)
+            follow_plan(cell, a.code)
     db.commit()
     return seeded
 
@@ -151,17 +151,21 @@ def seed_from_schedule(db: Session, year: int, month: int) -> int:
 def sync_planned_cell(
     db: Session, user_id: int, work_date: date, code: AttendanceCode
 ) -> bool:
-    """Carry an edit of a PUBLISHED roster cell into its seeded actual (B5).
+    """Carry an edit of a roster cell into its seeded actual (B5, I1).
+
+    Draft or published: a draft can still hold actuals seeded while it was
+    published (forced regenerate), and the next month's boundary reads them.
+    Never inserts a row, so a never-published draft gains no actuals.
 
     Only an actual nobody recorded by hand (``recorded_by`` NULL, i.e. left as
     ``seed_from_schedule`` wrote it) follows the plan; an admin-recorded cell
     always wins. Does not commit. Returns True when the actual was updated.
     """
     cell = _get_cell(db, user_id, work_date)
-    return cell is not None and _follow_plan(cell, code)
+    return cell is not None and follow_plan(cell, code)
 
 
-def _follow_plan(cell: AttendanceRecord, code: AttendanceCode) -> bool:
+def follow_plan(cell: AttendanceRecord, code: AttendanceCode) -> bool:
     """Set a still-seeded actual (``recorded_by`` NULL) to the planned code.
 
     A sick day (S) never follows the plan, whoever recorded it: the planned

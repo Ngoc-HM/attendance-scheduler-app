@@ -4,7 +4,8 @@ Called from the FastAPI lifespan on startup. Two jobs:
 
 1. (dev) create tables so the API runs locally without an Alembic step;
    production should manage schema with migrations instead. Skipped once the
-   database carries ``alembic_version`` (Alembic owns the schema then).
+   database carries ``alembic_version`` (Alembic owns the schema then), and
+   warn (never block) when that revision is behind the code's migration head.
 2. Ensure an admin can log in: the seed admin (role M) is created only while
    no ACTIVE admin exists, so a seed account an admin deleted on purpose is
    not resurrected on the next restart. In DEV only
@@ -17,6 +18,7 @@ from __future__ import annotations
 
 import logging
 from datetime import time
+from pathlib import Path
 
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.engine.url import make_url
@@ -88,6 +90,44 @@ def create_tables_if_enabled() -> None:
         return
     Base.metadata.create_all(bind=engine)
     logger.info("Database tables ensured (AUTO_CREATE_TABLES=on).")
+
+
+ALEMBIC_DIR = Path(__file__).resolve().parents[2] / "alembic"
+
+
+def alembic_script_head() -> str | None:
+    """The newest migration revision shipped with this code (None if unknown)."""
+    from alembic.script import ScriptDirectory
+
+    heads = ScriptDirectory(str(ALEMBIC_DIR)).get_heads()
+    return heads[0] if len(heads) == 1 else None
+
+
+def warn_if_schema_outdated() -> None:
+    """Log a WARNING when the database is not at the code's migration head.
+
+    Only for databases Alembic manages (an ``alembic_version`` table); a dev
+    database built by ``create_all`` has none and is skipped. Never blocks
+    startup: any failure of the check itself is logged and ignored (M2).
+    """
+    try:
+        if not inspect(engine).has_table("alembic_version"):
+            return
+        with engine.connect() as conn:
+            current = sorted(
+                row[0] for row in conn.execute(text("SELECT version_num FROM alembic_version"))
+            )
+        head = alembic_script_head()
+        if head is None or current == [head]:
+            return
+        logger.warning(
+            "Database schema revision %s differs from the code's migration head %s; "
+            "run 'alembic upgrade head' (the API may fail on missing columns).",
+            ", ".join(current) or "(none)", head,
+        )
+    except Exception:  # noqa: BLE001 — a diagnostic must never stop startup
+        logger.warning("Could not compare the database schema revision with the "
+                       "migration head.", exc_info=True)
 
 
 def ensure_first_admin(db: Session) -> User | None:
@@ -192,6 +232,7 @@ def run_startup_bootstrap() -> None:
     if not settings.is_production:
         ensure_database_exists()
     create_tables_if_enabled()
+    warn_if_schema_outdated()
     db = SessionLocal()
     try:
         ensure_first_admin(db)
