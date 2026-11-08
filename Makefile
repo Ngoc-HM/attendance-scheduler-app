@@ -43,7 +43,7 @@ frontend:
 	cd $(FLUTTER_DIR) && flutter run -d $(DEVICE)
 
 install:
-	cd $(BACKEND_DIR) && python3 -m venv .venv && $(VENV_PY) -m pip install --upgrade pip && $(VENV_PY) -m pip install -r requirements-dev.txt
+	cd $(BACKEND_DIR) && python3 -m venv .venv && $(VENV_PY) -m pip install --upgrade pip && $(VENV_PY) -m pip install -r requirements-dev.txt -c requirements.lock
 	cd $(FLUTTER_DIR) && flutter pub get
 
 test:
