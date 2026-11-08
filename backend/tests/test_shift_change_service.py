@@ -7,8 +7,9 @@ Coverage targets:
 - missing requested_code for change_code kind → 400.
 - missing counterpart_user_id for swap_with kind → 400.
 - strict_review true for A role, false for T role.
-- decide approve → status approved + "schedule application pending" warning.
+- decide approve with no schedule for the month → 409, request stays pending.
 - re-decide → 409.
+- a swap that would hand leave (AL) to the counterpart → 422 at approval.
 """
 
 from __future__ import annotations

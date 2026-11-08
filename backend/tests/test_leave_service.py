@@ -931,16 +931,22 @@ def test_balance_endpoint_self_and_admin(client: TestClient) -> None:
 
 def _long_text_cases():
     from app.models.attendance import AttendanceRecord
+    from app.models.flight import Flight, FlightPreset
     from app.models.leave import LeaveRequest
     from app.models.self_arrange_request import SelfArrangeRequest
     from app.models.shift_change_request import ShiftChangeRequest
     from app.models.user import User
     from app.schemas.attendance import AttendanceUpsert
+    from app.schemas.flight import FlightPresetUpsert, FlightUpsert
     from app.schemas.leave import LeaveCreate
     from app.schemas.self_arrange import SelfArrangeCreate
     from app.schemas.shift_change import ShiftChangeCreate
     from app.schemas.user import UserUpdate
 
+    _preset_body = {
+        "route": "HAN-FRA", "flt_arr": 37, "flt_dep": 36,
+        "sta": "06:00:00", "std": "08:00:00",
+    }
     return [
         pytest.param(
             LeaveRequest.__table__.c.note, LeaveCreate, "note", "post", "/leaves",
@@ -970,6 +976,21 @@ def _long_text_cases():
             User.__table__.c.full_name, UserUpdate, "full_name",
             "patch", "/users/1", {},
             id="user-full-name",
+        ),
+        pytest.param(
+            Flight.__table__.c.route, FlightUpsert, "route", "put", "/flights",
+            {"day": "2061-05-04", "flt_number": 37},
+            id="flight-route",
+        ),
+        pytest.param(
+            FlightPreset.__table__.c.label, FlightPresetUpsert, "label",
+            "post", "/flights/presets", _preset_body,
+            id="flight-preset-label",
+        ),
+        pytest.param(
+            FlightPreset.__table__.c.route, FlightPresetUpsert, "route",
+            "post", "/flights/presets", {**_preset_body, "label": "r2 long route"},
+            id="flight-preset-route",
         ),
     ]
 

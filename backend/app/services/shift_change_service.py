@@ -1,9 +1,10 @@
 """Shift-change request logic (locked decision #8, spec §3).
 
 Handles create / list / approve / reject for ShiftChangeRequest.
-- create: validates requester_id == current user; enforces kind-specific fields.
-- decide: idempotent guard; on approval lazily calls schedule_service.apply_shift_change
-  if available; if missing or NotImplementedError → still approves + adds warning.
+- create: the requester's own planned cell only; enforces kind-specific fields,
+  a changeable cell (not AL/CD/S/admin codes) and a valid swap partner.
+- decide: row-locked, 409 once decided; on approval applies the change via
+  schedule_service.apply_shift_change and commits cells + status together.
 - strict_review flag is derived at call-site from requester.role.is_fixed (not stored).
 """
 
@@ -20,7 +21,7 @@ from app.models.schedule import MonthlySchedule, ShiftAssignment
 from app.models.shift_change_request import ShiftChangeRequest
 from app.models.user import User
 from app.schemas.shift_change import ShiftChangeCreate
-from app.services import role_code_validation
+from app.services import role_code_validation, schedule_service
 
 # ---------------------------------------------------------------------------
 # Internal helpers
@@ -189,11 +190,14 @@ def decide(
 ) -> tuple[ShiftChangeRequest, bool, list[str]]:
     """Admin approve or reject a shift-change request.
 
-    On approval, lazily attempts to call schedule_service.apply_shift_change.
-    If that seam is missing or raises NotImplementedError the request is still
-    approved and a warning is added to the response.
+    The request row is locked first; a request that is no longer pending → 409
+    ``swap.already_decided``. On approval the change is written into the
+    schedule by ``schedule_service.apply_shift_change`` (its HTTPException —
+    no schedule, locked cell, non-requestable code — propagates and nothing is
+    committed). Cells and status are committed together.
 
-    Returns (request, strict_review, warnings).
+    Returns (request, strict_review, warnings) — warnings are the schedule
+    re-check after the change.
     """
     # Row lock (PostgreSQL): a second approve waits here until the first one
     # commits, then sees the request decided — a swap is never applied twice.
@@ -206,18 +210,8 @@ def decide(
     warnings: list[str] = []
 
     if new_status == LeaveStatus.approved:
-        # Phase-05 seam: apply the change to the persisted schedule.
-        # HTTPException (e.g. no schedule for that month) propagates to the
-        # caller — approving a change that cannot be applied is an error.
-        try:
-            import app.services.schedule_service as svc  # noqa: PLC0415
-
-            apply_fn = getattr(svc, "apply_shift_change", None)
-            if apply_fn is None:
-                raise NotImplementedError
-            warnings.extend(apply_fn(db, req))
-        except NotImplementedError:
-            warnings.append("schedule application pending")
+        # Approving a change that cannot be applied is an error (propagates).
+        warnings.extend(schedule_service.apply_shift_change(db, req))
 
     req.status = new_status
     req.decided_by_id = admin_id
