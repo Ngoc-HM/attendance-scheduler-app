@@ -359,6 +359,14 @@ class AppLocalizations {
       'requestRevoked': 'Approval revoked.',
       // --- User management guards (CSV TC-005/006/007/008) ---
       'usernameTaken': 'That username is already taken.',
+      // --- Request errors by status code + inactive account (review 2026-11-08) ---
+      'requestFailed': 'The request failed. Please try again.',
+      'requestServerUnavailable':
+          'Cannot reach the server. Check the connection and try again.',
+      'requestServerError':
+          'The server ran into an error. Please try again later.',
+      'authAccountInactive':
+          'Your account is no longer active. Please contact an admin.',
       'lastAdminWarning':
           'You are about to act on the last remaining admin. This action cannot proceed.',
       'lastAdminDialogMessage':
@@ -752,6 +760,13 @@ class AppLocalizations {
       'requestRevoked': 'Đã hủy duyệt.',
       // --- User management guards (CSV TC-005/006/007/008) ---
       'usernameTaken': 'Tên đăng nhập đã tồn tại.',
+      // --- Request errors by status code + inactive account (review 2026-11-08) ---
+      'requestFailed': 'Yêu cầu không thành công. Vui lòng thử lại.',
+      'requestServerUnavailable':
+          'Không kết nối được máy chủ. Hãy kiểm tra kết nối rồi thử lại.',
+      'requestServerError': 'Máy chủ gặp lỗi. Vui lòng thử lại sau.',
+      'authAccountInactive':
+          'Tài khoản của bạn không còn hoạt động. Vui lòng liên hệ quản trị viên.',
       'lastAdminWarning':
           'Bạn sắp thao tác lên admin cuối cùng. Thao tác này không thể tiếp tục.',
       'lastAdminDialogMessage':
@@ -957,6 +972,7 @@ class AppLocalizations {
     'http_failure' => text('authHttpFailure'),
     'unknown_failure' => text('authUnknownFailure'),
     'session_expired' => text('authSessionExpired'),
+    'account_inactive' => text('authAccountInactive'),
     null => '',
     _ => code,
   };
