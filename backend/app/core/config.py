@@ -23,6 +23,9 @@ _DEFAULT_ADMIN_PASSWORD = "admin123"
 _DEFAULT_DATABASE_URL = "postgresql+psycopg2://postgres:postgres@localhost:5432/attendance"
 _MIN_SECRET_LENGTH = 32
 _MIN_ADMIN_PASSWORD_LENGTH = 12
+# German working-time records must be kept at least 24 months (ArbZG §16(2)).
+# DATA_RETENTION_MIN_MONTHS may raise this floor; the env can never lower it.
+LEGAL_RETENTION_FLOOR_MONTHS = 24
 
 
 class Settings(BaseSettings):
@@ -110,13 +113,18 @@ class Settings(BaseSettings):
     # must be kept at least 24 months (ArbZG §16(2)); the customer's DPO owns
     # the final figure — 36 months is the shipped default.
     DATA_RETENTION_MONTHS: int = 36
-    DATA_RETENTION_MIN_MONTHS: int = 24
+    DATA_RETENTION_MIN_MONTHS: int = LEGAL_RETENTION_FLOOR_MONTHS
 
     # --- Environment guard -------------------------------------------------
     @property
     def is_production(self) -> bool:
         """staging and prod are both production-like: no dev conveniences."""
         return self.ENVIRONMENT != "dev"
+
+    @property
+    def retention_floor_months(self) -> int:
+        """The effective retention floor: never below the legal 24 months."""
+        return max(LEGAL_RETENTION_FLOOR_MONTHS, self.DATA_RETENTION_MIN_MONTHS)
 
     def production_config_errors(self) -> list[str]:
         """Unsafe defaults that must never reach a production-like process."""
@@ -154,10 +162,15 @@ class Settings(BaseSettings):
                 "AUTO_CREATE_TABLES must be false; manage the schema with "
                 "'alembic upgrade head'"
             )
-        if self.DATA_RETENTION_MONTHS < self.DATA_RETENTION_MIN_MONTHS:
+        if self.DATA_RETENTION_MIN_MONTHS < LEGAL_RETENTION_FLOOR_MONTHS:
             errors.append(
-                f"DATA_RETENTION_MONTHS={self.DATA_RETENTION_MONTHS} is below the legal "
-                f"minimum DATA_RETENTION_MIN_MONTHS={self.DATA_RETENTION_MIN_MONTHS}"
+                f"DATA_RETENTION_MIN_MONTHS={self.DATA_RETENTION_MIN_MONTHS} is below the "
+                f"legal floor of {LEGAL_RETENTION_FLOOR_MONTHS} months (ArbZG §16(2))"
+            )
+        if self.DATA_RETENTION_MONTHS < self.retention_floor_months:
+            errors.append(
+                f"DATA_RETENTION_MONTHS={self.DATA_RETENTION_MONTHS} is below the "
+                f"minimum of {self.retention_floor_months} months"
             )
         return errors
 

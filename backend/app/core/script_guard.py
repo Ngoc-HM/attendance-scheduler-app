@@ -94,10 +94,13 @@ def load_backend_env(env_file: Path) -> bool:
 def read_password(cli_value: str | None) -> str | None:
     """The ``--password`` value, else a getpass prompt (asked twice).
 
-    Returns None (after printing why, never the password) when the two
-    entries differ or are empty.
+    Returns None (after printing why, never the password) when the password
+    is empty (given or typed) or the two typed entries differ.
     """
     if cli_value is not None:
+        if not cli_value:
+            print("Refusing to run: the password is empty.", file=sys.stderr)
+            return None
         return cli_value
     first = getpass.getpass("New password: ")
     second = getpass.getpass("Repeat password: ")

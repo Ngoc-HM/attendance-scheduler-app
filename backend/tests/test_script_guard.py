@@ -173,3 +173,17 @@ def test_read_password_refuses_mismatch_or_empty(
     assert out.err  # says why
     for answer in filter(None, answers):
         assert answer not in out.err + out.out  # never echoes a password
+
+
+def test_read_password_refuses_empty_cli_value(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``--password ""`` is refused like an empty prompt, without prompting."""
+    from app.core import script_guard
+
+    def no_prompt(prompt: str = "") -> str:
+        raise AssertionError("must not prompt when --password is given")
+
+    monkeypatch.setattr(script_guard.getpass, "getpass", no_prompt)
+    assert script_guard.read_password("") is None
+    assert "empty" in capsys.readouterr().err

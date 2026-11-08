@@ -42,7 +42,7 @@ def next_month(today: date) -> tuple[int, int]:
     return (today.year + 1, 1) if today.month == 12 else (today.year, today.month + 1)
 
 
-def _month_bounds(year: int, month: int) -> tuple[date, date]:
+def _month_start_and_next(year: int, month: int) -> tuple[date, date]:
     """First day of the month and first day of the following month."""
     ny, nm = next_month(date(year, month, 1))
     return date(year, month, 1), date(ny, nm, 1)
@@ -74,7 +74,7 @@ def maybe_run_autorun(today: date | None = None) -> bool:
             logger.info("Autorun: schedule %s-%02d already exists, skipping.", year, month)
             return False
 
-        first, after = _month_bounds(year, month)
+        first, after = _month_start_and_next(year, month)
         has_flights = (
             db.query(FlightDay.id)
             .filter(FlightDay.day >= first, FlightDay.day < after)

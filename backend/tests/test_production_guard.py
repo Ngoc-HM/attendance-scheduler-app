@@ -93,6 +93,35 @@ def test_prod_guard_refuses_sqlite_cors_star_autocreate_short_retention(env: str
     assert at_minimum.production_config_errors() == []
 
 
+@pytest.mark.parametrize("env", ["staging", "prod"])
+def test_prod_guard_retention_floor_cannot_be_lowered_by_env(env: str) -> None:
+    """The legal 24-month floor is a constant: lowering DATA_RETENTION_MIN_MONTHS
+    does not make a shorter retention acceptable; raising it does tighten it."""
+    from app.core.config import LEGAL_RETENTION_FLOOR_MONTHS
+
+    assert LEGAL_RETENTION_FLOOR_MONTHS == 24
+    lowered = _settings(
+        ENVIRONMENT=env, **STRONG_PROD, DATA_RETENTION_MIN_MONTHS=6, DATA_RETENTION_MONTHS=12
+    )
+    assert lowered.retention_floor_months == 24
+    errors = lowered.production_config_errors()
+    assert any("DATA_RETENTION_MIN_MONTHS" in e for e in errors)
+    assert any("DATA_RETENTION_MONTHS=12" in e for e in errors)
+    with pytest.raises(RuntimeError, match="Refusing to start"):
+        lowered.validate_for_environment()
+
+    # Lowering the floor alone is refused even when the retention is long.
+    assert _settings(
+        ENVIRONMENT=env, **STRONG_PROD, DATA_RETENTION_MIN_MONTHS=12
+    ).production_config_errors()
+
+    raised = _settings(
+        ENVIRONMENT=env, **STRONG_PROD, DATA_RETENTION_MIN_MONTHS=48, DATA_RETENTION_MONTHS=36
+    )
+    assert raised.retention_floor_months == 48
+    assert any("DATA_RETENTION_MONTHS=36" in e for e in raised.production_config_errors())
+
+
 def test_dev_still_starts_with_sqlite_cors_star_and_autocreate() -> None:
     """The dev .env (SQLite or local PG, CORS '*', AUTO_CREATE_TABLES) runs."""
     s = _settings(

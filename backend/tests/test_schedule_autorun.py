@@ -23,7 +23,9 @@ LOGGER = "app.services.schedule_autorun"
 
 
 @pytest.fixture
-def autorun_on(monkeypatch: pytest.MonkeyPatch) -> None:
+def autorun_on(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Enable autorun only after the ``client`` lifespan has started, so the
+    app's startup check never runs with it on (it would use the real date)."""
     monkeypatch.setattr(settings, "AUTORUN_ENABLED", True)
     monkeypatch.setattr(settings, "AUTORUN_DAY", 20)
     monkeypatch.setattr(settings, "SOLVER_MAX_TIME_SECONDS", 5.0)
