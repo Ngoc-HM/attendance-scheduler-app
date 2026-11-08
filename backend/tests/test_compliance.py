@@ -119,6 +119,29 @@ def test_purge_floor_uses_effective_retention_floor(
     assert exc.value.status_code == 400
 
 
+@pytest.mark.parametrize("lang", ["en", "vi"])
+def test_retention_too_short_names_the_effective_floor(
+    monkeypatch: pytest.MonkeyPatch, lang: str
+) -> None:
+    """The refusal states the floor that was actually applied: a configured
+    36-month minimum reads 36, not the legal 24 hard-coded in the text."""
+    from app.core.i18n import set_request_language
+
+    monkeypatch.setattr(settings, "DATA_RETENTION_MIN_MONTHS", 36)
+    set_request_language(lang)
+    try:
+        with SessionLocal() as db, pytest.raises(HTTPException) as exc:
+            # 30 months back: allowed by the legal 24, refused by 36.
+            compliance_service.purge_before(
+                db, cutoff=date(1997, 7, 1), today=date(2000, 1, 1)
+            )
+    finally:
+        set_request_language(None)
+    assert exc.value.status_code == 400
+    assert "36" in exc.value.detail and "24" not in exc.value.detail
+    assert "{" not in exc.value.detail
+
+
 def test_export_timestamp_uses_business_clock(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:

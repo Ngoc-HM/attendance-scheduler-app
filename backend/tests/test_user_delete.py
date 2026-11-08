@@ -258,6 +258,13 @@ def test_delete_failing_after_guards_rolls_back_audit_and_user(
     )
 
     assert res.status_code == 500
+    # A failed delete is reported as such, not as an audit-log failure.
+    from app.core.i18n import MESSAGES, t
+
+    assert res.json()["detail"] == t("user.delete_failed")
+    for lang in ("en", "vi"):
+        assert "user.delete_failed" in MESSAGES[lang]
+        assert MESSAGES[lang]["user.delete_failed"] != MESSAGES[lang]["audit.write_failed"]
     db = SessionLocal()
     try:
         assert db.get(User, victim) is not None

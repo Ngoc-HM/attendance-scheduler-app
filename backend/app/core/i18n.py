@@ -124,9 +124,10 @@ MESSAGES: dict[str, dict[str, str]] = {
             "Decision status must be 'approved' or 'rejected'."
         ),
         "compliance.retention_too_short": (
-            "Retention cutoff must be at least 24 months in the past "
+            "Retention cutoff must be at least {months} months in the past "
             "(working-time records, ArbZG §16)."
         ),
+        "user.delete_failed": "Deleting the user failed; nothing was changed.",
     },
     "vi": {
         "auth.invalid_credentials": "Sai tên đăng nhập hoặc mật khẩu.",
@@ -229,9 +230,10 @@ MESSAGES: dict[str, dict[str, str]] = {
             "Trạng thái quyết định phải là 'approved' (duyệt) hoặc 'rejected' (từ chối)."
         ),
         "compliance.retention_too_short": (
-            "Mốc xóa dữ liệu phải cách hiện tại ít nhất 24 tháng "
+            "Mốc xóa dữ liệu phải cách hiện tại ít nhất {months} tháng "
             "(hồ sơ giờ làm, ArbZG §16)."
         ),
+        "user.delete_failed": "Xóa người dùng thất bại; chưa có thay đổi nào được lưu.",
     },
 }
 
