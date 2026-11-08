@@ -20,6 +20,10 @@ from app.models.schedule import MonthlySchedule
 from app.services import schedule_autorun
 from app.services.schedule_autorun import maybe_run_autorun, start_scheduler
 
+# Full-month solves over every user in the shared session DB: a short limit
+# times out on slower CI runners (two-phase solve gives phase 1 only 40 %).
+GENERATE_TIME_LIMIT = 20.0
+
 LOGGER = "app.services.schedule_autorun"
 
 
@@ -29,7 +33,7 @@ def autorun_on(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     app's startup check never runs with it on (it would use the real date)."""
     monkeypatch.setattr(settings, "AUTORUN_ENABLED", True)
     monkeypatch.setattr(settings, "AUTORUN_DAY", 20)
-    monkeypatch.setattr(settings, "SOLVER_MAX_TIME_SECONDS", 5.0)
+    monkeypatch.setattr(settings, "SOLVER_MAX_TIME_SECONDS", GENERATE_TIME_LIMIT)
 
 
 def _schedule_exists(year: int, month: int) -> bool:

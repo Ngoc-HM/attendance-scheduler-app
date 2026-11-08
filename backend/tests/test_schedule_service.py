@@ -8,6 +8,10 @@ from fastapi.testclient import TestClient
 
 from app.core.i18n import t
 
+# Full-month solves over every user in the shared session DB: a short limit
+# times out on slower CI runners (two-phase solve gives phase 1 only 40 %).
+GENERATE_TIME_LIMIT = 20.0
+
 V = "/api/v1"
 YEAR, MONTH = 2027, 3  # a clean month nothing else touches
 
@@ -214,7 +218,7 @@ def test_autorun_trigger_logic(client: TestClient, monkeypatch) -> None:
     # The suite turns autorun off by default; enable it so the trigger runs.
     monkeypatch.setattr(settings, "AUTORUN_ENABLED", True)
     monkeypatch.setattr(settings, "AUTORUN_DAY", 20)
-    monkeypatch.setattr(settings, "SOLVER_MAX_TIME_SECONDS", 5.0)
+    monkeypatch.setattr(settings, "SOLVER_MAX_TIME_SECONDS", GENERATE_TIME_LIMIT)
     admin = _admin_headers(client)
 
     assert next_month(date(2026, 12, 20)) == (2027, 1)
@@ -236,7 +240,7 @@ def test_autorun_fires_day_after_close(client: TestClient, monkeypatch) -> None:
 
     monkeypatch.setattr(settings, "AUTORUN_ENABLED", True)
     monkeypatch.setattr(settings, "AUTORUN_DAY", 20)
-    monkeypatch.setattr(settings, "SOLVER_MAX_TIME_SECONDS", 5.0)
+    monkeypatch.setattr(settings, "SOLVER_MAX_TIME_SECONDS", GENERATE_TIME_LIMIT)
     admin = _admin_headers(client)
 
     # Day 20: registration for 2030-10 is still open → no draft yet.
@@ -268,7 +272,7 @@ def test_autorun_uses_business_timezone_date(client: TestClient, monkeypatch) ->
     monkeypatch.setattr(settings, "AUTORUN_ENABLED", True)
     monkeypatch.setattr(settings, "AUTORUN_DAY", 20)
     monkeypatch.setattr(settings, "TIMEZONE", "Europe/Berlin")
-    monkeypatch.setattr(settings, "SOLVER_MAX_TIME_SECONDS", 5.0)
+    monkeypatch.setattr(settings, "SOLVER_MAX_TIME_SECONDS", GENERATE_TIME_LIMIT)
     # 23:30 UTC on 2026-12-20 is already 00:30 on 2026-12-21 in Berlin (CET).
     monkeypatch.setattr(
         business_time, "_utcnow", lambda: datetime(2026, 12, 20, 23, 30, tzinfo=UTC)
@@ -429,7 +433,7 @@ def test_force_regenerate_published_resyncs_seeded_actuals(
     from app.models.user import User
     from app.services import schedule_history
 
-    monkeypatch.setattr(settings, "SOLVER_MAX_TIME_SECONDS", 5.0)
+    monkeypatch.setattr(settings, "SOLVER_MAX_TIME_SECONDS", GENERATE_TIME_LIMIT)
     yr, mo = 2051, 7
     last = calendar.monthrange(yr, mo)[1]
     admin = _admin_headers(client)
@@ -511,7 +515,7 @@ def test_force_regenerate_hides_draft_seeded_actuals_from_employee(
     again; the admin-recorded row stays visible throughout."""
     from app.core.config import settings
 
-    monkeypatch.setattr(settings, "SOLVER_MAX_TIME_SECONDS", 5.0)
+    monkeypatch.setattr(settings, "SOLVER_MAX_TIME_SECONDS", GENERATE_TIME_LIMIT)
     # 2064-05: test_schedule_history publishes 2052-05 earlier in the run.
     yr, mo = 2064, 5
     admin = _admin_headers(client)
@@ -749,7 +753,7 @@ def test_force_regenerate_then_override_reaches_next_month_boundary(
     from app.models.user import User
     from app.services import schedule_history
 
-    monkeypatch.setattr(settings, "SOLVER_MAX_TIME_SECONDS", 5.0)
+    monkeypatch.setattr(settings, "SOLVER_MAX_TIME_SECONDS", GENERATE_TIME_LIMIT)
     yr, mo = 2063, 1
     last_day = date(yr, mo, calendar.monthrange(yr, mo)[1])
     admin = _admin_headers(client)
