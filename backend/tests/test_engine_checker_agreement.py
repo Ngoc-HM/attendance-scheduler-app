@@ -81,26 +81,34 @@ def _instance(seed: int) -> SolverInput:
     for uid, role in enumerate(roles, start=1):
         work_code = next(c for c in codes_for(role) if c.is_working)
         # The previous month's last six days, oldest first: mostly work, some
-        # rest, sometimes leave; a third end on an off tail (off-run across the
-        # boundary) and some on a long working run (carry streak).
+        # rest, sometimes leave or sick; a third end on an off tail (off-run
+        # across the boundary) and some on a long working run (carry streak).
         prev_list = [
             rng.choices(
-                [work_code, AttendanceCode.X, AttendanceCode.CD, AL],
-                weights=[6, 3, 1, 1],
+                [work_code, AttendanceCode.X, AttendanceCode.CD, AL, AttendanceCode.S],
+                weights=[6, 3, 1, 1, 1],
             )[0]
             for _ in range(6)
         ]
         tail = rng.random()
         if tail < 0.35:
             k = rng.randint(3, 5)
-            prev_list[-k:] = [rng.choice([AttendanceCode.X, AttendanceCode.CD]) for _ in range(k)]
+            prev_list[-k:] = [
+                rng.choice([AttendanceCode.X, AttendanceCode.CD, AttendanceCode.S])
+                for _ in range(k)
+            ]
         elif tail < 0.55:
             k = rng.randint(4, 6)
             prev_list[-k:] = [work_code] * k
+        # Like build_boundary_states: a day with no cell cuts prev_codes short
+        # and counts as rest in the rolling-rest flags.
+        if rng.random() < 0.2:
+            prev_list = prev_list[-rng.randint(1, 5) :]
         prev = tuple(prev_list)
         prev_days = [first - timedelta(days=n) for n in range(6, 0, -1)]
+        known = dict(zip(prev_days[len(prev_days) - len(prev) :], prev, strict=True))
         previous_working[uid] = {
-            d: code.is_working for d, code in zip(prev_days, prev, strict=True)
+            d: d in known and known[d].is_working for d in prev_days
         }
         people.append(
             PersonInput(
@@ -138,7 +146,7 @@ def _instance(seed: int) -> SolverInput:
         holidays={rng.choice(days)},
         long_leave_off=annual,
         previous_working=previous_working,
-        max_solve_seconds=10,
+        max_solve_seconds=3,
     )
 
 
@@ -226,7 +234,7 @@ def _edited(
 @pytest.mark.parametrize("seed", [11, 22, 33])
 def test_engine_clean_grid_passes_checker(seed: int) -> None:
     inp = _instance(seed)
-    out = SchedulerEngine().solve(inp)
+    out = SchedulerEngine(num_workers=1).solve(inp)
     assert out.feasible
     grid = {(a.user_id, a.day): a.code for a in out.assignments}
 
