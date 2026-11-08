@@ -1,0 +1,28 @@
+# Keep secrets, local databases and dev caches out of the image (`COPY . .`).
+# Runtime configuration comes from `docker run -e`, compose `env_file` or a
+# secret manager, never from a file baked into the image.
+.env
+.env.*
+*.db
+*.sqlite
+*.sqlite3
+*.dump
+backups/
+
+# Dev-only content.
+tests/
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+*.egg-info/
+.git
+.gitignore
+.dockerignore
+.DS_Store

@@ -33,7 +33,8 @@ class ApproveRequest(BaseModel):
 
 
 class UserUpdate(BaseModel):
-    full_name: str | None = None
+    # User.full_name is String(128), as in RegisterRequest.
+    full_name: str | None = Field(default=None, max_length=128)
     role: Role | None = None
     status: UserStatus | None = None
     password: str | None = Field(default=None, min_length=6, max_length=128)

@@ -18,6 +18,7 @@ import logging
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.core.i18n import t
 from app.models.audit import AuditLog
 
 logger = logging.getLogger(__name__)
@@ -50,6 +51,6 @@ def record(
         )
         raise HTTPException(
             status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Audit log write failed; the action was not confirmed.",
+            detail=t("audit.write_failed"),
         ) from exc
     return row

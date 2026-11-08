@@ -2,14 +2,19 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import UTC, date, datetime
 
+import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
+from app.core import business_time
+from app.core.config import settings
 from app.core.database import SessionLocal
 from app.models.attendance import AttendanceRecord
 from app.models.audit import AuditLog
 from app.models.enums import AttendanceCode
+from app.models.user import User
 from app.services import compliance_service
 
 V = "/api/v1"
@@ -100,3 +105,30 @@ def test_purge_respects_legal_floor_and_deletes_old_rows(client: TestClient) -> 
 
 def test_default_cutoff_uses_retention_months() -> None:
     assert compliance_service.default_cutoff(date(2030, 2, 15)) == date(2027, 2, 1)
+
+
+def test_purge_floor_uses_effective_retention_floor(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A DATA_RETENTION_MIN_MONTHS below the legal 24 months never lowers the
+    purge floor: the service uses ``settings.retention_floor_months``."""
+    monkeypatch.setattr(settings, "DATA_RETENTION_MIN_MONTHS", 12)
+    with SessionLocal() as db, pytest.raises(HTTPException) as exc:
+        # 18 months back: allowed by a 12-month floor, refused by the legal 24.
+        compliance_service.purge_before(db, cutoff=date(1998, 7, 1), today=date(2000, 1, 1))
+    assert exc.value.status_code == 400
+
+
+def test_export_timestamp_uses_business_clock(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``exported_at`` comes from the (freezable) business clock in
+    ``settings.TIMEZONE``, not the host's wall clock."""
+    monkeypatch.setattr(settings, "TIMEZONE", "Europe/Berlin")
+    monkeypatch.setattr(
+        business_time, "_utcnow", lambda: datetime(2026, 12, 20, 23, 30, tzinfo=UTC)
+    )
+    with SessionLocal() as db:
+        admin_id = db.query(User.id).filter(User.username == "admin").scalar()
+        data = compliance_service.export_user_data(db, admin_id)
+    assert data["exported_at"] == "2026-12-21T00:30:00+01:00"

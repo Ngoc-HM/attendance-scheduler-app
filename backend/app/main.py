@@ -4,12 +4,13 @@ Run locally with::
 
     uvicorn app.main:app --reload
 
-Interactive docs at ``/docs``. Database schema is provisioned by Alembic
-(``alembic upgrade head``), not at startup.
+Interactive docs at ``/docs`` in dev only (disabled in staging/prod).
+Database schema is provisioned by Alembic (``alembic upgrade head``), not at
+startup.
 
 Startup order: environment guard (refuse unsafe production settings) →
-bootstrap (tables in dev, seed admin) → autorun scheduler (draft at 00:05 on
-the day after AUTORUN_DAY).
+bootstrap (tables in dev, seed admin) → autorun scheduler (draft at 00:05 from
+the day after AUTORUN_DAY, plus one catch-up check at startup).
 """
 
 from __future__ import annotations
@@ -24,10 +25,43 @@ from sqlalchemy import text
 
 from app.api.v1.router import api_router
 from app.core.bootstrap import run_startup_bootstrap
-from app.core.config import settings
+from app.core.config import Settings, settings
 from app.core.database import engine
 
+_LOG_FORMAT = "%(asctime)s %(levelname)s [%(name)s] %(message)s"
+
+
+def configure_app_logging() -> None:
+    """Send the ``app.*`` loggers (autorun, bootstrap, ...) to stderr at INFO.
+
+    Uvicorn configures only its own loggers, so without this every app message
+    below WARNING was dropped. The root logger is left alone (no
+    ``basicConfig``), so uvicorn's output is unchanged; the handler is added
+    once even when the module is imported again (``--reload``).
+    """
+    app_logger = logging.getLogger("app")
+    app_logger.setLevel(logging.INFO)
+    if not any(getattr(h, "_app_console", False) for h in app_logger.handlers):
+        handler = logging.StreamHandler()
+        handler.setFormatter(logging.Formatter(_LOG_FORMAT))
+        handler._app_console = True  # type: ignore[attr-defined]
+        app_logger.addHandler(handler)
+
+
+configure_app_logging()
 logger = logging.getLogger(__name__)
+
+
+def api_docs_urls(s: Settings) -> dict[str, str | None]:
+    """Swagger, ReDoc and the OpenAPI schema are served in dev only: in
+    staging/prod they would publish the full API map to anyone."""
+    if s.is_production:
+        return {"docs_url": None, "redoc_url": None, "openapi_url": None}
+    return {
+        "docs_url": "/docs",
+        "redoc_url": "/redoc",
+        "openapi_url": f"{s.API_V1_STR}/openapi.json",
+    }
 
 
 @asynccontextmanager
@@ -39,19 +73,23 @@ async def lifespan(app: FastAPI):  # noqa: ANN201
     # Startup: ensure tables (dev) and the seed admin exist (F-01).
     run_startup_bootstrap()
     # Autorun (#9): the leave window closes at the end of AUTORUN_DAY; at 00:05
-    # (settings.TIMEZONE) the day after, next month's draft is generated.
+    # (settings.TIMEZONE) the day after, next month's draft is generated. The
+    # startup check catches up a month missed while the host was off.
     from app.services.schedule_autorun import start_scheduler
 
-    scheduler = start_scheduler()
+    scheduler = start_scheduler(check_on_startup=True)
     yield
     if scheduler is not None:
         scheduler.shutdown(wait=False)
 
 
+_docs = api_docs_urls(settings)
 app = FastAPI(
     title=settings.PROJECT_NAME,
-    openapi_url=f"{settings.API_V1_STR}/openapi.json",
     lifespan=lifespan,
+    docs_url=_docs["docs_url"],
+    redoc_url=_docs["redoc_url"],
+    openapi_url=_docs["openapi_url"],
 )
 
 if settings.BACKEND_CORS_ORIGINS:

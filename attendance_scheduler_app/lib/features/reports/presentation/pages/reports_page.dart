@@ -7,9 +7,11 @@ import '../providers/reports_provider.dart';
 
 /// Reports page (F-15) — admin-only export of monthly / yearly attendance.
 ///
-/// Lets the user pick year, month and format (CSV / XLSX), then triggers a
-/// download from the backend, saves the file to the system downloads folder,
-/// and surfaces the saved path via a [DsFeedback] snackbar.
+/// The year, month (or "Full year") and format selectors sit on the page
+/// (D5); Export downloads the chosen period from the backend, saves the file
+/// to the system downloads folder and surfaces the saved path via a
+/// [DsFeedback] snackbar. "Full year" keeps the month null and uses the
+/// yearly endpoint.
 class ReportsPage extends ConsumerWidget {
   const ReportsPage({super.key});
 
@@ -18,34 +20,67 @@ class ReportsPage extends ConsumerWidget {
     final state = ref.watch(reportsControllerProvider);
     final ctrl = ref.read(reportsControllerProvider.notifier);
     final l = AppLocalizations.of(context);
-
-    // Build the "recent exports" table rows from the last export result.
-    final rows = _buildRows(state, l);
+    final thisYear = DateTime.now().year;
+    final year = state.selectedYear ?? thisYear;
+    final years = {
+      for (var i = 0; i < 5; i++) thisYear - i,
+      year,
+    }.toList()..sort((a, b) => b.compareTo(a));
 
     return DsReportsView(
-      rows: rows,
-      onExportMonthly: state.isExporting
-          ? () {}
-          : () => _export(context, ref, ctrl.exportMonthly, l),
-      onExportYearly: state.isExporting
-          ? () {}
-          : () => _export(context, ref, ctrl.exportYearly, l),
-      onDownload: (_) => _showPicker(context, ref, ctrl, l),
+      rows: _buildRows(state, l),
+      exporting: state.isExporting,
+      onExport: () => _export(context, ctrl, l),
+      // Re-download the latest export with the current selection.
+      onDownload: (_) => _export(context, ctrl, l),
+      filters: [
+        DsSelectField<int>(
+          label: l.text('year'),
+          value: year,
+          items: [
+            for (final y in years)
+              DropdownMenuItem(value: y, child: Text('$y')),
+          ],
+          onChanged: (v) {
+            if (v != null) ctrl.selectYear(v);
+          },
+        ),
+        DsSelectField<int?>(
+          label: l.text('month'),
+          value: state.selectedMonth,
+          items: [
+            DropdownMenuItem<int?>(value: null, child: Text(l.text('allYear'))),
+            for (var m = 1; m <= 12; m++)
+              DropdownMenuItem<int?>(
+                value: m,
+                child: Text(l.monthYear(DateTime(year, m))),
+              ),
+          ],
+          onChanged: ctrl.selectMonth,
+        ),
+        DsSelectField<String>(
+          label: l.text('format'),
+          value: state.selectedFormat,
+          items: const [
+            DropdownMenuItem(value: 'csv', child: Text('CSV')),
+            DropdownMenuItem(value: 'xlsx', child: Text('XLSX')),
+          ],
+          onChanged: (v) {
+            if (v != null) ctrl.selectFormat(v);
+          },
+        ),
+      ],
     );
   }
 
-  // ---------------------------------------------------------------------------
-  // Export trigger
-  // ---------------------------------------------------------------------------
-
   Future<void> _export(
     BuildContext context,
-    WidgetRef ref,
-    Future<ExportResult> Function() action,
+    ReportsController ctrl,
     AppLocalizations l,
   ) async {
-    final result = await action();
-    if (!context.mounted) return;
+    final result = await ctrl.export();
+    // Null: an export was already running and this click was ignored.
+    if (result == null || !context.mounted) return;
 
     switch (result) {
       case ExportSuccess(:final path):
@@ -63,134 +98,19 @@ class ReportsPage extends ConsumerWidget {
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // Picker dialog: year / month / format
-  // ---------------------------------------------------------------------------
-
-  void _showPicker(
-    BuildContext context,
-    WidgetRef ref,
-    ReportsController ctrl,
-    AppLocalizations l,
-  ) {
-    final state = ref.read(reportsControllerProvider);
-    int year = state.selectedYear ?? DateTime.now().year;
-    int month = state.selectedMonth ?? DateTime.now().month;
-    String format = state.selectedFormat;
-
-    showDialog<void>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setS) => DsFormDialog(
-          title: l.text('exportOptions'),
-          width: 300,
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Year
-              Row(
-                children: [
-                  Text('${l.text("year")}:  '),
-                  DropdownButton<int>(
-                    value: year,
-                    items: List.generate(5, (i) => DateTime.now().year - i)
-                        .map((y) => DropdownMenuItem(
-                              value: y,
-                              child: Text('$y'),
-                            ))
-                        .toList(),
-                    onChanged: (v) => setS(() => year = v!),
-                  ),
-                ],
-              ),
-              const SizedBox(height: DsSpacing.x2),
-              // Month (optional — blank = yearly export)
-              Row(
-                children: [
-                  Text('${l.text("month")}:  '),
-                  DropdownButton<int?>(
-                    value: month,
-                    items: [
-                      DropdownMenuItem<int?>(
-                        value: null,
-                        child: Text(l.text('allYear')),
-                      ),
-                      ...List.generate(
-                        12,
-                        (i) => DropdownMenuItem<int?>(
-                          value: i + 1,
-                          child: Text('${i + 1}'),
-                        ),
-                      ),
-                    ],
-                    onChanged: (v) => setS(() => month = v ?? 0),
-                  ),
-                ],
-              ),
-              const SizedBox(height: DsSpacing.x2),
-              // Format
-              Row(
-                children: [
-                  Text('${l.text("format")}:  '),
-                  DropdownButton<String>(
-                    value: format,
-                    items: const [
-                      DropdownMenuItem(value: 'csv', child: Text('CSV')),
-                      DropdownMenuItem(value: 'xlsx', child: Text('XLSX')),
-                    ],
-                    onChanged: (v) => setS(() => format = v!),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: Text(l.cancel),
-            ),
-            DsPrimaryButton(
-              label: l.text('download'),
-              onPressed: () {
-                Navigator.of(ctx).pop();
-                ctrl.selectYear(year);
-                ctrl.selectMonth(month);
-                ctrl.selectFormat(format);
-                if (month > 0) {
-                  _export(context, ref, ctrl.exportMonthly, l);
-                } else {
-                  _export(context, ref, ctrl.exportYearly, l);
-                }
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ---------------------------------------------------------------------------
-  // Build display rows from last export result
-  // ---------------------------------------------------------------------------
-
+  /// The "recent exports" table: the last successful export, if any.
   List<DsReportRowData> _buildRows(ReportsState state, AppLocalizations l) {
-    final last = state.lastResult;
-    if (last is ExportSuccess) {
-      final now = DateTime.now();
-      return [
-        DsReportRowData(
-          name: l.text('latestExport'),
-          period: state.selectedMonth != null && (state.selectedMonth ?? 0) > 0
-              ? l.monthYear(
-                  DateTime(state.selectedYear ?? now.year,
-                      state.selectedMonth ?? now.month),
-                )
-              : '${state.selectedYear ?? now.year}',
-          updated: l.dateTime(now),
-          status: DsReportRowData.statusReady,
-        ),
-      ];
-    }
-    return [];
+    if (state.lastResult is! ExportSuccess) return [];
+    final now = DateTime.now();
+    final year = state.selectedYear ?? now.year;
+    final month = state.selectedMonth;
+    return [
+      DsReportRowData(
+        name: l.text('latestExport'),
+        period: month == null ? '$year' : l.monthYear(DateTime(year, month)),
+        updated: l.dateTime(now),
+        status: DsReportRowData.statusReady,
+      ),
+    ];
   }
 }

@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from datetime import date, time
 
-from sqlalchemy import Boolean, Date, Integer, String, Time
+from sqlalchemy import Boolean, Date, Integer, String, Time, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -31,6 +31,11 @@ class FlightDay(Base, TimestampMixin):
 
 class Flight(Base, TimestampMixin):
     __tablename__ = "flights"
+    # One leg per day + FLT number (B5): the import and manual upsert look a
+    # leg up by this key, so a duplicate would break both (migration 0009).
+    __table_args__ = (
+        UniqueConstraint("day", "flt_number", name="uq_flights_day_flt_number"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     day: Mapped[date] = mapped_column(Date, index=True)

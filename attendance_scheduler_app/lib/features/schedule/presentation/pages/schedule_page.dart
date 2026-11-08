@@ -110,13 +110,15 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
-    // Non-admin gets 404 for drafts: show an empty roster with a neutral
-    // message (no "generate" hint) and keep the own-requests panel below.
-    // The state may still hold the previous month's schedule, so no rows.
-    final notPublished = scheduleState.error != null && !isAdmin;
-    final rows = notPublished
-        ? const <DsRosterRowData>[]
-        : _buildRows(scheduleState);
+    // Only the month on screen is ever drawn or published (A3): a month
+    // without a schedule (404) shows the empty state and no Publish button.
+    final onScreen = scheduleState.holds(_month.year, _month.month);
+    final rows = onScreen
+        ? _buildRows(scheduleState)
+        : const <DsRosterRowData>[];
+    final violations = isAdmin && onScreen
+        ? (scheduleState.violations ?? const <ConstraintViolation>[])
+        : const <ConstraintViolation>[];
 
     return Column(
       children: [
@@ -128,8 +130,10 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
             onPreviousMonth: _prevMonth,
             onNextMonth: _nextMonth,
             onGenerate: isAdmin ? () => _onGenerate(context, l) : null,
-            onPublish: isAdmin ? () => _onPublish(context, l) : null,
-            emptyMessage: isAdmin ? null : l.text('scheduleNotPublishedYet'),
+            onPublish: isAdmin && onScreen
+                ? () => _onPublish(context, l)
+                : null,
+            emptyMessage: _emptyMessage(l, scheduleState, isAdmin),
             onCellTap: isAdmin
                 ? (row, dayIndex) => _onEditCell(context, l, row, dayIndex)
                 : me == null
@@ -141,6 +145,14 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
                 : (row) => row.id == me.id,
           ),
         ),
+        if (violations.isNotEmpty) ...[
+          const Divider(height: 1),
+          _ViolationsPanel(
+            lines: [
+              for (final v in violations) _violationLine(l, v, scheduleState),
+            ],
+          ),
+        ],
         if (!isAdmin && me != null) ...[
           const Divider(height: 1),
           MyShiftChangeRequestsPanel(
@@ -166,7 +178,11 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
               ],
             ),
           ),
-          const ShiftChangePendingPanel(),
+          // Approving rewrites schedule cells: reload the grid afterwards.
+          ShiftChangePendingPanel(
+            codeById: {for (final p in scheduleState.people) p.id: p.code},
+            onApproved: _loadMonth,
+          ),
           // Batch self-arrange approvals (owner 2026-07-09) — approving
           // rewrites schedule cells, so reload the grid afterwards.
           SelfArrangePendingPanel(onDecided: _loadMonth),
@@ -193,6 +209,42 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
   }
 
   // ── Helpers ──────────────────────────────────────────────────────────────────
+
+  /// Empty-roster text: a failed load names the backend detail; a month
+  /// with no schedule (404) gets the admin "generate" hint (null = the
+  /// view's default) or the employee "not published" note. Only a failed
+  /// load counts here: a failed generate is a toast, not "could not load".
+  String? _emptyMessage(
+    AppLocalizations l,
+    ScheduleState state,
+    bool isAdmin,
+  ) {
+    final error = state.loadError;
+    if (error != null && state.loadErrorStatus != 404) {
+      return '${l.text('scheduleLoadFailed')} $error';
+    }
+    return isAdmin ? null : l.text('scheduleNotPublishedYet');
+  }
+
+  /// "2026-06-03 · A1 — message"; the date and code parts are left out when
+  /// the violation is not tied to a day or a person.
+  String _violationLine(
+    AppLocalizations l,
+    ConstraintViolation v,
+    ScheduleState state,
+  ) {
+    final day = v.day;
+    final userId = v.userId;
+    final parts = [
+      if (day != null)
+        '${day.year}-${day.month.toString().padLeft(2, '0')}-'
+            '${day.day.toString().padLeft(2, '0')}',
+      if (userId != null)
+        state.people.where((p) => p.id == userId).firstOrNull?.code ??
+            l.userFallback(userId),
+    ];
+    return parts.isEmpty ? v.message : '${parts.join(' · ')} — ${v.message}';
+  }
 
   List<DsRosterRowData> _buildRows(ScheduleState state) {
     final schedule = state.schedule;
@@ -466,7 +518,7 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
     if (warnings == null) {
       DsFeedback.show(
         context,
-        ref.read(scheduleControllerProvider).error ?? l.text('loadFailed'),
+        ref.read(scheduleControllerProvider).error ?? l.text('actionFailed'),
         tone: DsTone.danger,
       );
     } else if (warnings.isEmpty) {
@@ -510,22 +562,47 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
     } else {
       DsFeedback.show(
         context,
-        ref.read(shiftChangeControllerProvider).error ?? l.text('loadFailed'),
+        ref.read(shiftChangeControllerProvider).error ?? l.text('actionFailed'),
         tone: DsTone.danger,
       );
     }
   }
 
+  /// Publishes the month on screen (A3). The rules are re-checked first
+  /// (C2): any violation, or a failed check, needs the admin's confirmation.
   Future<void> _onPublish(BuildContext context, AppLocalizations l) async {
-    await DsBusy.run(
+    final year = _month.year;
+    final month = _month.month;
+    final controller = ref.read(scheduleControllerProvider.notifier);
+    final violations = await DsBusy.run(
+      context,
+      l.text('checkingRules'),
+      controller.refreshViolations,
+    );
+    if (!context.mounted) return;
+    if (violations == null || violations.isNotEmpty) {
+      final state = ref.read(scheduleControllerProvider);
+      final proceed = await _confirmPublish(
+        context,
+        l,
+        violations == null
+            ? null
+            : [for (final v in violations) _violationLine(l, v, state)],
+      );
+      if (!proceed || !context.mounted) return;
+    }
+    final ok = await DsBusy.run(
       context,
       l.text('publishingSchedule'),
-      () => ref.read(scheduleControllerProvider.notifier).publish(),
+      () => controller.publish(year: year, month: month),
     );
-    final state = ref.read(scheduleControllerProvider);
     if (!context.mounted) return;
-    if (state.error != null) {
-      DsFeedback.show(context, state.error!, tone: DsTone.danger);
+    if (!ok) {
+      DsFeedback.show(
+        context,
+        ref.read(scheduleControllerProvider).error ?? l.text('actionFailed'),
+        tone: DsTone.danger,
+      );
     } else {
       DsFeedback.show(
         context,
@@ -533,5 +610,73 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
         tone: DsTone.success,
       );
     }
+  }
+
+  /// Lists the month's rule violations ([lines]) — or says the check could
+  /// not run (null) — and lets the admin publish anyway or cancel.
+  Future<bool> _confirmPublish(
+    BuildContext context,
+    AppLocalizations l,
+    List<String>? lines,
+  ) async {
+    final proceed = await showDialog<bool>(
+      context: context,
+      builder: (context) => DsFormDialog(
+        title: l.text(
+          lines == null ? 'rulesNotCheckedTitle' : 'publishWithViolationsTitle',
+        ),
+        width: 520,
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              lines == null
+                  ? l.text('rulesCheckFailed')
+                  : l.text('publishWithViolationsBody'),
+            ),
+            if (lines != null) ...[
+              const SizedBox(height: DsSpacing.x3),
+              RuleWarningsList(lines: lines),
+            ],
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(l.text('cancel')),
+          ),
+          DsPrimaryButton(
+            label: l.text('publishAnyway'),
+            onPressed: () => Navigator.of(context).pop(true),
+          ),
+        ],
+      ),
+    );
+    return proceed == true;
+  }
+}
+
+/// Admin strip under the roster: how many hard rules the month on screen
+/// breaks right now (C2), expandable to the full list.
+class _ViolationsPanel extends StatelessWidget {
+  const _ViolationsPanel({required this.lines});
+
+  final List<String> lines;
+
+  @override
+  Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    return ExpansionTile(
+      leading: const Icon(Icons.rule_outlined, color: DsColors.warning),
+      title: Text('${lines.length} ${l.text('ruleViolationsInMonth')}'),
+      childrenPadding: const EdgeInsets.fromLTRB(
+        DsSpacing.x4,
+        0,
+        DsSpacing.x4,
+        DsSpacing.x3,
+      ),
+      children: [RuleWarningsList(lines: lines, maxHeight: 200)],
+    );
   }
 }

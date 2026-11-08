@@ -42,6 +42,11 @@ MESSAGES: dict[str, dict[str, str]] = {
         "flight.import_failed": "Excel import failed.",
         "flight.import_bad_file": "Unsupported or unreadable Excel file.",
         "flight.preset_not_found": "Flight preset not found.",
+        "flight.import_row_invalid_date": "Row {row}: invalid date \"{value}\" (expected YYYY-MM-DD).",
+        "flight.import_row_invalid_flt": "Row {row}: invalid FLT number \"{value}\".",
+        "flight.import_row_invalid_time": "Row {row}: invalid time \"{value}\" (expected HH:MM).",
+        "flight.import_row_route_too_long": "Row {row}: route is longer than {max} characters.",
+        "flight.import_row_duplicate": "Row {row} repeats row {first_row} (same date and FLT {flt}); the later row is used.",
         # --- Leaves (F-05/F-06) ---
         "leave.not_found": "Leave request not found.",
         "leave.window_closed_monthly": "Monthly leave registration is open from day 1 to day {day} of the previous month.",
@@ -66,6 +71,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "swap.code_required": "A requested code is required for a change request.",
         "swap.no_schedule": "There is no schedule for that date yet.",
         "swap.code_not_requestable": "Employees may only request their regular working or off codes.",
+        "swap.cell_locked": "Leave, comp, sick and admin-assigned days cannot be changed by request — only regular working or off days.",
+        "swap.counterpart_self": "You cannot swap a shift with yourself.",
+        "swap.counterpart_inactive": "That colleague's account is not active.",
+        "swap.counterpart_other_role": "You can only swap with a colleague who works the same shift codes.",
         # --- Attendance / holidays (F-10..F-13) ---
         "attendance.not_found": "Attendance record not found.",
         "holiday.not_found": "Holiday not found.",
@@ -90,6 +99,22 @@ MESSAGES: dict[str, dict[str, str]] = {
             "schedule."
         ),
         "audit.write_failed": "Audit log write failed; the action was not confirmed.",
+        # --- Review 2026-11-08 (Task 4): attendance, validation, decisions ---
+        "attendance.schedule_not_published": (
+            "Attendance can only be seeded from a published schedule."
+        ),
+        "attendance.sick_cover_forced": (
+            "Recently sick colleague assigned the A/D cover (§6)."
+        ),
+        "attendance.sick_cover_fewest_ad": (
+            "Colleague with the fewest A/D doubles this month assigned the cover."
+        ),
+        "code.not_allowed_for_role": (
+            "Code {code} is not valid for role {role}; allowed: {allowed}"
+        ),
+        "request.decision_status_invalid": (
+            "Decision status must be 'approved' or 'rejected'."
+        ),
         "compliance.retention_too_short": (
             "Retention cutoff must be at least 24 months in the past "
             "(working-time records, ArbZG §16)."
@@ -115,6 +140,11 @@ MESSAGES: dict[str, dict[str, str]] = {
         "flight.import_failed": "Import Excel thất bại.",
         "flight.import_bad_file": "File Excel không hợp lệ hoặc không đọc được.",
         "flight.preset_not_found": "Không tìm thấy preset chuyến bay.",
+        "flight.import_row_invalid_date": "Dòng {row}: ngày \"{value}\" không hợp lệ (định dạng YYYY-MM-DD).",
+        "flight.import_row_invalid_flt": "Dòng {row}: số hiệu chuyến bay \"{value}\" không hợp lệ.",
+        "flight.import_row_invalid_time": "Dòng {row}: giờ \"{value}\" không hợp lệ (định dạng HH:MM).",
+        "flight.import_row_route_too_long": "Dòng {row}: tuyến bay dài quá {max} ký tự.",
+        "flight.import_row_duplicate": "Dòng {row} trùng với dòng {first_row} (cùng ngày và chuyến {flt}); dùng dòng sau.",
         # --- Leaves (F-05/F-06) ---
         "leave.not_found": "Không tìm thấy đơn nghỉ.",
         "leave.window_closed_monthly": "Đăng ký nghỉ tháng mở từ ngày 1 đến ngày {day} của tháng trước.",
@@ -139,6 +169,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "swap.code_required": "Cần chọn mã ca muốn đổi.",
         "swap.no_schedule": "Chưa có lịch cho ngày này.",
         "swap.code_not_requestable": "Nhân viên chỉ được yêu cầu mã ca làm hoặc nghỉ thông thường.",
+        "swap.cell_locked": "Không thể yêu cầu đổi ngày nghỉ phép, nghỉ bù, ngày ốm hoặc ngày do admin gán — chỉ đổi được ngày làm hoặc ngày nghỉ thường.",
+        "swap.counterpart_self": "Không thể hoán đổi ca với chính mình.",
+        "swap.counterpart_inactive": "Tài khoản của đồng nghiệp này không còn hoạt động.",
+        "swap.counterpart_other_role": "Chỉ được hoán đổi ca với đồng nghiệp làm cùng loại mã ca.",
         # --- Attendance / holidays (F-10..F-13) ---
         "attendance.not_found": "Không tìm thấy bản ghi chấm công.",
         "holiday.not_found": "Không tìm thấy ngày lễ.",
@@ -162,6 +196,22 @@ MESSAGES: dict[str, dict[str, str]] = {
             "Nghỉ ốm (S) chỉ được ghi ở chấm công thực tế, không đưa vào lịch kế hoạch."
         ),
         "audit.write_failed": "Ghi nhật ký kiểm toán thất bại; thao tác chưa được xác nhận.",
+        # --- Review 2026-11-08 (Task 4): attendance, validation, decisions ---
+        "attendance.schedule_not_published": (
+            "Chỉ được khởi tạo chấm công từ lịch đã công bố."
+        ),
+        "attendance.sick_cover_forced": (
+            "Đồng nghiệp vừa nghỉ ốm gần đây được phân ca bù A/D (§6)."
+        ),
+        "attendance.sick_cover_fewest_ad": (
+            "Đồng nghiệp có ít ca đôi A/D nhất trong tháng được phân ca bù."
+        ),
+        "code.not_allowed_for_role": (
+            "Mã {code} không hợp lệ với vai trò {role}; mã được phép: {allowed}"
+        ),
+        "request.decision_status_invalid": (
+            "Trạng thái quyết định phải là 'approved' (duyệt) hoặc 'rejected' (từ chối)."
+        ),
         "compliance.retention_too_short": (
             "Mốc xóa dữ liệu phải cách hiện tại ít nhất 24 tháng "
             "(hồ sơ giờ làm, ArbZG §16)."

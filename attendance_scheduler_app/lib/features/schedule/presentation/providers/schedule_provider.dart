@@ -15,9 +15,14 @@ class ScheduleState {
     this.isLoading = false,
     this.isMutating = false,
     this.error,
+    this.loadError,
+    this.loadErrorStatus,
     this.lastResult,
+    this.violations,
   });
 
+  /// The month last requested by [ScheduleController.load], or null when it
+  /// has no schedule (404) or failed to load. Never a previous month's.
   final MonthlySchedule? schedule;
 
   /// id → code/role source for the roster columns (people are shown by
@@ -25,8 +30,28 @@ class ScheduleState {
   final List<UserDirectoryEntry> people;
   final bool isLoading;
   final bool isMutating;
+
+  /// Failed generate / edit / publish: the backend `detail`, never
+  /// "ApiException(...)". Shown as a toast.
   final String? error;
+
+  /// Failed [ScheduleController.load] only (backend detail), kept apart from
+  /// [error] so a failed generate never reads as "could not load".
+  final String? loadError;
+
+  /// HTTP status of the failed load (404 = month not generated / not
+  /// published); null when the load did not fail or never reached a server.
+  final int? loadErrorStatus;
   final ScheduleResult? lastResult; // most-recent generate result
+
+  /// Admin only: hard-rule violations of [schedule] as it stands now.
+  /// Null = not checked (employee, no schedule, or the check failed).
+  final List<ConstraintViolation>? violations;
+
+  /// True when [schedule] is the given month, so publish and cell edits
+  /// never act on a month that is not on screen.
+  bool holds(int year, int month) =>
+      schedule != null && schedule!.year == year && schedule!.month == month;
 
   ScheduleState copyWith({
     MonthlySchedule? schedule,
@@ -34,19 +59,35 @@ class ScheduleState {
     bool? isLoading,
     bool? isMutating,
     String? error,
+    String? loadError,
+    int? loadErrorStatus,
     ScheduleResult? lastResult,
+    List<ConstraintViolation>? violations,
     bool clearError = false,
+    bool clearLoadError = false,
     bool clearResult = false,
+    bool clearSchedule = false,
+    bool clearViolations = false,
   }) =>
       ScheduleState(
-        schedule: schedule ?? this.schedule,
+        schedule: clearSchedule ? null : (schedule ?? this.schedule),
         people: people ?? this.people,
         isLoading: isLoading ?? this.isLoading,
         isMutating: isMutating ?? this.isMutating,
         error: clearError ? null : (error ?? this.error),
+        loadError: clearLoadError ? null : (loadError ?? this.loadError),
+        loadErrorStatus: clearLoadError
+            ? null
+            : (loadErrorStatus ?? this.loadErrorStatus),
         lastResult: clearResult ? null : (lastResult ?? this.lastResult),
+        violations: clearViolations ? null : (violations ?? this.violations),
       );
 }
+
+/// The message to show for a failed call: the backend detail when there is
+/// one, never the exception's debug text ("ApiException(409): ...").
+String scheduleErrorMessage(Object e) =>
+    e is ApiException ? e.message : e.toString();
 
 // ── Controller ────────────────────────────────────────────────────────────────
 
@@ -56,22 +97,47 @@ class ScheduleController extends StateNotifier<ScheduleState> {
   final ScheduleRemoteDataSource _ds;
   final UserManagementDataSource _userDs;
 
+  /// Bumped by every [load]; the response of an older load is dropped so a
+  /// slow month can never overwrite the month on screen.
+  int _loadSeq = 0;
+
   /// Loads the month and the people behind its columns. GET /users is
   /// admin-only, so employees read the name-free GET /users/directory.
+  /// The previous month's grid is cleared at once (A3): an admin on a month
+  /// without a schedule sees the empty state, never last month's roster.
+  /// Admins also get the month's rule violations (C2).
   Future<void> load(int year, int month, {bool isAdmin = false}) async {
-    state = state.copyWith(isLoading: true, clearError: true);
+    final seq = ++_loadSeq;
+    state = state.copyWith(
+      isLoading: true,
+      clearError: true,
+      clearLoadError: true,
+      clearSchedule: true,
+      clearViolations: true,
+      clearResult: true,
+    );
     try {
       final results = await Future.wait<Object>([
         _ds.fetchSchedule(year, month),
         isAdmin ? _allUsers() : _directoryOrEmpty(),
       ]);
+      final schedule = results[0] as MonthlySchedule;
+      final violations = isAdmin ? await _violationsOrNull(schedule.id) : null;
+      if (seq != _loadSeq) return;
       state = state.copyWith(
-        schedule: results[0] as MonthlySchedule,
+        schedule: schedule,
         people: results[1] as List<UserDirectoryEntry>,
+        violations: violations,
         isLoading: false,
       );
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: e.toString());
+      if (seq != _loadSeq) return;
+      state = state.copyWith(
+        isLoading: false,
+        clearSchedule: true,
+        loadError: scheduleErrorMessage(e),
+        loadErrorStatus: e is ApiException ? e.statusCode : null,
+      );
     }
   }
 
@@ -91,6 +157,30 @@ class ScheduleController extends StateNotifier<ScheduleState> {
     }
   }
 
+  /// The rule check is advisory: its failure must not hide the roster.
+  Future<List<ConstraintViolation>?> _violationsOrNull(int scheduleId) async {
+    try {
+      return await _ds.fetchViolations(scheduleId);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Re-checks the loaded month (admin, e.g. right before publishing).
+  /// Returns the violations, or null when there is no schedule or the check
+  /// failed.
+  Future<List<ConstraintViolation>?> refreshViolations() async {
+    final scheduleId = state.schedule?.id;
+    if (scheduleId == null) return null;
+    final violations = await _violationsOrNull(scheduleId);
+    if (state.schedule?.id == scheduleId) {
+      state = violations == null
+          ? state.copyWith(clearViolations: true)
+          : state.copyWith(violations: violations);
+    }
+    return violations;
+  }
+
   /// Rethrows the backend's 409 (month published or manually edited, needs
   /// [force]) so the page can confirm with the admin and retry; every other
   /// failure lands in [ScheduleState.error].
@@ -98,29 +188,39 @@ class ScheduleController extends StateNotifier<ScheduleState> {
     state = state.copyWith(isMutating: true, clearError: true, clearResult: true);
     try {
       final result = await _ds.generate(year: year, month: month, force: force);
-      state = state.copyWith(
-        isMutating: false,
-        schedule: result.schedule ?? state.schedule,
-        lastResult: result,
-      );
+      final generated = result.schedule;
+      state = generated != null
+          ? state.copyWith(
+              isMutating: false,
+              schedule: generated,
+              lastResult: result,
+              violations: result.violations,
+              clearLoadError: true,
+            )
+          : state.copyWith(isMutating: false, lastResult: result);
     } catch (e) {
       if (e is ApiException && e.statusCode == 409) {
         state = state.copyWith(isMutating: false);
         rethrow;
       }
-      state = state.copyWith(isMutating: false, error: e.toString());
+      state = state.copyWith(
+        isMutating: false,
+        error: scheduleErrorMessage(e),
+      );
     }
   }
 
   /// Admin cell edit (F-09). Returns the recheck warnings (empty = clean);
-  /// null when the call itself failed (error is set on the state).
+  /// null when the call failed (error is set on the state) or the loaded
+  /// schedule is not [workDate]'s month. A response that arrives after the
+  /// admin moved to another month is not written into that month's state.
   Future<List<String>?> overrideCell({
     required int userId,
     required DateTime workDate,
     required String code,
   }) async {
-    final scheduleId = state.schedule?.id;
-    if (scheduleId == null) return null;
+    if (!state.holds(workDate.year, workDate.month)) return null;
+    final scheduleId = state.schedule!.id;
     state = state.copyWith(isMutating: true, clearError: true);
     try {
       final result = await _ds.override(
@@ -129,13 +229,22 @@ class ScheduleController extends StateNotifier<ScheduleState> {
         workDate: workDate,
         code: code,
       );
+      final warnings = result.violations.map((v) => v.message).toList();
+      if (state.schedule?.id != scheduleId) {
+        state = state.copyWith(isMutating: false);
+        return warnings;
+      }
       state = state.copyWith(
         isMutating: false,
         schedule: result.schedule ?? state.schedule,
       );
-      return result.violations.map((v) => v.message).toList();
+      await refreshViolations();
+      return warnings;
     } catch (e) {
-      state = state.copyWith(isMutating: false, error: e.toString());
+      state = state.copyWith(
+        isMutating: false,
+        error: scheduleErrorMessage(e),
+      );
       return null;
     }
   }
@@ -144,15 +253,23 @@ class ScheduleController extends StateNotifier<ScheduleState> {
     state = state.copyWith(clearResult: true);
   }
 
-  Future<void> publish() async {
-    final scheduleId = state.schedule?.id;
-    if (scheduleId == null) return;
+  /// Publishes the loaded schedule only when it is [year]/[month], the month
+  /// on screen (A3). True on success; false when that month has nothing to
+  /// publish or the call failed (error set on the state).
+  Future<bool> publish({required int year, required int month}) async {
+    if (!state.holds(year, month)) return false;
+    final scheduleId = state.schedule!.id;
     state = state.copyWith(isMutating: true, clearError: true);
     try {
       final updated = await _ds.publish(scheduleId);
       state = state.copyWith(isMutating: false, schedule: updated);
+      return true;
     } catch (e) {
-      state = state.copyWith(isMutating: false, error: e.toString());
+      state = state.copyWith(
+        isMutating: false,
+        error: scheduleErrorMessage(e),
+      );
+      return false;
     }
   }
 }

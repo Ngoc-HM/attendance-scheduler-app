@@ -39,10 +39,9 @@ class ReportsRemoteDataSource {
         filename: _extractFilename(response, 'attendance_${year}_${_two(month)}.$format'),
       );
     } on DioException catch (e) {
-      throw ApiException(
-        e.message ?? 'Failed to download monthly report',
-        statusCode: e.response?.statusCode,
-      );
+      // The error body arrives as bytes (responseType.bytes); fromDio
+      // decodes it so the user sees the backend's detail.
+      throw ApiException.fromDio(e, 'Failed to download monthly report');
     }
   }
 
@@ -59,10 +58,9 @@ class ReportsRemoteDataSource {
         filename: _extractFilename(response, 'attendance_$year.$format'),
       );
     } on DioException catch (e) {
-      throw ApiException(
-        e.message ?? 'Failed to download yearly report',
-        statusCode: e.response?.statusCode,
-      );
+      // The error body arrives as bytes (responseType.bytes); fromDio
+      // decodes it so the user sees the backend's detail.
+      throw ApiException.fromDio(e, 'Failed to download yearly report');
     }
   }
 

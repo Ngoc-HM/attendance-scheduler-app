@@ -7,7 +7,7 @@ from datetime import date, datetime
 from pydantic import BaseModel, Field
 
 from app.models.enums import AttendanceCode, LeaveStatus
-from app.schemas.common import ORMModel
+from app.schemas.common import YEAR_MAX, YEAR_MIN, ORMModel
 
 # 2 changes per day is impossible; 62 caps a full month of paired swaps.
 MAX_CHANGES = 62
@@ -21,10 +21,11 @@ class SelfArrangeChange(BaseModel):
 class SelfArrangeCreate(BaseModel):
     """Payload for POST /self-arrange — the requester's own cells only."""
 
-    year: int
+    year: int = Field(ge=YEAR_MIN, le=YEAR_MAX)
     month: int = Field(ge=1, le=12)
     changes: list[SelfArrangeChange] = Field(min_length=1, max_length=MAX_CHANGES)
-    note: str | None = None
+    # SelfArrangeRequest.note is String(255).
+    note: str | None = Field(default=None, max_length=255)
 
 
 class SelfArrangeDecision(BaseModel):

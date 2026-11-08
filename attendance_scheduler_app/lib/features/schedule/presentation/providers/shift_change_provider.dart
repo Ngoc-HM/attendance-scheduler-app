@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/network/api_exception.dart';
 import '../../data/datasources/schedule_remote_datasource.dart';
 import '../../domain/entities/schedule_entities.dart';
 
@@ -56,7 +57,7 @@ class ShiftChangeController extends StateNotifier<ShiftChangeState> {
       state = state.copyWith(
         isLoading: false,
         loadFailed: true,
-        error: e.toString(),
+        error: _message(e),
       );
     }
   }
@@ -80,12 +81,14 @@ class ShiftChangeController extends StateNotifier<ShiftChangeState> {
       state = state.copyWith(isMutating: false);
       return true;
     } catch (e) {
-      state = state.copyWith(isMutating: false, error: e.toString());
+      state = state.copyWith(isMutating: false, error: _message(e));
       return false;
     }
   }
 
-  Future<bool> decide(int id, String status) async {
+  /// Returns the decided request, whose `warnings` carry the backend's rule
+  /// recheck after an approval; null when the call failed (error is set).
+  Future<ShiftChangeRequest?> decide(int id, String status) async {
     state = state.copyWith(isMutating: true, clearError: true);
     try {
       final updated = await _ds.decideShiftChange(id: id, status: status);
@@ -94,12 +97,16 @@ class ShiftChangeController extends StateNotifier<ShiftChangeState> {
           if (r.id == id) updated else r,
       ];
       state = state.copyWith(isMutating: false, requests: newList);
-      return true;
+      return updated;
     } catch (e) {
-      state = state.copyWith(isMutating: false, error: e.toString());
-      return false;
+      state = state.copyWith(isMutating: false, error: _message(e));
+      return null;
     }
   }
+
+  /// The backend detail, never "ApiException(409): ...".
+  static String _message(Object e) =>
+      e is ApiException ? e.message : e.toString();
 }
 
 final shiftChangeControllerProvider =

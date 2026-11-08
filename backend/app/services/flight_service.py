@@ -8,6 +8,7 @@ See ``flight_excel_parser.py`` for the expected Excel column layout.
 
 from __future__ import annotations
 
+import logging
 from datetime import date
 
 from fastapi import HTTPException, UploadFile, status
@@ -24,6 +25,8 @@ from app.schemas.flight import (
 )
 from app.services.flight_excel_parser import parse_flight_workbook
 from app.services.flight_pair_derivation import derive_pairs_for_day
+
+logger = logging.getLogger(__name__)
 
 # Maximum allowed upload size (2 MB).
 _MAX_UPLOAD_BYTES = 2 * 1024 * 1024
@@ -160,6 +163,8 @@ def import_excel(db: Session, file: UploadFile) -> list[Flight]:
     See ``flight_excel_parser.py`` for full column spec.
     - File must be .xlsx and <= 2 MB.
     - Any hard parse error rejects the entire import (no partial commit).
+    - Rows repeating a (day, flt_number) are merged by the parser (last row
+      wins, review B5); each repeat is logged as a warning.
     - On success, all Flight rows are upserted and FlightDay.flight_pairs is
       recomputed for every touched day.
     """
@@ -180,7 +185,7 @@ def import_excel(db: Session, file: UploadFile) -> list[Flight]:
 
     # --- Parse workbook (pure, no DB) ---
     try:
-        parsed_rows, parse_errors = parse_flight_workbook(raw)
+        parsed_rows, parse_errors, parse_warnings = parse_flight_workbook(raw)
     except Exception as exc:
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -192,6 +197,9 @@ def import_excel(db: Session, file: UploadFile) -> list[Flight]:
             status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail={"message": t("flight.import_failed"), "errors": parse_errors},
         )
+
+    for warning in parse_warnings:
+        logger.warning("flight import %r: %s", filename, warning)
 
     # --- Upsert flights and recompute pairs ---
     touched_days: set[date] = set()

@@ -1,9 +1,12 @@
 """CLI tool to seed 10 deterministic demo users.
 
-Run from anywhere, for example:
+Run from anywhere; ``backend/.env`` is loaded by its absolute path. The demo
+password is read with a hidden prompt (asked twice), for example:
 
     python backend/scripts/seed_demo_users.py
-    python backend/scripts/seed_demo_users.py --password demo12345
+
+``--password`` keeps working for non-interactive use, but leaves the password
+in the shell history and the process list.
 
 Refuses (exit code 2) unless ENVIRONMENT=dev AND the database is local
 (SQLite, localhost, 127.0.0.1 or ::1); pass ``--allow-non-dev`` to run
@@ -30,9 +33,13 @@ if (
 if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
 
+# Before the settings import: the settings read '.env' relative to the cwd.
+from app.core import script_guard  # noqa: E402
+
+script_guard.load_backend_env(BACKEND_ROOT / ".env")
+
 from app.core.config import settings  # noqa: E402
 from app.core.database import SessionLocal  # noqa: E402
-from app.core.script_guard import refuse_unless_safe  # noqa: E402
 from app.services.demo_user_seed import DEMO_USERS, seed_demo_users  # noqa: E402
 
 
@@ -40,8 +47,11 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Seed 10 demo users")
     parser.add_argument(
         "--password",
-        default="demo12345",
-        help="Password to assign to every seeded user (default: demo12345)",
+        default=None,
+        help=(
+            "Password to assign to every seeded user (non-interactive use; omit "
+            "it to be prompted without echo)"
+        ),
     )
     parser.add_argument(
         "--allow-non-dev",
@@ -56,12 +66,15 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
-    refused = refuse_unless_safe(settings, args.allow_non_dev)
+    refused = script_guard.refuse_unless_safe(settings, args.allow_non_dev)
     if refused is not None:
         return refused
+    password = script_guard.read_password(args.password)
+    if password is None:
+        return 1
     db = SessionLocal()
     try:
-        result = seed_demo_users(db, args.password)
+        result = seed_demo_users(db, password)
     finally:
         db.close()
 
@@ -71,7 +84,8 @@ def main() -> int:
     )
     for spec in DEMO_USERS:
         print(f"- {spec.username} ({spec.role.value})")
-    print(f"Password: {args.password}")
+    if result["skipped"]:
+        print("Existing users kept their current password.")
     return 0
 
 

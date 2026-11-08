@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/network/api_exception.dart';
 import '../../../users/data/user_management_datasource.dart';
 import '../../../auth/domain/entities/user.dart';
 import '../../data/datasources/attendance_remote_datasource.dart';
@@ -49,6 +50,8 @@ class AttendanceState {
       );
 }
 
+/// Every mutation re-checks `mounted` after its await: logout invalidates
+/// this provider, possibly while a request is in flight.
 class AttendanceController extends StateNotifier<AttendanceState> {
   AttendanceController(this._ds, this._userDs, this._calculationsDs)
       : super(const AttendanceState());
@@ -68,6 +71,7 @@ class AttendanceController extends StateNotifier<AttendanceState> {
         if (isAdmin) _userDs.list(),
       ];
       final results = await Future.wait(futures);
+      if (!mounted) return;
       final records = results[0] as List<AttendanceRecord>;
       final holidays = results[1] as List<Holiday>;
       final users = (isAdmin && results.length > 2)
@@ -81,7 +85,9 @@ class AttendanceController extends StateNotifier<AttendanceState> {
         isLoading: false,
       );
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: e.toString());
+      if (mounted) {
+        state = state.copyWith(isLoading: false, error: _message(e));
+      }
     }
   }
 
@@ -99,6 +105,7 @@ class AttendanceController extends StateNotifier<AttendanceState> {
         code: code,
         note: note,
       );
+      if (!mounted) return false;
       final newList = [
         for (final r in state.records)
           if (r.userId == userId &&
@@ -119,7 +126,9 @@ class AttendanceController extends StateNotifier<AttendanceState> {
       state = state.copyWith(isMutating: false, records: newList);
       return true;
     } catch (e) {
-      state = state.copyWith(isMutating: false, error: e.toString());
+      if (mounted) {
+        state = state.copyWith(isMutating: false, error: _message(e));
+      }
       return false;
     }
   }
@@ -127,11 +136,17 @@ class AttendanceController extends StateNotifier<AttendanceState> {
   Future<bool> markSick({
     required int userId,
     required DateTime workDate,
+    String? note,
   }) async {
     state = state.copyWith(
         isMutating: true, clearError: true, clearSickCover: true);
     try {
-      final result = await _ds.sickCover(userId: userId, workDate: workDate);
+      final result = await _ds.sickCover(
+        userId: userId,
+        workDate: workDate,
+        note: note,
+      );
+      if (!mounted) return false;
       // Refresh the records list to reflect the sick + cover entries.
       final updatedRecords = List<AttendanceRecord>.from(state.records);
       _upsertRecord(updatedRecords, result.sick);
@@ -143,7 +158,9 @@ class AttendanceController extends StateNotifier<AttendanceState> {
       );
       return true;
     } catch (e) {
-      state = state.copyWith(isMutating: false, error: e.toString());
+      if (mounted) {
+        state = state.copyWith(isMutating: false, error: _message(e));
+      }
       return false;
     }
   }
@@ -152,11 +169,14 @@ class AttendanceController extends StateNotifier<AttendanceState> {
     state = state.copyWith(isMutating: true, clearError: true);
     try {
       await _ds.seed(year: year, month: month);
+      if (!mounted) return false;
       // Reload to reflect seeded data.
       await load(year, month, isAdmin: true);
       return true;
     } catch (e) {
-      state = state.copyWith(isMutating: false, error: e.toString());
+      if (mounted) {
+        state = state.copyWith(isMutating: false, error: _message(e));
+      }
       return false;
     }
   }
@@ -173,7 +193,7 @@ class AttendanceController extends StateNotifier<AttendanceState> {
     try {
       return await _calculationsDs.closeMonth(year, month);
     } finally {
-      state = state.copyWith(isMutating: false);
+      if (mounted) state = state.copyWith(isMutating: false);
     }
   }
 
@@ -186,6 +206,7 @@ class AttendanceController extends StateNotifier<AttendanceState> {
     state = state.copyWith(isMutating: true, clearError: true);
     try {
       final holiday = await _ds.upsertHoliday(day: day, name: name);
+      if (!mounted) return false;
       final newList = [
         for (final h in state.holidays)
           if (h.day.year == day.year &&
@@ -203,7 +224,9 @@ class AttendanceController extends StateNotifier<AttendanceState> {
       state = state.copyWith(isMutating: false, holidays: newList);
       return true;
     } catch (e) {
-      state = state.copyWith(isMutating: false, error: e.toString());
+      if (mounted) {
+        state = state.copyWith(isMutating: false, error: _message(e));
+      }
       return false;
     }
   }
@@ -212,12 +235,15 @@ class AttendanceController extends StateNotifier<AttendanceState> {
     state = state.copyWith(isMutating: true, clearError: true);
     try {
       await _ds.deleteHoliday(id);
+      if (!mounted) return false;
       final newList =
           state.holidays.where((h) => h.id != id).toList();
       state = state.copyWith(isMutating: false, holidays: newList);
       return true;
     } catch (e) {
-      state = state.copyWith(isMutating: false, error: e.toString());
+      if (mounted) {
+        state = state.copyWith(isMutating: false, error: _message(e));
+      }
       return false;
     }
   }
@@ -225,6 +251,10 @@ class AttendanceController extends StateNotifier<AttendanceState> {
   void clearSickCover() => state = state.copyWith(clearSickCover: true);
 
   // ── Private helpers ────────────────────────────────────────────────────────
+
+  /// What the page and dialogs show for a failure: the backend's detail for
+  /// an API error, never `ApiException(409): ...`.
+  static String _message(Object e) => e is ApiException ? e.message : '$e';
 
   void _upsertRecord(List<AttendanceRecord> list, AttendanceRecord record) {
     final idx = list.indexWhere((r) =>

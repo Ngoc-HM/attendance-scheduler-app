@@ -8,9 +8,12 @@ exact target).
 
 from __future__ import annotations
 
+from datetime import date
+
 from app.models.enums import AttendanceCode, Role
 from app.scheduler import PersonInput, SchedulerEngine, SolverInput
 from app.scheduler.calendar_utils import build_weeks, month_days
+from app.services.schedule_violation_checker import check_staffing
 
 DEMAND = {0: (0, 0), 1: (1, 1), 2: (1, 2)}  # minimum (A, D) per flight pairs
 FLIGHT_A = {AttendanceCode.A, AttendanceCode.D}
@@ -106,3 +109,61 @@ def test_understaffed_day_reports_violation_without_auto_ad() -> None:
     assert staffing[0].day is not None
     assert "will not assign an A/D" in staffing[0].message
     assert all(item.code is not AttendanceCode.A_D for item in out.assignments)
+
+
+def test_one_role_a_on_leave_two_pair_day_is_feasible() -> None:
+    """Review F5: the only role-A person on annual leave on a 2-pair day used
+    to make the model INFEASIBLE (shortfall capped at the role-A head count).
+    The shortfall is now capped by the demand, so the plan comes back with a
+    staffing violation for that day."""
+    days = month_days(2026, 9)
+    leave_day = date(2026, 9, 10)
+    people = [PersonInput(1, Role.A), PersonInput(2, Role.T), PersonInput(3, Role.M)]
+    fp = {d: 1 for d in days}
+    fp[leave_day] = 2
+    out = SchedulerEngine().solve(
+        SolverInput(
+            year=2026,
+            month=9,
+            people=people,
+            days=days,
+            weeks=build_weeks(days),
+            flight_pairs=fp,
+            approved_off={1: {leave_day: AttendanceCode.AL}},
+            max_solve_seconds=10.0,
+        )
+    )
+
+    assert out.feasible
+    assert out.status in ("optimal", "feasible")
+    assert len(out.assignments) == len(days) * len(people)
+    staffing_days = {v.day for v in out.violations if v.rule == "flight_staffing"}
+    assert leave_day in staffing_days
+
+
+def test_no_role_a_users_reports_shortfall() -> None:
+    """Review F6: with flights but no role-A staff the engine reported
+    nothing. Every flight day is now a shortfall, matching the checker."""
+    days = month_days(2026, 9)
+    people = [PersonInput(2, Role.T), PersonInput(3, Role.M)]
+    fp = {d: (2 if d.day % 2 else 1) for d in days}
+    fp[date(2026, 9, 7)] = 0
+    weeks = build_weeks(days)
+    out = SchedulerEngine().solve(
+        SolverInput(
+            year=2026,
+            month=9,
+            people=people,
+            days=days,
+            weeks=weeks,
+            flight_pairs=fp,
+            max_solve_seconds=10.0,
+        )
+    )
+
+    assert out.feasible
+    grid = {(a.user_id, a.day): a.code for a in out.assignments}
+    checker = check_staffing(grid, {2: Role.T, 3: Role.M}, weeks, fp)
+    engine = [v for v in out.violations if v.rule == "flight_staffing"]
+    assert len(engine) == len(checker) == len(days) - 1
+    assert date(2026, 9, 7) not in {v.day for v in engine}

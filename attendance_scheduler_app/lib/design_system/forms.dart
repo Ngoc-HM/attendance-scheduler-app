@@ -178,6 +178,8 @@ class DsSelectField<T> extends StatelessWidget {
   Widget build(BuildContext context) {
     return DropdownButtonFormField<T>(
       initialValue: value,
+      // Fill the field and ellipsize long labels instead of overflowing.
+      isExpanded: true,
       decoration: InputDecoration(labelText: label),
       items: items,
       onChanged: onChanged,

@@ -30,7 +30,7 @@
 - **R4 (F13):** admin manual override may create the missing cell of an active user; the re-check flags A/D cells of disabled users and does not count them as cover.
 - **R5 (F15):** no holiday-work penalty (design suggestion, not a bug); listed as an open question.
 - **R6 (goldens):** goldens are tagged `golden` and run only on a macOS CI job; Ubuntu runs `--exclude-tags golden`; the Windows build no longer waits for goldens.
-- **R7 (B1):** reports list only active users; cells starting with `= + - @ TAB CR` are prefixed with `'`.
+- **R7 (B1, revised 2026-11-08 after Task 3 review):** reports exclude pending users always and include a disabled user only when they have actuals in the reported period; cells starting with `= + - @ TAB CR` are prefixed with `'`.
 - **R8 (deleting users):** requests the deleted user decided keep their row with `decided_by_id = NULL`; requests where the deleted user is the swap counterpart are deleted when pending and kept with `counterpart_user_id = NULL` when decided.
 
 ## Review Focus
