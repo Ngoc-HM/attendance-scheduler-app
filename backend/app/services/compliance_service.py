@@ -12,11 +12,13 @@ from __future__ import annotations
 
 from datetime import date, datetime, time
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException, status
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
+from app.core.business_time import business_today
 from app.core.config import settings
 from app.core.i18n import t
 from app.models.attendance import AttendanceRecord
@@ -43,7 +45,7 @@ def _months_before(today: date, months: int) -> date:
 
 def default_cutoff(today: date | None = None) -> date:
     """First day of the month ``DATA_RETENTION_MONTHS`` before today."""
-    return _months_before(today or date.today(), settings.DATA_RETENTION_MONTHS)
+    return _months_before(today or business_today(), settings.DATA_RETENTION_MONTHS)
 
 
 def purge_before(
@@ -54,7 +56,7 @@ def purge_before(
     Returns ``(cutoff, {table: rows deleted})``. Raises 400 when the cutoff
     is more recent than the legal minimum retention.
     """
-    today = today or date.today()
+    today = today or business_today()
     cutoff = cutoff or default_cutoff(today)
     floor = _months_before(today, settings.DATA_RETENTION_MIN_MONTHS)
     if cutoff > floor:
@@ -140,7 +142,7 @@ def export_user_data(db: Session, user_id: int) -> dict[str, Any]:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=t("user.not_found"))
 
     return {
-        "exported_at": datetime.now().isoformat(timespec="seconds"),
+        "exported_at": datetime.now(ZoneInfo(settings.TIMEZONE)).isoformat(timespec="seconds"),
         "profile": _plain(
             user,
             (

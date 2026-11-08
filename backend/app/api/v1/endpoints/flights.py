@@ -12,6 +12,7 @@ from __future__ import annotations
 from fastapi import APIRouter, UploadFile, status
 
 from app.api.deps import ActiveUser, AdminUser, DbSession
+from app.api.params import MonthQuery, YearQuery
 from app.schemas.flight import (
     FlightDayApply,
     FlightDayApplyBatch,
@@ -135,7 +136,7 @@ def apply_presets_batch(db: DbSession, payload: FlightDayApplyBatch, admin: Admi
 
 
 @router.get("/days", response_model=list[FlightDayRead])
-def list_flight_days(db: DbSession, _user: ActiveUser, year: int, month: int):
+def list_flight_days(db: DbSession, _user: ActiveUser, year: YearQuery, month: MonthQuery):
     """List all FlightDay records for the given year/month with flight legs."""
     days = flight_service.list_days(db, year, month)
     if not days:

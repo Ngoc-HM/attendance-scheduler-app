@@ -145,3 +145,74 @@ def test_recently_sick_rule_spans_month_boundary(client: TestClient) -> None:
     assert body["cover"] is not None
     assert body["cover"]["user_id"] == was_sick and body["cover"]["code"] == "A/D"
     assert body["forced"] is True
+
+
+# --- review-2 B6 / E: active covers only, no health text, published seed ----
+
+def test_sick_cover_skips_disabled_users(client: TestClient) -> None:
+    """B6 — a disabled colleague is never chosen as the A/D cover, even when
+    they would win the fairness tie-break (lowest id, no A/D yet)."""
+    admin = _admin(client)
+    gone = _mk(client, admin, "b6_disabled", "A")  # lowest id of the three
+    sick = _mk(client, admin, "b6_sick", "A")
+    helper = _mk(client, admin, "b6_helper", "A")
+    day = "2027-09-14"
+    for uid, code in ((gone, "D"), (sick, "A"), (helper, "D")):
+        res = client.put("/api/v1/attendance", headers=admin,
+                         json={"user_id": uid, "work_date": day, "code": code})
+        assert res.status_code == 200, res.text
+    res = client.patch(f"/api/v1/users/{gone}", headers=admin, json={"status": "disabled"})
+    assert res.status_code == 200, res.text
+
+    res = client.post("/api/v1/attendance/sick-cover", headers=admin,
+                      json={"user_id": sick, "work_date": day, "code": "S"})
+    assert res.status_code == 200, res.text
+    cover = res.json()["cover"]
+    assert cover is not None
+    assert cover["user_id"] == helper
+
+
+def test_sick_cover_note_has_no_health_text(client: TestClient) -> None:
+    """§9.1 — the cover colleague's ordinary actual row must not say that
+    somebody was sick: its note is None, also on the forced (§6) path."""
+    admin = _admin(client)
+    sick = _mk(client, admin, "note_sick", "A")
+    helper = _mk(client, admin, "note_helper", "A")
+    # helper was sick a week earlier → forced cover (§6).
+    client.put("/api/v1/attendance", headers=admin,
+               json={"user_id": helper, "work_date": "2027-10-05", "code": "S"})
+    day = "2027-10-12"
+    client.put("/api/v1/attendance", headers=admin,
+               json={"user_id": sick, "work_date": day, "code": "A"})
+    client.put("/api/v1/attendance", headers=admin,
+               json={"user_id": helper, "work_date": day, "code": "D"})
+
+    res = client.post("/api/v1/attendance/sick-cover", headers=admin,
+                      json={"user_id": sick, "work_date": day, "code": "S"})
+    assert res.status_code == 200, res.text
+    body = res.json()
+    assert body["cover"]["user_id"] == helper and body["forced"] is True
+    assert body["cover"]["note"] is None
+
+    rows = client.get("/api/v1/attendance?year=2027&month=10", headers=admin).json()
+    stored = next(r for r in rows if r["user_id"] == helper and r["work_date"] == day)
+    assert stored["note"] is None
+
+
+def test_seed_refuses_draft_schedule(client: TestClient) -> None:
+    """A draft roster is never copied into the actuals (employees would see
+    unpublished codes through /attendance/me): 409
+    ``attendance.schedule_not_published``."""
+    from app.core.database import SessionLocal
+    from app.core.i18n import t
+    from app.models.enums import ScheduleStatus
+    from app.models.schedule import MonthlySchedule
+
+    with SessionLocal() as db:
+        db.add(MonthlySchedule(year=2041, month=2, status=ScheduleStatus.draft))
+        db.commit()
+
+    admin = _admin(client)
+    res = client.post("/api/v1/attendance/seed?year=2041&month=2", headers=admin)
+    assert res.status_code == 409, res.text
+    assert res.json()["detail"] == t("attendance.schedule_not_published")
