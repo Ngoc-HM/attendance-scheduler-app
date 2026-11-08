@@ -11,8 +11,9 @@ from typing import Annotated
 
 from fastapi import Path, Query
 
-YEAR_MIN = 2000
-YEAR_MAX = 2100
+from app.schemas.common import YEAR_MAX, YEAR_MIN
+
+__all__ = ["YEAR_MAX", "YEAR_MIN", "MonthPath", "MonthQuery", "YearPath", "YearQuery"]
 
 YearQuery = Annotated[int, Query(ge=YEAR_MIN, le=YEAR_MAX)]
 MonthQuery = Annotated[int, Query(ge=1, le=12)]

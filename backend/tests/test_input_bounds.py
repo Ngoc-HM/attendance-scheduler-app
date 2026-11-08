@@ -79,29 +79,72 @@ def test_year_out_of_range_422(
     assert res.status_code == 422, (template, year, res.status_code, res.text)
 
 
+@pytest.mark.parametrize(("year", "month"), [(1999, 6), (2101, 6), (2026, 0), (2026, 13)])
+def test_self_arrange_body_year_month_bounded(
+    client: TestClient, headers: dict, year: int, month: int
+) -> None:
+    """``SelfArrangeCreate`` body: year 2000..2100 and month 1..12 → else 422."""
+    res = client.post(
+        f"{V}/self-arrange", headers=headers["employee"],
+        json={"year": year, "month": month,
+              "changes": [{"work_date": "2026-06-01", "code": "X"}]},
+    )
+    assert res.status_code == 422, (year, month, res.status_code, res.text)
+
+
 # --- i18n: no hard-coded HTTPException detail ------------------------------
 
 APP_DIR = Path(__file__).resolve().parents[1] / "app"
 
-# Files still holding literal details that belong to OTHER fix tasks of the
-# 2026-11-08 review (they own those files). The coordinator empties this list
-# once those tasks are merged — do not add new entries.
-KNOWN_LITERAL_OFFENDERS: set[str] = {
-    "services/schedule_service.py",  # Task 7 (lines ~151/169) + Task 2 (~228)
+# Literal details still owned by ANOTHER fix task of the 2026-11-08 review
+# (Task 7: schedule_service manual override). Listed by (file, exact text), not
+# by file, so any NEW literal in the same file still fails. The coordinator
+# empties this set once Task 7 is merged — do not add entries.
+KNOWN_LITERAL_OFFENDERS: set[tuple[str, str]] = {
+    ("services/schedule_service.py", "Override date must belong to the schedule month."),
+    ("services/schedule_service.py", "Schedule cell not found."),
 }
 
 
-def _is_literal_text(node: ast.AST | None) -> bool:
-    """A str constant, an f-string, or a concatenation / %-format of one."""
+def _single_assignment(scope: ast.AST | None, name: str) -> ast.AST | None:
+    """The value of ``name``'s only assignment inside ``scope``, else None."""
+    if scope is None:
+        return None
+    values = []
+    for node in ast.walk(scope):
+        if isinstance(node, ast.Assign):
+            if any(isinstance(tg, ast.Name) and tg.id == name for tg in node.targets):
+                values.append(node.value)
+        elif isinstance(node, ast.AnnAssign | ast.AugAssign):
+            if isinstance(node.target, ast.Name) and node.target.id == name:
+                values.append(node.value)
+    return values[0] if len(values) == 1 else None
+
+
+def _is_literal_text(node: ast.AST | None, scope: ast.AST | None = None) -> bool:
+    """A str constant, an f-string, a concatenation / ``.format`` of one, a
+    conditional with a literal branch, or a bare name assigned exactly once
+    from such a literal in the enclosing function (``scope``)."""
     if isinstance(node, ast.Constant):
         return isinstance(node.value, str)
     if isinstance(node, ast.JoinedStr):
         return True
     if isinstance(node, ast.BinOp):
-        return _is_literal_text(node.left) or _is_literal_text(node.right)
+        return _is_literal_text(node.left, scope) or _is_literal_text(node.right, scope)
+    if isinstance(node, ast.IfExp):
+        return _is_literal_text(node.body, scope) or _is_literal_text(node.orelse, scope)
+    if isinstance(node, ast.Name):
+        value = _single_assignment(scope, node.id)
+        return value is not None and _is_literal_text(value)
     if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
-        return node.func.attr == "format" and _is_literal_text(node.func.value)
+        return node.func.attr == "format" and _is_literal_text(node.func.value, scope)
     return False
+
+
+def _is_literal_detail(detail: ast.AST | None, scope: ast.AST | None) -> bool:
+    if isinstance(detail, ast.Dict):
+        return any(_is_literal_text(v, scope) for v in detail.values)
+    return _is_literal_text(detail, scope)
 
 
 def _t_key(node: ast.AST | None) -> str | None:
@@ -124,42 +167,94 @@ def _t_key(node: ast.AST | None) -> str | None:
     return None
 
 
-def _http_exception_details() -> list[tuple[str, int, ast.AST | None]]:
-    found = []
-    for path in sorted(APP_DIR.rglob("*.py")):
-        rel = path.relative_to(APP_DIR).as_posix()
-        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
-            if not isinstance(node, ast.Call):
-                continue
-            func = node.func
-            name = func.id if isinstance(func, ast.Name) else getattr(func, "attr", None)
-            if name != "HTTPException":
-                continue
-            detail = next((k.value for k in node.keywords if k.arg == "detail"), None)
-            if detail is None and len(node.args) >= 2:
-                detail = node.args[1]
-            found.append((rel, node.lineno, detail))
+Detail = tuple[int, ast.AST | None, ast.AST | None]  # (line, detail, enclosing function)
+
+
+def _scan_source(source: str) -> list[Detail]:
+    """Every ``HTTPException(...)`` call in ``source`` with its detail node."""
+    tree = ast.parse(source)
+    parents = {child: node for node in ast.walk(tree) for child in ast.iter_child_nodes(node)}
+
+    def enclosing_function(node: ast.AST) -> ast.AST | None:
+        while node in parents:
+            node = parents[node]
+            if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
+                return node
+        return None
+
+    found: list[Detail] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+        name = func.id if isinstance(func, ast.Name) else getattr(func, "attr", None)
+        if name != "HTTPException":
+            continue
+        detail = next((k.value for k in node.keywords if k.arg == "detail"), None)
+        if detail is None and len(node.args) >= 2:
+            detail = node.args[1]
+        found.append((node.lineno, detail, enclosing_function(node)))
     return found
 
 
+def _app_details() -> list[tuple[str, Detail]]:
+    return [
+        (path.relative_to(APP_DIR).as_posix(), found)
+        for path in sorted(APP_DIR.rglob("*.py"))
+        for found in _scan_source(path.read_text(encoding="utf-8"))
+    ]
+
+
+def _allow_listed(rel: str, detail: ast.AST | None) -> bool:
+    return (
+        isinstance(detail, ast.Constant)
+        and (rel, detail.value) in KNOWN_LITERAL_OFFENDERS
+    )
+
+
+def test_literal_scanner_catches_indirect_literals() -> None:
+    """The scanner itself: literals hidden behind a conditional or a local
+    variable are flagged; catalog lookups are not."""
+    source = '''
+def a(flag):
+    raise HTTPException(400, detail="Plain literal.")
+def b(flag):
+    raise HTTPException(400, detail=t("x.key") if flag else "Fallback text.")
+def c():
+    msg = "Assigned once."
+    raise HTTPException(400, detail=msg)
+def d(x):
+    raise HTTPException(400, detail=f"Value {x}")
+def e():
+    msg = t("x.key")
+    raise HTTPException(400, detail=msg)
+def f(flag):
+    raise HTTPException(400, detail=t("x.a") if flag else t("x.b"))
+def g():
+    raise HTTPException(400, detail={"message": "Literal in dict.", "errors": []})
+'''
+    flagged = [
+        getattr(scope, "name", None)
+        for _line, detail, scope in _scan_source(source)
+        if _is_literal_detail(detail, scope)
+    ]
+    assert flagged == ["a", "b", "c", "d", "g"]
+
+
 def test_every_http_exception_detail_is_catalog_key() -> None:
-    details = _http_exception_details()
+    details = _app_details()
     assert details, "scanner found no HTTPException at all — broken walk?"
 
     literals = [
         f"{rel}:{line}"
-        for rel, line, detail in details
-        if rel not in KNOWN_LITERAL_OFFENDERS
-        and (_is_literal_text(detail) or (
-            isinstance(detail, ast.Dict)
-            and any(_is_literal_text(v) for v in detail.values)
-        ))
+        for rel, (line, detail, scope) in details
+        if _is_literal_detail(detail, scope) and not _allow_listed(rel, detail)
     ]
     assert literals == [], f"hard-coded HTTPException detail(s): {literals}"
 
     missing = [
         f"{rel}:{line} {key}"
-        for rel, line, detail in details
+        for rel, (line, detail, _scope) in details
         for key in [_t_key(detail)]
         if key is not None and not (key in MESSAGES["en"] and key in MESSAGES["vi"])
     ]

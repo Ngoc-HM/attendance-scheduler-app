@@ -172,6 +172,39 @@ def test_sick_cover_skips_disabled_users(client: TestClient) -> None:
     assert cover["user_id"] == helper
 
 
+def test_sick_cover_skips_pending_users(client: TestClient) -> None:
+    """A not-yet-approved (pending) account is never the A/D cover either,
+    even when it would win the fairness tie-break or is "recently sick"."""
+    from app.core.database import SessionLocal
+    from app.models.enums import UserStatus
+    from app.models.user import User
+
+    admin = _admin(client)
+    waiting = _mk(client, admin, "b6_pending", "A")  # lowest id of the three
+    sick = _mk(client, admin, "b6p_sick", "A")
+    helper = _mk(client, admin, "b6p_helper", "A")
+    # waiting was sick recently → would be the FORCED cover if eligible (§6).
+    client.put("/api/v1/attendance", headers=admin,
+               json={"user_id": waiting, "work_date": "2027-11-02", "code": "S"})
+    day = "2027-11-09"
+    for uid, code in ((waiting, "D"), (sick, "A"), (helper, "D")):
+        res = client.put("/api/v1/attendance", headers=admin,
+                         json={"user_id": uid, "work_date": day, "code": code})
+        assert res.status_code == 200, res.text
+    with SessionLocal() as db:
+        user = db.get(User, waiting)
+        assert user is not None
+        user.status = UserStatus.pending
+        db.commit()
+
+    res = client.post("/api/v1/attendance/sick-cover", headers=admin,
+                      json={"user_id": sick, "work_date": day, "code": "S"})
+    assert res.status_code == 200, res.text
+    body = res.json()
+    assert body["cover"] is not None
+    assert body["cover"]["user_id"] == helper and body["forced"] is False
+
+
 def test_sick_cover_note_has_no_health_text(client: TestClient) -> None:
     """§9.1 — the cover colleague's ordinary actual row must not say that
     somebody was sick: its note is None, also on the forced (§6) path."""
