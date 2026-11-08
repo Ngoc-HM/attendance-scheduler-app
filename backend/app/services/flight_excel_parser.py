@@ -3,7 +3,8 @@
 Expected layout (row 1 = header, one flight per data row):
   Column A: date       — Excel date cell OR ISO string "YYYY-MM-DD"
   Column B: flt_number — integer (37, 36, 31, 30)
-  Column C: route      — string, e.g. "HAN-FRA" (optional)
+  Column C: route      — string, e.g. "HAN-FRA" (optional, at most
+                         ROUTE_MAX_LENGTH characters)
   Column D: sta        — Excel time cell OR "HH:MM" string (optional, LT FRA)
   Column E: std        — Excel time cell OR "HH:MM" string (optional, LT FRA)
 
@@ -19,6 +20,10 @@ from datetime import date, datetime, time
 from typing import Any, NamedTuple
 
 from app.core.i18n import t
+
+# ``Flight.route`` is String(32): a longer value is a row error here instead of
+# a database error at commit (PostgreSQL enforces the length; SQLite does not).
+ROUTE_MAX_LENGTH = 32
 
 # ---------------------------------------------------------------------------
 # Cell value parsers
@@ -166,6 +171,15 @@ def parse_flight_workbook(raw: bytes) -> FlightParseResult:
             continue
         sta, std = times
 
+        route = str(col_route).strip() if col_route is not None else None
+        if route is not None and len(route) > ROUTE_MAX_LENGTH:
+            parse_errors.append(
+                t("flight.import_row_route_too_long").format(
+                    row=row_idx, max=ROUTE_MAX_LENGTH
+                )
+            )
+            continue
+
         key = (day, flt_number)
         if key in by_key:
             warnings.append(
@@ -178,7 +192,7 @@ def parse_flight_workbook(raw: bytes) -> FlightParseResult:
         by_key[key] = {
             "day": day,
             "flt_number": flt_number,
-            "route": str(col_route).strip() if col_route is not None else None,
+            "route": route,
             "sta": sta,
             "std": std,
         }

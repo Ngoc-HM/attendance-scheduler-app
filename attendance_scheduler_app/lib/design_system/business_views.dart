@@ -1053,6 +1053,7 @@ class DsLeavesView extends StatelessWidget {
     required this.rows,
     required this.onMonthlyRequest,
     required this.onAnnualRequest,
+    this.onRefresh,
     this.onApprove,
     this.onReject,
     this.onRevoke,
@@ -1065,6 +1066,9 @@ class DsLeavesView extends StatelessWidget {
   final List<DsLeaveRowData> rows;
   final VoidCallback onMonthlyRequest;
   final VoidCallback onAnnualRequest;
+
+  /// Reloads the requests; null → no refresh button.
+  final VoidCallback? onRefresh;
 
   /// Null → viewer cannot decide (employee): the actions column is hidden.
   final ValueChanged<int>? onApprove;
@@ -1102,6 +1106,12 @@ class DsLeavesView extends StatelessWidget {
       title: l.text('leaveRequests'),
       subtitle: day == null ? null : l.leaveSubtitle(day),
       actions: [
+        if (onRefresh != null)
+          DsSecondaryButton(
+            label: l.refresh,
+            icon: Icons.refresh,
+            onPressed: onRefresh,
+          ),
         DsSecondaryButton(
           label: l.text('requestAnnualLeave'),
           icon: Icons.calendar_month_outlined,
@@ -1456,15 +1466,24 @@ class DsReportsView extends StatelessWidget {
   const DsReportsView({
     super.key,
     required this.rows,
-    required this.onExportMonthly,
-    required this.onExportYearly,
+    required this.onExport,
     required this.onDownload,
+    this.filters = const [],
+    this.exporting = false,
   });
 
   final List<DsReportRowData> rows;
-  final VoidCallback onExportMonthly;
-  final VoidCallback onExportYearly;
+
+  /// Export the period and format chosen in [filters].
+  final VoidCallback onExport;
   final ValueChanged<int> onDownload;
+
+  /// Period / format selectors shown above the cards (D5: they used to hide
+  /// behind a row's download action).
+  final List<Widget> filters;
+
+  /// An export is running: the export button shows progress.
+  final bool exporting;
 
   @override
   Widget build(BuildContext context) {
@@ -1473,20 +1492,29 @@ class DsReportsView extends StatelessWidget {
       title: l.text('reportsTitle'),
       subtitle: l.text('reportsSubtitle'),
       actions: [
-        DsSecondaryButton(
-          label: l.text('exportYear'),
-          icon: Icons.calendar_view_month_outlined,
-          onPressed: onExportYearly,
-        ),
         DsPrimaryButton(
-          label: l.text('exportMonth'),
+          label: l.text('exportReport'),
           icon: Icons.download_outlined,
-          onPressed: onExportMonthly,
+          loading: exporting,
+          onPressed: onExport,
         ),
       ],
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (filters.isNotEmpty) ...[
+            DsSurface(
+              child: Wrap(
+                spacing: DsSpacing.x4,
+                runSpacing: DsSpacing.x3,
+                children: [
+                  for (final filter in filters)
+                    SizedBox(width: 200, child: filter),
+                ],
+              ),
+            ),
+            const SizedBox(height: DsSpacing.x6),
+          ],
           DsResponsiveGrid(
             children: [
               DsMetricCard(

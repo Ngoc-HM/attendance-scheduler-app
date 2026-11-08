@@ -8,7 +8,10 @@ import '../../../auth/domain/entities/user.dart';
 import '../providers/attendance_provider.dart';
 
 /// Admin dialog to record / update a single attendance cell.
-/// Supports all AttendanceCode values including "S" (sick).
+///
+/// Lists only active people. The code list is the selected person's planned
+/// codes ([ShiftCodeX.plannedCodesFor] their role) plus "S" (sick), and
+/// defaults to the role's first planned code.
 class AttendanceUpsertDialog extends ConsumerStatefulWidget {
   const AttendanceUpsertDialog({
     super.key,
@@ -32,18 +35,59 @@ class _AttendanceUpsertDialogState
     extends ConsumerState<AttendanceUpsertDialog> {
   int? _userId;
   DateTime? _workDate;
-  ShiftCode _code = ShiftCode.a;
+  ShiftCode? _code;
   bool _sickCoverMode = false;
   final _noteCtrl = TextEditingController();
+
+  /// Disabled or pending people cannot work a shift.
+  late final List<User> _activeUsers = widget.users
+      .where((u) => u.status == 'active')
+      .toList();
+
+  User? get _selectedUser {
+    for (final u in _activeUsers) {
+      if (u.id == _userId) return u;
+    }
+    return null;
+  }
+
+  /// The selected person's planned codes plus S; empty until someone is
+  /// selected.
+  List<ShiftCode> get _codes {
+    final user = _selectedUser;
+    if (user == null) return const [];
+    return [...ShiftCodeX.plannedCodesFor(user.role), ShiftCode.s];
+  }
 
   @override
   void initState() {
     super.initState();
-    _userId = widget.preselectedUserId;
     _workDate = widget.preselectedDate;
-    if (widget.preselectedCode != null) {
-      _code = _parseCode(widget.preselectedCode!);
+    _selectUser(widget.preselectedUserId);
+    final preselected = widget.preselectedCode;
+    if (preselected != null) {
+      final code = _parseCode(preselected);
+      if (_codes.contains(code)) _setCode(code);
     }
+  }
+
+  /// Select [userId] (ignored unless active) and keep the code valid for the
+  /// new person's role: a code outside it falls back to the first planned one.
+  void _selectUser(int? userId) {
+    _userId = _activeUsers.any((u) => u.id == userId) ? userId : null;
+    final codes = _codes;
+    if (codes.isEmpty) {
+      _code = null;
+      _sickCoverMode = false;
+    } else if (!codes.contains(_code)) {
+      _setCode(codes.first);
+    }
+  }
+
+  /// Picking S switches on the automatic cover by default.
+  void _setCode(ShiftCode code) {
+    _code = code;
+    _sickCoverMode = code == ShiftCode.s;
   }
 
   @override
@@ -84,7 +128,7 @@ class _AttendanceUpsertDialogState
             value: _userId,
             isExpanded: true,
             hint: Text(l.text('selectEmployee')),
-            items: widget.users
+            items: _activeUsers
                 .map(
                   (u) => DropdownMenuItem(
                     value: u.id,
@@ -94,7 +138,7 @@ class _AttendanceUpsertDialogState
                   ),
                 )
                 .toList(),
-            onChanged: (v) => setState(() => _userId = v),
+            onChanged: (v) => setState(() => _selectUser(v)),
           ),
           const SizedBox(height: DsSpacing.x3),
           // Date picker
@@ -114,17 +158,11 @@ class _AttendanceUpsertDialogState
           DropdownButton<ShiftCode>(
             value: _code,
             isExpanded: true,
-            items: ShiftCode.values
+            items: _codes
                 .map((c) => DropdownMenuItem(value: c, child: Text(c.code)))
                 .toList(),
             onChanged: (v) {
-              if (v != null) {
-                setState(() {
-                  _code = v;
-                  // Auto-enable sick-cover mode when S is selected.
-                  _sickCoverMode = v == ShiftCode.s;
-                });
-              }
+              if (v != null) setState(() => _setCode(v));
             },
           ),
           if (_code == ShiftCode.s) ...[
@@ -166,7 +204,10 @@ class _AttendanceUpsertDialogState
         DsPrimaryButton(
           label: l.text('save'),
           loading: state.isMutating,
-          onPressed: state.isMutating || _userId == null || _workDate == null
+          onPressed: state.isMutating ||
+                  _userId == null ||
+                  _workDate == null ||
+                  _code == null
               ? null
               : () => _submit(context, l),
         ),
@@ -187,10 +228,16 @@ class _AttendanceUpsertDialogState
 
   Future<void> _submit(BuildContext context, AppLocalizations l) async {
     final ctrl = ref.read(attendanceControllerProvider.notifier);
+    final code = _code!;
+    final note = _noteCtrl.text.isNotEmpty ? _noteCtrl.text : null;
     bool ok;
 
-    if (_code == ShiftCode.s && _sickCoverMode) {
-      ok = await ctrl.markSick(userId: _userId!, workDate: _workDate!);
+    if (code == ShiftCode.s && _sickCoverMode) {
+      ok = await ctrl.markSick(
+        userId: _userId!,
+        workDate: _workDate!,
+        note: note,
+      );
       if (context.mounted && ok) {
         final cover = ref.read(attendanceControllerProvider).lastSickCover;
         final msg = cover?.cover != null
@@ -206,8 +253,8 @@ class _AttendanceUpsertDialogState
       ok = await ctrl.upsert(
         userId: _userId!,
         workDate: _workDate!,
-        code: _code.code,
-        note: _noteCtrl.text.isNotEmpty ? _noteCtrl.text : null,
+        code: code.code,
+        note: note,
       );
       if (context.mounted && ok) {
         DsFeedback.show(
@@ -219,7 +266,8 @@ class _AttendanceUpsertDialogState
     }
 
     if (context.mounted && !ok) {
-      final err = ref.read(attendanceControllerProvider).error ?? 'error';
+      final err =
+          ref.read(attendanceControllerProvider).error ?? l.text('saveFailed');
       DsFeedback.show(context, err, tone: DsTone.danger);
     } else if (context.mounted) {
       Navigator.of(context).pop(true);

@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, Query, status
 
 from app.api.deps import ActiveUser, AdminUser, DbSession
+from app.core.i18n import t
 from app.models.enums import LeaveStatus
 from app.schemas.shift_change import ShiftChangeCreate, ShiftChangeDecision, ShiftChangeRead
 from app.services import audit_service, shift_change_service
@@ -51,7 +52,7 @@ def list_shift_changes(
     if all:
         from app.models.enums import Role
         if current_user.role is not Role.M:
-            raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Admin only")
+            raise HTTPException(status.HTTP_403_FORBIDDEN, detail=t("auth.admin_required"))
         pairs = shift_change_service.list_all(db)
     else:
         pairs = shift_change_service.list_for_user(db, current_user.id)
@@ -70,7 +71,7 @@ def decide_shift_change(
     if payload.status == LeaveStatus.pending:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            detail="Decision status must be 'approved' or 'rejected'.",
+            detail=t("request.decision_status_invalid"),
         )
     req, strict_review, warnings = shift_change_service.decide(
         db, req_id, payload.status, admin.id

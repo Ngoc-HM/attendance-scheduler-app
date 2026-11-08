@@ -11,11 +11,27 @@ import '../providers/leaves_provider.dart';
 ///
 /// All users: submit request, view own leaves.
 /// Admin: view all leaves, approve / reject pending.
-class LeavesPage extends ConsumerWidget {
+///
+/// Reloads every time it is opened and from its refresh button (D4).
+class LeavesPage extends ConsumerStatefulWidget {
   const LeavesPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<LeavesPage> createState() => _LeavesPageState();
+}
+
+class _LeavesPageState extends ConsumerState<LeavesPage> {
+  @override
+  void initState() {
+    super.initState();
+    // After the first frame: a provider must not change during build.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) ref.read(leavesControllerProvider.notifier).load();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final state = ref.watch(leavesControllerProvider);
     final ctrl = ref.read(leavesControllerProvider.notifier);
     final isAdmin = ref.watch(authControllerProvider).user?.isAdmin ?? false;
@@ -38,6 +54,7 @@ class LeavesPage extends ConsumerWidget {
       ),
       data: (rows) => DsLeavesView(
         rows: rows,
+        onRefresh: ctrl.load,
         onMonthlyRequest: () => _showMonthlyRequestDialog(context, ref, l),
         onAnnualRequest: () => _showAnnualRequestDialog(context, ref, l),
         // Null for employees → the actions column disappears entirely
@@ -183,20 +200,23 @@ class LeavesPage extends ConsumerWidget {
         : l.leaveSubtitle(closesOnDay);
 
     final now = DateTime.now();
-    final firstAllowed = DateTime(2000);
-    // Annual leave is filed for the server's target year (business date in
-    // TIMEZONE); the device year + 1 is only the fallback before it loads.
+    // Leave is filed for the server's targets (business date in TIMEZONE):
+    // annual leave for the target year, monthly leave for the target month
+    // only. The device's next year / next month is only the fallback before
+    // the window loads.
     final annualYear = window?.annualTargetYear ?? now.year + 1;
-    final annualFirst = DateTime(annualYear, 1, 1);
-    final annualLast = DateTime(annualYear, 12, 31);
+    final monthlyTarget = window == null
+        ? DateTime(now.year, now.month + 1)
+        : DateTime(window.monthlyTargetYear, window.monthlyTargetMonth);
+    final rangeFirst = isAnnual
+        ? DateTime(annualYear, 1, 1)
+        : DateTime(monthlyTarget.year, monthlyTarget.month, 1);
+    final rangeLast = isAnnual
+        ? DateTime(annualYear, 12, 31)
+        : DateTime(monthlyTarget.year, monthlyTarget.month + 1, 0);
 
     String fmtDate(DateTime d) =>
         '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
-
-    DateTime pickerFirstDate() =>
-        isAnnual ? (startDate ?? annualFirst) : (startDate ?? firstAllowed);
-
-    DateTime pickerLastDate() => isAnnual ? annualLast : DateTime(2100);
 
     await showDialog<void>(
       context: context,
@@ -230,16 +250,18 @@ class LeavesPage extends ConsumerWidget {
                 onTap: () async {
                   final picked = await showDatePicker(
                     context: ctx,
-                    initialDate: startDate ?? (isAnnual ? annualFirst : now),
-                    firstDate: isAnnual ? annualFirst : firstAllowed,
-                    lastDate: pickerLastDate(),
+                    initialDate: startDate ?? rangeFirst,
+                    firstDate: rangeFirst,
+                    lastDate: rangeLast,
                   );
                   if (picked != null) {
                     setS(() {
                       startDate = picked;
                       startCtrl.text = fmtDate(picked);
-                      // Auto-fill end if not set yet.
-                      if (endDate == null) {
+                      // Fill the end when unset, and move it up when the new
+                      // start passed it: the end never precedes the start.
+                      final end = endDate;
+                      if (end == null || end.isBefore(picked)) {
                         endDate = picked;
                         endCtrl.text = fmtDate(picked);
                       }
@@ -259,13 +281,12 @@ class LeavesPage extends ConsumerWidget {
                     size: 20,
                   ),
                 ),
-                  onTap: () async {
+                onTap: () async {
                   final picked = await showDatePicker(
                     context: ctx,
-                    initialDate:
-                        endDate ?? startDate ?? (isAnnual ? annualFirst : now),
-                    firstDate: pickerFirstDate(),
-                    lastDate: pickerLastDate(),
+                    initialDate: endDate ?? startDate ?? rangeFirst,
+                    firstDate: startDate ?? rangeFirst,
+                    lastDate: rangeLast,
                   );
                   if (picked != null) {
                     setS(() {

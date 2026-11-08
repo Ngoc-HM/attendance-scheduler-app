@@ -8,7 +8,9 @@ from typing import Annotated
 from fastapi import APIRouter, HTTPException, Query, status
 
 from app.api.deps import ActiveUser, AdminUser, DbSession, ensure_self_or_admin
+from app.api.params import YEAR_MAX, YEAR_MIN
 from app.core.business_time import business_today
+from app.core.i18n import t
 from app.models.enums import LeaveStatus
 from app.schemas.leave import (
     AnnualLeaveSummary,
@@ -34,7 +36,7 @@ def list_leaves(
         # Only admins may view all requests.
         from app.models.enums import Role
         if current_user.role is not Role.M:
-            raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Admin only")
+            raise HTTPException(status.HTTP_403_FORBIDDEN, detail=t("auth.admin_required"))
         return leave_service.list_all(db)
     return leave_service.list_for_user(db, current_user.id)
 
@@ -66,7 +68,7 @@ def leave_window(_user: ActiveUser):
 def leave_balance_summary(
     db: DbSession,
     current_user: ActiveUser,
-    year: Annotated[int | None, Query(ge=1, le=9999)] = None,
+    year: Annotated[int | None, Query(ge=YEAR_MIN, le=YEAR_MAX)] = None,
     user_id: int | None = None,
 ):
     """Annual leave quota, used, pending and remaining days (D4).
@@ -117,7 +119,7 @@ def decide_leave(
     if payload.status == LeaveStatus.pending:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            detail="Decision status must be 'approved' or 'rejected'.",
+            detail=t("request.decision_status_invalid"),
         )
     decided, warnings = leave_service.decide(db, leave_id, payload.status, admin.id)
     audit_service.record(db, admin.id, f"leave.{payload.status.value}", "LeaveRequest",

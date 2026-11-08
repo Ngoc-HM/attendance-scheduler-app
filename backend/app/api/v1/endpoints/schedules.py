@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from datetime import date
-
 from fastapi import APIRouter, HTTPException, status
 
 from app.api.deps import ActiveUser, AdminUser, DbSession
+from app.api.params import MonthPath, YearPath
+from app.core.business_time import business_today
 from app.core.config import settings
 from app.core.i18n import t
 from app.schemas.schedule import (
@@ -30,7 +30,7 @@ def get_schedule_violations(db: DbSession, schedule_id: int, _admin: AdminUser):
 
 
 @router.get("/{year}/{month}", response_model=MonthlyScheduleRead)
-def get_schedule(db: DbSession, year: int, month: int, current_user: ActiveUser):
+def get_schedule(db: DbSession, year: YearPath, month: MonthPath, current_user: ActiveUser):
     """View the month's schedule. Drafts are visible to admins only (G4).
 
     Non-admin visibility window (owner 2026-07-09): any past month, the current
@@ -42,7 +42,7 @@ def get_schedule(db: DbSession, year: int, month: int, current_user: ActiveUser)
     """
     is_admin = current_user.role.is_admin
     if not is_admin and settings.ENVIRONMENT != "dev":
-        today = date.today()
+        today = business_today()
         if year * 12 + month > today.year * 12 + today.month + 2:
             raise HTTPException(
                 status.HTTP_403_FORBIDDEN, detail=t("schedule.month_out_of_range")

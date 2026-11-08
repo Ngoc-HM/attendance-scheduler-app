@@ -11,6 +11,7 @@ from fastapi import APIRouter, Query
 from fastapi.responses import StreamingResponse
 
 from app.api.deps import AdminUser, DbSession
+from app.api.params import MonthPath, YearPath
 from app.services import audit_service, report_serializers, report_service
 
 router = APIRouter()
@@ -29,7 +30,7 @@ def _stream(table, fmt: str, filename: str) -> StreamingResponse:
 
 @router.get("/monthly/{year}/{month}")
 def monthly_report(
-    db: DbSession, year: int, month: int, admin: AdminUser,
+    db: DbSession, year: YearPath, month: MonthPath, admin: AdminUser,
     format: str = Query("csv"),
 ):
     """F-15 — attendance export for a single month."""
@@ -41,7 +42,7 @@ def monthly_report(
 
 @router.get("/yearly/{year}")
 def yearly_report(
-    db: DbSession, year: int, admin: AdminUser, format: str = Query("csv")
+    db: DbSession, year: YearPath, admin: AdminUser, format: str = Query("csv")
 ):
     """F-15 — attendance export for a full year."""
     table = report_service.yearly(db, year)

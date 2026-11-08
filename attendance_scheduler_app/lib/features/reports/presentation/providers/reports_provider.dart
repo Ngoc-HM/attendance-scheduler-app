@@ -40,6 +40,9 @@ class ReportsState {
   final bool isExporting;
   final ExportResult? lastResult;
   final int? selectedYear;
+
+  /// 1..12, or null for the full year (yearly endpoint; never month 0,
+  /// which the backend rejects).
   final int? selectedMonth;
   final String selectedFormat; // 'csv' | 'xlsx'
 
@@ -48,32 +51,52 @@ class ReportsState {
     ExportResult? lastResult,
     int? selectedYear,
     int? selectedMonth,
+    bool fullYear = false,
     String? selectedFormat,
   }) =>
       ReportsState(
         isExporting: isExporting ?? this.isExporting,
         lastResult: lastResult ?? this.lastResult,
         selectedYear: selectedYear ?? this.selectedYear,
-        selectedMonth: selectedMonth ?? this.selectedMonth,
+        selectedMonth: fullYear ? null : (selectedMonth ?? this.selectedMonth),
         selectedFormat: selectedFormat ?? this.selectedFormat,
       );
 }
 
+/// Writes a downloaded report and returns the saved path.
+typedef ReportFileSaver = Future<String> Function(
+  List<int> bytes,
+  String filename,
+);
+
 class ReportsController extends StateNotifier<ReportsState> {
-  ReportsController(this._ds)
-      : super(ReportsState(
+  /// [saveFile] defaults to the system downloads folder; tests pass a fake.
+  ReportsController(this._ds, {ReportFileSaver? saveFile})
+      : _saveFile = saveFile ?? _saveToDownloads,
+        super(ReportsState(
           selectedYear: DateTime.now().year,
           selectedMonth: DateTime.now().month,
         ));
 
   final ReportsRemoteDataSource _ds;
+  final ReportFileSaver _saveFile;
 
   void selectYear(int year) => state = state.copyWith(selectedYear: year);
-  void selectMonth(int month) => state = state.copyWith(selectedMonth: month);
+
+  /// [month] 1..12, or null for the full year.
+  void selectMonth(int? month) => state = month == null
+      ? state.copyWith(fullYear: true)
+      : state.copyWith(selectedMonth: month);
   void selectFormat(String fmt) => state = state.copyWith(selectedFormat: fmt);
 
+  /// Export the selected period: the month's report, or the yearly report
+  /// when the full year is selected. Null when an export is already running
+  /// (the click is ignored).
+  Future<ExportResult?> export() =>
+      state.selectedMonth == null ? exportYearly() : exportMonthly();
+
   /// Download monthly report, save to downloads directory, surface path.
-  Future<ExportResult> exportMonthly() async {
+  Future<ExportResult?> exportMonthly() async {
     final year = state.selectedYear;
     final month = state.selectedMonth;
     if (year == null || month == null) {
@@ -85,7 +108,7 @@ class ReportsController extends StateNotifier<ReportsState> {
   }
 
   /// Download yearly report, save to downloads directory, surface path.
-  Future<ExportResult> exportYearly() async {
+  Future<ExportResult?> exportYearly() async {
     final year = state.selectedYear;
     if (year == null) {
       return const ExportFailure.localized('selectYearFirst');
@@ -93,29 +116,47 @@ class ReportsController extends StateNotifier<ReportsState> {
     return _export(() => _ds.yearly(year, state.selectedFormat));
   }
 
-  Future<ExportResult> _export(
+  /// One export at a time: a second click (Export or a row's Download)
+  /// while one runs returns null. A failed download shows the backend detail
+  /// or `reportExportFailed`; only a failed file write is `reportSaveFailed`.
+  Future<ExportResult?> _export(
     Future<ReportDownload> Function() fetch,
   ) async {
+    if (state.isExporting) return null;
     state = state.copyWith(isExporting: true);
+    final ReportDownload download;
     try {
-      final download = await fetch();
-      final savedPath = await _saveFile(download.bytes, download.filename);
-      final result = ExportSuccess(savedPath);
-      state = state.copyWith(isExporting: false, lastResult: result);
-      return result;
+      download = await fetch();
     } on ApiException catch (e) {
-      final result = ExportFailure(e.message);
-      state = state.copyWith(isExporting: false, lastResult: result);
-      return result;
-    } catch (e) {
-      final result = ExportFailure(e.toString());
-      state = state.copyWith(isExporting: false, lastResult: result);
-      return result;
+      return _finish(ExportFailure(e.message));
+    } catch (_) {
+      // A malformed response (e.g. a body that is not bytes).
+      return _finish(const ExportFailure.localized('reportExportFailed'));
+    }
+    try {
+      final path = await _saveFile(download.bytes, download.filename);
+      return _finish(ExportSuccess(path));
+    } catch (_) {
+      // No writable folder, disk full, ...: a localized message instead of
+      // the raw exception text.
+      return _finish(const ExportFailure.localized('reportSaveFailed'));
     }
   }
 
+  /// Store [result] unless the controller was disposed meanwhile (logout
+  /// resets the providers mid-export).
+  ExportResult _finish(ExportResult result) {
+    if (mounted) {
+      state = state.copyWith(isExporting: false, lastResult: result);
+    }
+    return result;
+  }
+
   /// Write [bytes] to the system downloads directory and return the full path.
-  static Future<String> _saveFile(List<int> bytes, String filename) async {
+  static Future<String> _saveToDownloads(
+    List<int> bytes,
+    String filename,
+  ) async {
     final dir = await _resolveDownloadsDir();
     final file = File('${dir.path}${Platform.pathSeparator}$filename');
     await file.writeAsBytes(bytes, flush: true);
