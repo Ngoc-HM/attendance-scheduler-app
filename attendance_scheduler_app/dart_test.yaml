@@ -1,0 +1,6 @@
+# Test tags used in this package (`dart test` / `flutter test`).
+tags:
+  # Pixel goldens (test/visual_golden_test.dart). They are rendered on macOS
+  # and only match there: run with `flutter test --tags golden` on macOS and
+  # `flutter test --exclude-tags golden` everywhere else.
+  golden:
