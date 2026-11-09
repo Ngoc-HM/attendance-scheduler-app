@@ -11,5 +11,8 @@
 	<!-- Allow outbound HTTP to the backend REST API. -->
 	<key>com.apple.security.network.client</key>
 	<true/>
+	<!-- Report exports are saved straight into ~/Downloads (no save dialog). -->
+	<key>com.apple.security.files.downloads.read-write</key>
+	<true/>
 </dict>
 </plist>
