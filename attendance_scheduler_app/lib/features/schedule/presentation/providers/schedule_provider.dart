@@ -114,16 +114,39 @@ class ScheduleController extends StateNotifier<ScheduleState> {
       clearResult: true,
     );
     try {
-      final results = await Future.wait<Object>([
-        _ds.fetchSchedule(year, month),
+      // A month without a schedule (404) must still keep the people: the
+      // admin generates it next, and its columns need their codes and roles.
+      // A failed people call (admin) still fails the whole load.
+      Object? scheduleError;
+      final results = await Future.wait<Object?>([
+        _ds.fetchSchedule(year, month).then<Object?>(
+          (schedule) => schedule,
+          onError: (Object e) {
+            scheduleError = e;
+            return null;
+          },
+        ),
         isAdmin ? _allUsers() : _directoryOrEmpty(),
       ]);
-      final schedule = results[0] as MonthlySchedule;
+      final people = results[1]! as List<UserDirectoryEntry>;
+      final schedule = results[0] as MonthlySchedule?;
+      if (schedule == null) {
+        if (!mounted || seq != _loadSeq) return;
+        final error = scheduleError;
+        state = state.copyWith(
+          people: people,
+          isLoading: false,
+          clearSchedule: true,
+          loadError: error,
+          loadErrorStatus: error is ApiException ? error.statusCode : null,
+        );
+        return;
+      }
       final violations = isAdmin ? await _violationsOrNull(schedule.id) : null;
       if (!mounted || seq != _loadSeq) return;
       state = state.copyWith(
         schedule: schedule,
-        people: results[1] as List<UserDirectoryEntry>,
+        people: people,
         violations: violations,
         isLoading: false,
       );

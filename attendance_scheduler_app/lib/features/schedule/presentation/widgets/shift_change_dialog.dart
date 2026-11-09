@@ -182,20 +182,23 @@ class _ShiftChangeRequestDialogState
 
 /// Admin panel showing pending shift-change requests with approve/reject.
 /// Each row names the requester and, for a swap, the partner by code (D3).
-/// Approving shows the backend's rule warnings and calls [onApproved] so the
-/// page reloads the grid the approval changed.
+/// A successful decision is handed to [onDecided]; the panel itself only
+/// reports a failed one.
 class ShiftChangePendingPanel extends ConsumerWidget {
   const ShiftChangePendingPanel({
     super.key,
     this.codeById = const {},
-    this.onApproved,
+    required this.onDecided,
   });
 
   /// Person id → code (e.g. "A3").
   final Map<int, String> codeById;
 
-  /// Called after a successful approval (e.g. to reload the schedule grid).
-  final VoidCallback? onApproved;
+  /// Called with the decided request after a successful approval or
+  /// rejection. The caller shows the feedback (toast, or the backend's rule
+  /// warnings) and reloads the grid: deciding the last pending request
+  /// removes its row, so this panel can no longer do it from that row.
+  final ValueChanged<ShiftChangeRequest> onDecided;
 
   String _code(AppLocalizations l, int? id) =>
       id == null ? '—' : (codeById[id] ?? l.userFallback(id));
@@ -293,53 +296,20 @@ class ShiftChangePendingPanel extends ConsumerWidget {
     final decided = await ref
         .read(shiftChangeControllerProvider.notifier)
         .decide(id, status);
+    if (decided != null) {
+      onDecided(decided);
+      return;
+    }
     if (!context.mounted) return;
-    if (decided == null) {
-      DsFeedback.show(
-        context,
-        apiErrorMessage(
-          l,
-          ref.read(shiftChangeControllerProvider).error,
-          fallbackKey: 'actionFailed',
-        ),
-        tone: DsTone.danger,
-      );
-      return;
-    }
-    if (status != 'approved') {
-      DsFeedback.show(
-        context,
-        l.text('requestRejected'),
-        tone: DsTone.success,
-      );
-      return;
-    }
-    if (decided.warnings.isEmpty) {
-      DsFeedback.show(
-        context,
-        l.text('requestApproved'),
-        tone: DsTone.success,
-      );
-    } else {
-      // The approval is saved; the warnings are the backend's rule recheck
-      // of the changed cells, listed in full instead of a one-line toast.
-      await showDialog<void>(
-        context: context,
-        builder: (context) => DsFormDialog(
-          title: l.text('approvedWithWarnings'),
-          content: RuleWarningsList(lines: decided.warnings),
-          actions: [
-            DsPrimaryButton(
-              label: l.text('close'),
-              onPressed: () => Navigator.of(context).pop(),
-            ),
-          ],
-        ),
-      );
-      // The dialog may outlive the panel (logout, month switch).
-      if (!context.mounted) return;
-    }
-    onApproved?.call();
+    DsFeedback.show(
+      context,
+      apiErrorMessage(
+        l,
+        ref.read(shiftChangeControllerProvider).error,
+        fallbackKey: 'actionFailed',
+      ),
+      tone: DsTone.danger,
+    );
   }
 }
 

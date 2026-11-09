@@ -4,16 +4,22 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/network/api_error_message.dart';
 import '../../../../design_system/design_system.dart';
 import '../../../../i18n/app_localizations.dart';
+import '../../domain/entities/self_arrange_entities.dart';
 import '../providers/self_arrange_provider.dart';
 
 /// Admin panel listing pending self-arrange batches with approve/reject
 /// (owner 2026-07-09). Mounted on the admin schedule page next to the
-/// shift-change panel. Approving applies every cell of the batch.
+/// shift-change panel. Approving applies every cell of the batch. A
+/// successful decision is handed to [onDecided]; the panel itself only
+/// reports a failed one.
 class SelfArrangePendingPanel extends ConsumerWidget {
-  const SelfArrangePendingPanel({super.key, this.onDecided});
+  const SelfArrangePendingPanel({super.key, required this.onDecided});
 
-  /// Called after a successful decision (e.g. to reload the schedule grid).
-  final VoidCallback? onDecided;
+  /// Called with the decided batch after a successful approval or rejection.
+  /// The caller shows the feedback (with the backend's rule warnings) and
+  /// reloads the grid: deciding the last pending batch removes its row, so
+  /// this panel can no longer do it from that row.
+  final ValueChanged<SelfArrangeBatch> onDecided;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -106,25 +112,15 @@ class SelfArrangePendingPanel extends ConsumerWidget {
     final decided = await ref
         .read(selfArrangeAdminControllerProvider.notifier)
         .decide(id, status);
-    if (decided != null) onDecided?.call();
-    if (!context.mounted) return;
-    if (decided == null) {
-      DsFeedback.show(
-        context,
-        apiErrorMessage(l, ref.read(selfArrangeAdminControllerProvider).error),
-        tone: DsTone.danger,
-      );
+    if (decided != null) {
+      onDecided(decided);
       return;
     }
-    // Surface the hard-rule recheck warnings the backend returns on approval
-    // (F-09 parity) — the admin confirmed the change but must see the impact.
-    final hasWarnings = decided.warnings.isNotEmpty;
+    if (!context.mounted) return;
     DsFeedback.show(
       context,
-      hasWarnings
-          ? '${l.text('selfArrangeDecided')} ${decided.warnings.join('; ')}'
-          : l.text('selfArrangeDecided'),
-      tone: hasWarnings ? DsTone.warning : DsTone.success,
+      apiErrorMessage(l, ref.read(selfArrangeAdminControllerProvider).error),
+      tone: DsTone.danger,
     );
   }
 }

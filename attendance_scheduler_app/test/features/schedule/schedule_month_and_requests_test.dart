@@ -9,8 +9,10 @@ import 'dart:async';
 import 'dart:core';
 import 'dart:core' as core;
 
+import 'package:attendance_scheduler_app/core/constants/shift_codes.dart';
 import 'package:attendance_scheduler_app/core/network/api_exception.dart';
 import 'package:attendance_scheduler_app/core/storage/locale_storage.dart';
+import 'package:attendance_scheduler_app/design_system/design_system.dart';
 import 'package:attendance_scheduler_app/features/auth/data/models/user_model.dart';
 import 'package:attendance_scheduler_app/features/auth/domain/entities/user.dart';
 import 'package:attendance_scheduler_app/features/auth/domain/repositories/auth_repository.dart';
@@ -84,6 +86,7 @@ class _FakeScheduleDataSource extends ScheduleRemoteDataSource {
     this.fetchError,
     this.violationsError,
     this.generateError,
+    this.generateResult,
   }) : super(Dio());
 
   final bool julyExists;
@@ -98,8 +101,15 @@ class _FakeScheduleDataSource extends ScheduleRemoteDataSource {
   /// Thrown by [generate].
   final Object? generateError;
 
+  /// Returned by [generate] when [generateError] is null.
+  final ScheduleResult? generateResult;
+
   /// Holds the [override] response until completed.
   Completer<void>? overrideGate;
+
+  /// Holds the [decideShiftChange] response until completed, so frames run
+  /// while the request is in flight (as with a real server).
+  Completer<void>? decideGate;
 
   /// Thrown by every [fetchSchedule] call (instead of the 404 for July).
   final Object? fetchError;
@@ -156,6 +166,7 @@ class _FakeScheduleDataSource extends ScheduleRemoteDataSource {
     required int month,
     bool force = false,
   }) async {
+    if (generateError == null && generateResult != null) return generateResult!;
     throw generateError ?? StateError('generate not stubbed');
   }
 
@@ -199,13 +210,32 @@ class _FakeScheduleDataSource extends ScheduleRemoteDataSource {
 
   @core.override
   Future<List<ShiftChangeRequest>> fetchShiftChanges({bool all = false}) async =>
-      List.of(requests);
+      [
+        // A reload after a decision lists that request as decided.
+        for (final r in requests)
+          if (decided.where((d) => d.$1 == r.id).firstOrNull case final d?)
+            ShiftChangeRequest(
+              id: r.id,
+              requesterId: r.requesterId,
+              workDate: r.workDate,
+              kind: r.kind,
+              status: d.$2,
+              strictReview: r.strictReview,
+              warnings: r.warnings,
+              requestedCode: r.requestedCode,
+              counterpartUserId: r.counterpartUserId,
+            )
+          else
+            r,
+      ];
 
   @core.override
   Future<ShiftChangeRequest> decideShiftChange({
     required int id,
     required String status,
   }) async {
+    final gate = decideGate;
+    if (gate != null) await gate.future;
     decided.add((id, status));
     final r = requests.firstWhere((r) => r.id == id);
     return ShiftChangeRequest(
@@ -266,6 +296,13 @@ class _FakeUserDataSource implements UserManagementDataSource {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
+/// GET /users fails (admin view); the directory still works.
+class _FailingUserDataSource extends _FakeUserDataSource {
+  @override
+  Future<List<UserModel>> list() async =>
+      throw const ApiException('Database unavailable', statusCode: 503);
+}
+
 class _FakeFlightsDataSource extends FlightsRemoteDataSource {
   _FakeFlightsDataSource() : super(Dio());
 
@@ -274,19 +311,56 @@ class _FakeFlightsDataSource extends FlightsRemoteDataSource {
 }
 
 class _FakeSelfArrangeDataSource extends SelfArrangeRemoteDataSource {
-  _FakeSelfArrangeDataSource() : super(Dio());
+  _FakeSelfArrangeDataSource({
+    this.batches = const [],
+    this.decideWarnings = const [],
+  }) : super(Dio());
+
+  final List<SelfArrangeBatch> batches;
+  final List<String> decideWarnings;
+  final decided = <(int, String)>[];
+
+  /// Holds the [decide] response until completed.
+  Completer<void>? decideGate;
 
   @override
   Future<List<SelfArrangeBatch>> list({
     bool all = false,
     bool pendingOnly = false,
-  }) async => [];
+  }) async => [
+    // The backend no longer lists a batch once it is decided.
+    for (final b in batches)
+      if (!decided.any((d) => d.$1 == b.id)) b,
+  ];
+
+  @override
+  Future<SelfArrangeBatch> decide({
+    required int id,
+    required String status,
+  }) async {
+    final gate = decideGate;
+    if (gate != null) await gate.future;
+    decided.add((id, status));
+    final b = batches.firstWhere((b) => b.id == id);
+    return SelfArrangeBatch(
+      id: b.id,
+      requesterId: b.requesterId,
+      year: b.year,
+      month: b.month,
+      changes: b.changes,
+      status: status,
+      warnings: decideWarnings,
+    );
+  }
 }
 
 Future<void> _pump(
   WidgetTester tester, {
   required User user,
   required _FakeScheduleDataSource ds,
+  _FakeSelfArrangeDataSource? selfArrange,
+  UserManagementDataSource? users,
+  int initialMonth = _june,
 }) async {
   await tester.binding.setSurfaceSize(const Size(1400, 1800));
   addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -298,11 +372,11 @@ Future<void> _pump(
         ),
         scheduleRemoteDataSourceProvider.overrideWithValue(ds),
         userManagementDataSourceProvider.overrideWithValue(
-          _FakeUserDataSource(),
+          users ?? _FakeUserDataSource(),
         ),
         flightsDataSourceProvider.overrideWithValue(_FakeFlightsDataSource()),
         selfArrangeRemoteDataSourceProvider.overrideWithValue(
-          _FakeSelfArrangeDataSource(),
+          selfArrange ?? _FakeSelfArrangeDataSource(),
         ),
       ],
       child: MaterialApp(
@@ -313,7 +387,9 @@ Future<void> _pump(
         ],
         supportedLocales: AppLocalizations.supportedLocales,
         locale: const Locale('en'),
-        home: Scaffold(body: SchedulePage(initialMonth: DateTime(2026, 6))),
+        home: Scaffold(
+          body: SchedulePage(initialMonth: DateTime(2026, initialMonth)),
+        ),
       ),
     ),
   );
@@ -710,5 +786,309 @@ void main() {
       'T10',
     ]);
     expect(picker.items!.map((item) => item.value), [_t2, 12]);
+  });
+
+  group('ungenerated month (bug: columns read "ID n" after generate)', () {
+    ProviderContainer containerWith(
+      _FakeScheduleDataSource ds, {
+      UserManagementDataSource? users,
+    }) {
+      final container = ProviderContainer(
+        overrides: [
+          scheduleRemoteDataSourceProvider.overrideWithValue(ds),
+          userManagementDataSourceProvider.overrideWithValue(
+            users ?? _FakeUserDataSource(),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      return container;
+    }
+
+    test('people are kept when the month has no schedule', () async {
+      final container = containerWith(_FakeScheduleDataSource());
+      await container
+          .read(scheduleControllerProvider.notifier)
+          .load(2026, _july, isAdmin: true);
+
+      final state = container.read(scheduleControllerProvider);
+      expect(state.schedule, isNull);
+      expect(state.loadErrorStatus, 404, reason: 'still "not generated"');
+      expect(state.people.map((p) => p.code), ['A1', 'T1', 'T2']);
+    });
+
+    test('employee on an unpublished month keeps the directory', () async {
+      final container = containerWith(_FakeScheduleDataSource());
+      await container
+          .read(scheduleControllerProvider.notifier)
+          .load(2026, _july);
+
+      final state = container.read(scheduleControllerProvider);
+      expect(state.loadErrorStatus, 404);
+      expect(state.people.map((p) => p.code), contains('T2'));
+    });
+
+    test('admin user-list failure is still a load error', () async {
+      for (final month in [_june, _july]) {
+        final container = containerWith(
+          _FakeScheduleDataSource(),
+          users: _FailingUserDataSource(),
+        );
+        await container
+            .read(scheduleControllerProvider.notifier)
+            .load(2026, month, isAdmin: true);
+
+        final state = container.read(scheduleControllerProvider);
+        expect(state.schedule, isNull, reason: 'month $month');
+        expect(state.loadError, isA<ApiException>(), reason: 'month $month');
+        expect(state.loadErrorStatus, 503, reason: 'month $month');
+      }
+    });
+
+    testWidgets("generate on an ungenerated month shows codes and the role's "
+        'own codes', (tester) async {
+      final ds = _FakeScheduleDataSource(
+        generateResult: ScheduleResult(
+          feasible: true,
+          violations: const [],
+          schedule: MonthlySchedule(
+            id: _FakeScheduleDataSource.idFor(_july),
+            year: 2026,
+            month: _july,
+            status: ScheduleStatus.draft,
+            assignments: [
+              for (var d = 1; d <= 31; d++) ...[
+                ShiftAssignment(
+                  id: d,
+                  userId: _a1,
+                  workDate: DateTime(2026, _july, d),
+                  code: 'A',
+                  isManualOverride: false,
+                ),
+                ShiftAssignment(
+                  id: 100 + d,
+                  userId: _t2,
+                  workDate: DateTime(2026, _july, d),
+                  code: 'AD',
+                  isManualOverride: false,
+                ),
+              ],
+            ],
+          ),
+        ),
+      );
+      // Fresh login straight onto the ungenerated month.
+      await _pump(tester, user: _admin, ds: ds, initialMonth: _july);
+      expect(find.text(_generateHint), findsOneWidget);
+
+      await tester.tap(find.text('Generate schedule'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Generate anyway')); // no flights this month
+      await tester.pumpAndSettle();
+
+      expect(find.text('A1'), findsOneWidget, reason: 'column header');
+      expect(find.text('T2'), findsOneWidget, reason: 'column header');
+      expect(find.textContaining('ID '), findsNothing);
+
+      // Column 0 is A1 (role A): its cell offers the A role's codes.
+      final a1Cell = find
+          .descendant(
+            of: find.byType(InkWell),
+            matching: find.byType(DsShiftBadge),
+          )
+          .at(2 * 1);
+      await tester.ensureVisible(a1Cell);
+      await tester.tap(a1Cell);
+      await tester.pumpAndSettle();
+      final offered = tester
+          .widget<DropdownButton<ShiftCode>>(
+            find.byType(DropdownButton<ShiftCode>),
+          )
+          .items!
+          .map((item) => item.value)
+          .toList();
+      expect(offered, ShiftCodeX.plannedCodesFor(UserRole.a));
+      expect(offered, containsAll([ShiftCode.a, ShiftCode.d]));
+      expect(offered, isNot(contains(ShiftCode.ad)));
+
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      await _drainToast(tester);
+    });
+  });
+
+  group('deciding the last pending request (bug: no feedback, stale grid)', () {
+    final only = ShiftChangeRequest(
+      id: 41,
+      requesterId: _a1,
+      workDate: DateTime(2026, 6, 9),
+      kind: 'change_code',
+      status: 'pending',
+      strictReview: false,
+      warnings: const [],
+      requestedCode: 'X',
+    );
+
+    Future<void> openPanel(WidgetTester tester) async {
+      await tester.tap(find.text('Shift-change requests'));
+      await tester.pumpAndSettle();
+    }
+
+    /// Taps [tooltip] while the server holds the answer for a few frames.
+    Future<void> decide(
+      WidgetTester tester,
+      _FakeScheduleDataSource ds,
+      String tooltip,
+    ) async {
+      ds.decideGate = Completer<void>();
+      await tester.tap(find.byTooltip(tooltip));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+      ds.decideGate!.complete();
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('approving the only shift change toasts and reloads once', (
+      tester,
+    ) async {
+      final ds = _FakeScheduleDataSource(requests: [only]);
+      await _pump(tester, user: _admin, ds: ds);
+      await openPanel(tester);
+
+      await decide(tester, ds, 'Approve');
+
+      expect(ds.decided, [(41, 'approved')]);
+      expect(find.text('Request approved.'), findsOneWidget);
+      expect(ds.fetchedMonths, [_june, _june], reason: 'grid reloaded once');
+      expect(find.text('No pending shift-change requests.'), findsOneWidget);
+      await _drainToast(tester);
+    });
+
+    testWidgets('rejecting the only shift change toasts', (tester) async {
+      final ds = _FakeScheduleDataSource(requests: [only]);
+      await _pump(tester, user: _admin, ds: ds);
+      await openPanel(tester);
+
+      await decide(tester, ds, 'Reject');
+
+      expect(ds.decided, [(41, 'rejected')]);
+      expect(find.text('Request rejected.'), findsOneWidget);
+      expect(ds.fetchedMonths, [_june], reason: 'a rejection changes no cell');
+      await _drainToast(tester);
+    });
+
+    testWidgets('approving the only shift change with warnings shows them', (
+      tester,
+    ) async {
+      final ds = _FakeScheduleDataSource(
+        requests: [only],
+        decideWarnings: const ['2026-06-09: departure cover below minimum'],
+      );
+      await _pump(tester, user: _admin, ds: ds);
+      await openPanel(tester);
+
+      await decide(tester, ds, 'Approve');
+
+      expect(find.byType(AlertDialog), findsOneWidget);
+      expect(
+        find.text('2026-06-09: departure cover below minimum'),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('Close'));
+      await tester.pumpAndSettle();
+      expect(ds.fetchedMonths, [_june, _june], reason: 'grid reloaded once');
+    });
+
+    SelfArrangeBatch batch() => SelfArrangeBatch(
+      id: 51,
+      requesterId: _t2,
+      year: 2026,
+      month: _june,
+      changes: [SelfArrangeChange(workDate: DateTime(2026, 6, 4), code: 'X')],
+      status: 'pending',
+    );
+
+    for (final (status, tooltip) in [
+      ('approved', 'Approve'),
+      ('rejected', 'Reject'),
+    ]) {
+      testWidgets('deciding ($status) the only self-arrange batch toasts and '
+          'reloads once', (tester) async {
+        final ds = _FakeScheduleDataSource();
+        final selfArrange = _FakeSelfArrangeDataSource(batches: [batch()]);
+        await _pump(tester, user: _admin, ds: ds, selfArrange: selfArrange);
+        await openPanel(tester);
+
+        await tester.tap(find.byTooltip(tooltip));
+        await tester.pumpAndSettle();
+
+        expect(selfArrange.decided, [(51, status)]);
+        expect(find.text('Request decided.'), findsOneWidget);
+        expect(ds.fetchedMonths, [_june, _june], reason: 'grid reloaded once');
+        await _drainToast(tester);
+      });
+    }
+
+    testWidgets('approving the only self-arrange batch shows its warnings', (
+      tester,
+    ) async {
+      final ds = _FakeScheduleDataSource();
+      final selfArrange = _FakeSelfArrangeDataSource(
+        batches: [batch()],
+        decideWarnings: const ['2026-06-04: off chain too long'],
+      );
+      await _pump(tester, user: _admin, ds: ds, selfArrange: selfArrange);
+      await openPanel(tester);
+
+      await tester.tap(find.byTooltip('Approve'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.textContaining('2026-06-04: off chain too long'),
+        findsOneWidget,
+      );
+      expect(ds.fetchedMonths, [_june, _june], reason: 'grid reloaded once');
+      await _drainToast(tester);
+    });
+    // The row's context is gone before the answer arrives: the feedback and
+    // the reload must not depend on it.
+    testWidgets('closing the panel while a shift change is decided still '
+        'toasts and reloads', (tester) async {
+      final ds = _FakeScheduleDataSource(requests: [only]);
+      await _pump(tester, user: _admin, ds: ds);
+      await openPanel(tester);
+
+      ds.decideGate = Completer<void>();
+      await tester.tap(find.byTooltip('Approve'));
+      await tester.pump();
+      await openPanel(tester); // toggles the panel closed
+      expect(find.byTooltip('Approve'), findsNothing);
+      ds.decideGate!.complete();
+      await tester.pumpAndSettle();
+
+      expect(find.text('Request approved.'), findsOneWidget);
+      expect(ds.fetchedMonths, [_june, _june], reason: 'grid reloaded once');
+      await _drainToast(tester);
+    });
+
+    testWidgets('closing the panel while a self-arrange batch is decided '
+        'still toasts and reloads', (tester) async {
+      final ds = _FakeScheduleDataSource();
+      final selfArrange = _FakeSelfArrangeDataSource(batches: [batch()]);
+      await _pump(tester, user: _admin, ds: ds, selfArrange: selfArrange);
+      await openPanel(tester);
+
+      selfArrange.decideGate = Completer<void>();
+      await tester.tap(find.byTooltip('Approve'));
+      await tester.pump();
+      await openPanel(tester); // toggles the panel closed
+      expect(find.byTooltip('Approve'), findsNothing);
+      selfArrange.decideGate!.complete();
+      await tester.pumpAndSettle();
+
+      expect(find.text('Request decided.'), findsOneWidget);
+      expect(ds.fetchedMonths, [_june, _june], reason: 'grid reloaded once');
+      await _drainToast(tester);
+    });
   });
 }
