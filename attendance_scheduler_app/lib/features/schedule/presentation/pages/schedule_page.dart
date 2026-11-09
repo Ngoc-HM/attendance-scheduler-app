@@ -11,6 +11,7 @@ import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../../flights/data/datasources/flights_remote_datasource.dart';
 import '../../../flights/data/models/flight_day_model.dart';
 import '../../domain/entities/schedule_entities.dart';
+import '../../domain/entities/self_arrange_entities.dart';
 import '../providers/schedule_provider.dart';
 import '../providers/self_arrange_provider.dart';
 import '../providers/shift_change_provider.dart';
@@ -180,14 +181,14 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
               ],
             ),
           ),
-          // Approving rewrites schedule cells: reload the grid afterwards.
+          // The page, not the panel row, shows the decision and reloads the
+          // grid: the row leaves the tree once its request is decided.
           ShiftChangePendingPanel(
             codeById: {for (final p in scheduleState.people) p.id: p.code},
-            onApproved: _loadMonth,
+            onDecided: _onShiftChangeDecided,
           ),
-          // Batch self-arrange approvals (owner 2026-07-09) — approving
-          // rewrites schedule cells, so reload the grid afterwards.
-          SelfArrangePendingPanel(onDecided: _loadMonth),
+          // Batch self-arrange approvals (owner 2026-07-09).
+          SelfArrangePendingPanel(onDecided: _onSelfArrangeDecided),
         ],
         if (isAdmin)
           Padding(
@@ -458,6 +459,52 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
         );
       }
     }
+  }
+
+  /// A shift-change request was decided (admin panel). Approving rewrites
+  /// schedule cells, so the grid reloads at once; the backend's rule
+  /// warnings are listed in full instead of a one-line toast.
+  Future<void> _onShiftChangeDecided(ShiftChangeRequest decided) async {
+    if (!mounted) return;
+    final l = AppLocalizations.of(context);
+    if (decided.status != 'approved') {
+      DsFeedback.show(context, l.text('requestRejected'), tone: DsTone.success);
+      return;
+    }
+    _loadMonth();
+    if (decided.warnings.isEmpty) {
+      DsFeedback.show(context, l.text('requestApproved'), tone: DsTone.success);
+      return;
+    }
+    await showDialog<void>(
+      context: context,
+      builder: (context) => DsFormDialog(
+        title: l.text('approvedWithWarnings'),
+        content: RuleWarningsList(lines: decided.warnings),
+        actions: [
+          DsPrimaryButton(
+            label: l.text('close'),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// A self-arrange batch was decided (admin panel): reload the grid and
+  /// surface the backend's rule recheck warnings (F-09 parity).
+  void _onSelfArrangeDecided(SelfArrangeBatch decided) {
+    if (!mounted) return;
+    final l = AppLocalizations.of(context);
+    _loadMonth();
+    final hasWarnings = decided.warnings.isNotEmpty;
+    DsFeedback.show(
+      context,
+      hasWarnings
+          ? '${l.text('selfArrangeDecided')} ${decided.warnings.join('; ')}'
+          : l.text('selfArrangeDecided'),
+      tone: hasWarnings ? DsTone.warning : DsTone.success,
+    );
   }
 
   /// F-09 admin cell edit: tap a roster cell → pick a code → save. The edit
