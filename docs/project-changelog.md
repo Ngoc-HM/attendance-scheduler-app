@@ -1,5 +1,17 @@
 # Project Changelog
 
+## 2026-11-10 — End-to-end run follow-ups
+
+- Schedule page: the people list survives a month with no schedule, so the
+  grid shows codes and each role's own codes right after Generate; the page
+  (not the pending-panel row) shows the decision toast or warnings and
+  reloads the grid, also when the last pending request is decided.
+- macOS build may write report exports to Downloads (sandbox entitlement).
+- A `DATABASE_URL` without a driver (`postgresql://…`, `postgres://…`) is
+  read as `postgresql+psycopg2://…`. SQLAlchemy 2.1 reads the bare form as
+  psycopg 3, which is not installed, so the backend and Alembic failed at
+  import with "No module named 'psycopg'".
+
 ## 2026-11-08 — Review-2 fixes
 
 Fixes every finding of the 2026-11-08 whole-system review

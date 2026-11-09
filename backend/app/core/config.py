@@ -214,6 +214,20 @@ class Settings(BaseSettings):
             return [item.strip() for item in v.split(",") if item.strip()]
         return v
 
+    @field_validator("DATABASE_URL")
+    @classmethod
+    def _default_postgres_driver(cls, v: str) -> str:
+        """Read a driverless ``postgresql://`` (or ``postgres://``) URL as psycopg2.
+
+        SQLAlchemy 2.1 maps a bare ``postgresql://`` to psycopg 3, which this
+        project does not install: requirements, CI and the docs use psycopg2.
+        A URL that names its driver is left alone.
+        """
+        scheme, separator, rest = v.partition("://")
+        if separator and scheme in ("postgresql", "postgres"):
+            return f"postgresql+psycopg2://{rest}"
+        return v
+
     @field_validator("TIMEZONE")
     @classmethod
     def _known_timezone(cls, v: str) -> str:
