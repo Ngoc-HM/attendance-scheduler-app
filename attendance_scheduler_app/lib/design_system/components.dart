@@ -287,62 +287,69 @@ class DsLanguageSelector extends StatelessWidget {
         ),
       ],
       builder: (context, controller, child) {
-        return Tooltip(
-          message: l.language,
-          child: DsLiquidGlassSurface(
-            padding: EdgeInsets.zero,
-            borderRadius: DsRadius.medium,
-            // On the dark glass the pill is as clear as the card it sits
-            // on (same tint and blur).
-            blur: onDark ? 4 : 14,
-            tint: DsColors.surface.withValues(alpha: onDark ? 0.05 : 0.56),
-            uniformTint: onDark,
-            edgeLight: onDark,
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                key: const Key('language-selector'),
-                onTap: controller.open,
-                borderRadius: BorderRadius.circular(DsRadius.medium),
-                child: Padding(
-                  // Compact: 9 so icon + chevron (38) fit the collapsed
-                  // rail's 56 px (10 overflowed it by 2 px).
-                  padding: EdgeInsets.symmetric(
-                    horizontal: compact ? 9 : 12,
-                    vertical: 9,
+        final button = Material(
+          color: Colors.transparent,
+          child: InkWell(
+            key: const Key('language-selector'),
+            onTap: controller.open,
+            borderRadius: BorderRadius.circular(DsRadius.medium),
+            child: Padding(
+              // Compact: 9 so icon + chevron (38) fit the collapsed
+              // rail's 56 px (10 overflowed it by 2 px).
+              padding: EdgeInsets.symmetric(
+                horizontal: compact ? 9 : 12,
+                vertical: 9,
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.language_outlined,
+                    size: 18,
+                    color: onDark ? DsColors.surface : DsColors.primaryHover,
                   ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.language_outlined,
-                        size: 18,
-                        color: onDark
-                            ? DsColors.surface
-                            : DsColors.primaryHover,
-                      ),
-                      if (!compact) ...[
-                        const SizedBox(width: DsSpacing.x2),
-                        Text(
-                          selectedLabel,
-                          style: Theme.of(context).textTheme.labelLarge
-                              ?.copyWith(
-                                color: onDark ? DsColors.surface : null,
-                              ),
-                        ),
-                      ],
-                      const SizedBox(width: DsSpacing.x1),
-                      Icon(
-                        Icons.expand_more,
-                        size: 16,
+                  if (!compact) ...[
+                    const SizedBox(width: DsSpacing.x2),
+                    Text(
+                      selectedLabel,
+                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
                         color: onDark ? DsColors.surface : null,
                       ),
-                    ],
+                    ),
+                  ],
+                  const SizedBox(width: DsSpacing.x1),
+                  Icon(
+                    Icons.expand_more,
+                    size: 16,
+                    color: onDark ? DsColors.surface : null,
                   ),
-                ),
+                ],
               ),
             ),
           ),
+        );
+        return Tooltip(
+          message: l.language,
+          child: onDark
+              // On the dark glass card: a plain rounded outline, as clear
+              // as the card, with no glass light of its own.
+              ? DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: DsColors.surface.withValues(alpha: 0.05),
+                    borderRadius: BorderRadius.circular(DsRadius.medium),
+                    border: Border.all(
+                      color: DsColors.surface.withValues(alpha: 0.6),
+                    ),
+                  ),
+                  child: button,
+                )
+              : DsLiquidGlassSurface(
+                  padding: EdgeInsets.zero,
+                  borderRadius: DsRadius.medium,
+                  blur: 14,
+                  tint: DsColors.surface.withValues(alpha: 0.56),
+                  child: button,
+                ),
         );
       },
     );
