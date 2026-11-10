@@ -58,6 +58,8 @@ void main() {
         find.widgetWithText(TextButton, 'Create an account'),
       );
       expect(link.style?.foregroundColor?.resolve({}), DsColors.surface);
+      final language = tester.widget<Text>(find.text('English'));
+      expect(language.style?.color, DsColors.surface);
       final photo = tester.getSize(find.byKey(const Key('login-photo')));
       expect(photo, Size(width, 800));
       expect(find.text('Roster FRA'), findsNothing);

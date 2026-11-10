@@ -253,11 +253,16 @@ class DsLanguageSelector extends StatelessWidget {
     required this.languageCode,
     required this.onChanged,
     this.compact = false,
+    this.onDark = false,
   });
 
   final String languageCode;
   final ValueChanged<String> onChanged;
   final bool compact;
+
+  /// On a dark surface (the login card's glass): a clear pill with white
+  /// text and icons instead of the light, frosted one.
+  final bool onDark;
 
   @override
   Widget build(BuildContext context) {
@@ -287,8 +292,10 @@ class DsLanguageSelector extends StatelessWidget {
           child: DsLiquidGlassSurface(
             padding: EdgeInsets.zero,
             borderRadius: DsRadius.medium,
-            blur: 14,
-            tint: DsColors.surface.withValues(alpha: 0.56),
+            blur: onDark ? 4 : 14,
+            tint: DsColors.surface.withValues(alpha: onDark ? 0.1 : 0.56),
+            uniformTint: onDark,
+            edgeLight: onDark,
             child: Material(
               color: Colors.transparent,
               child: InkWell(
@@ -305,20 +312,29 @@ class DsLanguageSelector extends StatelessWidget {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(
+                      Icon(
                         Icons.language_outlined,
                         size: 18,
-                        color: DsColors.primaryHover,
+                        color: onDark
+                            ? DsColors.surface
+                            : DsColors.primaryHover,
                       ),
                       if (!compact) ...[
                         const SizedBox(width: DsSpacing.x2),
                         Text(
                           selectedLabel,
-                          style: Theme.of(context).textTheme.labelLarge,
+                          style: Theme.of(context).textTheme.labelLarge
+                              ?.copyWith(
+                                color: onDark ? DsColors.surface : null,
+                              ),
                         ),
                       ],
                       const SizedBox(width: DsSpacing.x1),
-                      const Icon(Icons.expand_more, size: 16),
+                      Icon(
+                        Icons.expand_more,
+                        size: 16,
+                        color: onDark ? DsColors.surface : null,
+                      ),
                     ],
                   ),
                 ),
