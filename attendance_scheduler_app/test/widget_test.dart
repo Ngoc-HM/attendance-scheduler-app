@@ -47,6 +47,17 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byType(DsBrandLogo), findsOneWidget);
+      // On the dark glass: white title, white wordmark, white footer link.
+      final title = tester.widget<Text>(find.text('Log in').first);
+      expect(title.style?.color, DsColors.surface);
+      expect(
+        tester.widget<DsBrandLogo>(find.byType(DsBrandLogo)).onDark,
+        isTrue,
+      );
+      final link = tester.widget<TextButton>(
+        find.widgetWithText(TextButton, 'Create an account'),
+      );
+      expect(link.style?.foregroundColor?.resolve({}), DsColors.surface);
       final photo = tester.getSize(find.byKey(const Key('login-photo')));
       expect(photo, Size(width, 800));
       expect(find.text('Roster FRA'), findsNothing);
