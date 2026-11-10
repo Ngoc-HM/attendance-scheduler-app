@@ -1,5 +1,34 @@
 # Project Changelog
 
+## 2026-11-10 — Flight plan template and customer logo
+
+- Flights page (admin): new **Download template** button next to
+  **Import Excel**. `GET /flights/template?year=&month=` returns
+  `flight-plan-YYYY-MM.xlsx` for the month shown: one row per active flight
+  preset, one column per day of that month (28–31), a weekday row, weekends
+  shaded, `x` already set on the days both legs of the preset exist.
+- The filled template goes back through the same **Import Excel** button
+  (`POST /flights/import` recognises it by `B1 = YYYY-MM`): `x` writes the
+  preset's two legs for that day, an empty cell removes them, anything else
+  in a day cell rejects the whole file and names the cell. More than two
+  presets on a day, or two presets sharing a FLT number on a day, are
+  rejected too. The older one-flight-per-row file still imports as before
+  (design decision #60).
+- After an import the page shows the imported month when all imported
+  flights are in one month.
+- A rejected import now reads as a sentence with its first five row/cell
+  errors instead of a raw `{message, errors}` dump.
+- Page header: many actions wrap onto a second line instead of overflowing.
+- App shell header: the customer's logo (Vietnam Airlines) replaces the plane
+  tile and the product name — full wordmark on the wide rail and in the phone
+  app bar, the lotus alone on the collapsed rail.
+- Login page: the logo replaces the plane tile above the form, and the context
+  panel (wide windows) gets a side-view line drawing of an airliner
+  (`DsAircraftLineArt`, drawn in code).
+- App icon (macOS icon set and Windows `.ico`): the lotus on a white tile,
+  re-sharpened from the 115 px lotus in the received logo; a larger source
+  logo would give a crisper icon.
+
 ## 2026-11-10 — End-to-end run follow-ups
 
 - `make dev` now runs the whole dev stack: PostgreSQL 16 in Docker
