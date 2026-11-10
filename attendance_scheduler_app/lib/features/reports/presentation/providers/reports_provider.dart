@@ -1,9 +1,7 @@
-import 'dart:io';
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:path_provider/path_provider.dart';
 
 import '../../../../core/network/api_exception.dart';
+import '../../../../core/utils/file_download.dart';
 import '../../data/datasources/reports_remote_datasource.dart';
 
 /// Result of a completed export: saved file path or error message.
@@ -71,15 +69,12 @@ class ReportsState {
 }
 
 /// Writes a downloaded report and returns the saved path.
-typedef ReportFileSaver = Future<String> Function(
-  List<int> bytes,
-  String filename,
-);
+typedef ReportFileSaver = DownloadedFileSaver;
 
 class ReportsController extends StateNotifier<ReportsState> {
   /// [saveFile] defaults to the system downloads folder; tests pass a fake.
   ReportsController(this._ds, {ReportFileSaver? saveFile})
-      : _saveFile = saveFile ?? _saveToDownloads,
+      : _saveFile = saveFile ?? saveToDownloads,
         super(ReportsState(
           selectedYear: DateTime.now().year,
           selectedMonth: DateTime.now().month,
@@ -157,30 +152,6 @@ class ReportsController extends StateNotifier<ReportsState> {
       state = state.copyWith(isExporting: false, lastResult: result);
     }
     return result;
-  }
-
-  /// Write [bytes] to the system downloads directory and return the full path.
-  static Future<String> _saveToDownloads(
-    List<int> bytes,
-    String filename,
-  ) async {
-    final dir = await _resolveDownloadsDir();
-    final file = File('${dir.path}${Platform.pathSeparator}$filename');
-    await file.writeAsBytes(bytes, flush: true);
-    return file.path;
-  }
-
-  /// Resolve the best writable output directory.
-  ///
-  /// Tries downloads first (Windows/macOS); falls back to documents.
-  static Future<Directory> _resolveDownloadsDir() async {
-    try {
-      final downloads = await getDownloadsDirectory();
-      if (downloads != null) return downloads;
-    } catch (_) {
-      // path_provider may not support getDownloadsDirectory on all platforms.
-    }
-    return getApplicationDocumentsDirectory();
   }
 }
 

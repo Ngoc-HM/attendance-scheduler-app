@@ -13,6 +13,31 @@ const _en = AppLocalizations(Locale('en'));
 const _vi = AppLocalizations(Locale('vi'));
 
 void main() {
+  // POST /flights/import rejects a file with {message, errors: [...]}: the
+  // toast shows the sentence and which rows/cells are wrong, not a map dump.
+  test('an import rejection lists its row errors', () {
+    final detail = ApiException.detailOf({
+      'detail': {
+        'message': 'Excel import failed.',
+        'errors': ['Cell W4: "y" is not a valid mark.', 'Row 6: no preset.'],
+      },
+    });
+    expect(
+      detail,
+      'Excel import failed. Cell W4: "y" is not a valid mark.; Row 6: no preset.',
+    );
+  });
+
+  test('a long import error list is cut after five with the rest counted', () {
+    final detail = ApiException.detailOf({
+      'detail': {
+        'message': 'Excel import failed.',
+        'errors': [for (var i = 1; i <= 8; i++) 'e$i'],
+      },
+    });
+    expect(detail, 'Excel import failed. e1; e2; e3; e4; e5 (+3)');
+  });
+
   test('a 4xx shows only the backend detail', () {
     const e = ApiException('You already checked out today.', statusCode: 409);
     expect(apiErrorMessage(_en, e), 'You already checked out today.');

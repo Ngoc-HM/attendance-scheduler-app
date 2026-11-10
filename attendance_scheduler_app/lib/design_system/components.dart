@@ -195,8 +195,10 @@ class DsLanguageSelector extends StatelessWidget {
                 onTap: controller.open,
                 borderRadius: BorderRadius.circular(DsRadius.medium),
                 child: Padding(
+                  // Compact: 9 so icon + chevron (38) fit the collapsed
+                  // rail's 56 px (10 overflowed it by 2 px).
                   padding: EdgeInsets.symmetric(
-                    horizontal: compact ? 10 : 12,
+                    horizontal: compact ? 9 : 12,
                     vertical: 9,
                   ),
                   child: Row(
@@ -336,10 +338,20 @@ class DsPageHeader extends StatelessWidget {
             Expanded(child: titleBlock),
             if (actions.isNotEmpty) ...[
               const SizedBox(width: DsSpacing.x6),
-              Wrap(
-                spacing: DsSpacing.x2,
-                runSpacing: DsSpacing.x2,
-                children: actions,
+              // A Wrap in a Row gets unbounded width and never wraps: with
+              // many actions it squeezed the title to nothing and overflowed.
+              // Capped, the actions wrap onto a second (right-aligned) line
+              // and the title keeps at least a third of the header.
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: constraints.maxWidth * 2 / 3,
+                ),
+                child: Wrap(
+                  alignment: WrapAlignment.end,
+                  spacing: DsSpacing.x2,
+                  runSpacing: DsSpacing.x2,
+                  children: actions,
+                ),
               ),
             ],
           ],

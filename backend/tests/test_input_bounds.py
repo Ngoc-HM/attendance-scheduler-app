@@ -25,6 +25,7 @@ MONTH_ENDPOINTS: list[tuple[str, str, str]] = [
     ("POST", "/attendance/seed?year={y}&month={m}", "admin"),
     ("GET", "/attendance/clock/me?year={y}&month={m}", "employee"),
     ("GET", "/flights/days?year={y}&month={m}", "employee"),
+    ("GET", "/flights/template?year={y}&month={m}", "admin"),
     ("GET", "/schedules/{y}/{m}", "employee"),
     ("GET", "/schedules/{y}/{m}", "admin"),
     ("GET", "/reports/monthly/{y}/{m}", "admin"),

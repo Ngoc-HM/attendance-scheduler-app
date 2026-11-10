@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../i18n/app_localizations.dart';
+import 'aircraft_line_art.dart';
 import 'components.dart';
 import 'navigation.dart';
 import 'tokens.dart';
@@ -251,7 +252,7 @@ class DsAuthPage extends StatelessWidget {
                                     children: [
                                       Row(
                                         children: [
-                                          const DsBrandMark(size: 44),
+                                          const DsBrandLogo(height: 30),
                                           const Spacer(),
                                           DsLanguageSelector(
                                             languageCode: languageCode,
@@ -319,35 +320,44 @@ class _DsAuthContextPanel extends StatelessWidget {
         padding: const EdgeInsets.all(DsSpacing.x8),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
-              l.productName,
-              style: Theme.of(
-                context,
-              ).textTheme.headlineMedium?.copyWith(color: DsColors.textPrimary),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  l.productName,
+                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                    color: DsColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: DsSpacing.x3),
+                Text(
+                  l.text('authPanelSubtitle'),
+                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                    color: DsColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: DsSpacing.x8),
+                _DsFeatureLine(
+                  icon: Icons.auto_awesome_outlined,
+                  label: l.text('authFeatureSchedule'),
+                ),
+                const SizedBox(height: DsSpacing.x4),
+                _DsFeatureLine(
+                  icon: Icons.balance_outlined,
+                  label: l.text('authFeatureBalance'),
+                ),
+                const SizedBox(height: DsSpacing.x4),
+                _DsFeatureLine(
+                  icon: Icons.fact_check_outlined,
+                  label: l.text('authFeatureAttendance'),
+                ),
+              ],
             ),
-            const SizedBox(height: DsSpacing.x3),
-            Text(
-              l.text('authPanelSubtitle'),
-              style: Theme.of(
-                context,
-              ).textTheme.bodyLarge?.copyWith(color: DsColors.textSecondary),
-            ),
-            const SizedBox(height: DsSpacing.x8),
-            _DsFeatureLine(
-              icon: Icons.auto_awesome_outlined,
-              label: l.text('authFeatureSchedule'),
-            ),
-            const SizedBox(height: DsSpacing.x4),
-            _DsFeatureLine(
-              icon: Icons.balance_outlined,
-              label: l.text('authFeatureBalance'),
-            ),
-            const SizedBox(height: DsSpacing.x4),
-            _DsFeatureLine(
-              icon: Icons.fact_check_outlined,
-              label: l.text('authFeatureAttendance'),
+            const Padding(
+              padding: EdgeInsets.only(top: DsSpacing.x8),
+              child: DsAircraftLineArt(),
             ),
           ],
         ),

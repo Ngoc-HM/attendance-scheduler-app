@@ -383,6 +383,9 @@ class AppLocalizations {
       'importExcelSuccess': 'Imported {count} flights from Excel.',
       'importExcelFailed': 'Could not import the Excel file.',
       'importExcelHint': 'Choose an .xlsx file of at most 2 MB.',
+      'downloadFlightTemplate': 'Download template',
+      'flightTemplateSaved': 'Template saved to',
+      'flightTemplateFailed': 'Could not download the template.',
       // --- F-14 month close / carry-over ---
       'close': 'Close',
       'closeMonth': 'Close month',
@@ -802,6 +805,9 @@ class AppLocalizations {
       'importExcelSuccess': 'Đã nhập {count} chuyến bay từ Excel.',
       'importExcelFailed': 'Không thể nhập tệp Excel.',
       'importExcelHint': 'Chọn tệp .xlsx có dung lượng tối đa 2 MB.',
+      'downloadFlightTemplate': 'Tải file mẫu',
+      'flightTemplateSaved': 'File mẫu đã lưu tại',
+      'flightTemplateFailed': 'Không thể tải file mẫu.',
       // --- F-14 month close / carry-over ---
       'close': 'Đóng',
       'closeMonth': 'Chốt tháng',

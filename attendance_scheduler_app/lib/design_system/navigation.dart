@@ -87,12 +87,9 @@ class DsNavigationShell extends StatelessWidget {
             backgroundColor: DsColors.surface.withValues(alpha: 0.76),
             surfaceTintColor: Colors.transparent,
             titleSpacing: DsSpacing.x2,
-            title: Row(
-              children: [
-                const DsBrandMark(size: 32),
-                const SizedBox(width: 10),
-                Text(appTitle, style: Theme.of(context).textTheme.titleMedium),
-              ],
+            title: Align(
+              alignment: Alignment.centerLeft,
+              child: DsBrandLogo(height: 22, semanticLabel: appTitle),
             ),
             actions: [
               DsLanguageSelector(
@@ -152,25 +149,32 @@ class _DsTabPageBackground extends StatelessWidget {
   }
 }
 
-class DsBrandMark extends StatelessWidget {
-  const DsBrandMark({super.key, required this.size});
+/// The customer's logo in the app shell header (owner request 2026-11-10):
+/// the Vietnam Airlines wordmark, or only its lotus where the header is
+/// narrow. Scales down to the width it is given.
+class DsBrandLogo extends StatelessWidget {
+  const DsBrandLogo({
+    super.key,
+    required this.height,
+    this.markOnly = false,
+    this.semanticLabel,
+  });
 
-  final double size;
+  static const logoAsset = 'assets/images/vietnam_airlines_logo.png';
+  static const markAsset = 'assets/images/vietnam_airlines_mark.png';
+
+  final double height;
+  final bool markOnly;
+  final String? semanticLabel;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        color: DsColors.primary,
-        borderRadius: BorderRadius.circular(DsRadius.medium),
-      ),
-      child: Icon(
-        Icons.flight_takeoff_outlined,
-        color: Colors.white,
-        size: size * 0.55,
-      ),
+    return Image.asset(
+      markOnly ? markAsset : logoAsset,
+      height: height,
+      fit: BoxFit.contain,
+      filterQuality: FilterQuality.medium,
+      semanticLabel: semanticLabel,
     );
   }
 }
@@ -215,23 +219,13 @@ class _DsSideNavigation extends StatelessWidget {
             decoration: const BoxDecoration(
               border: Border(bottom: BorderSide(color: DsColors.border)),
             ),
-            child: Row(
-              mainAxisAlignment: extended
-                  ? MainAxisAlignment.start
-                  : MainAxisAlignment.center,
-              children: [
-                const DsBrandMark(size: 36),
-                if (extended) ...[
-                  const SizedBox(width: DsSpacing.x3),
-                  Expanded(
-                    child: Text(
-                      productName,
-                      style: Theme.of(context).textTheme.titleMedium,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              ],
+            // The customer's logo stands for the product name here: the full
+            // wordmark when the rail is wide, only the lotus when collapsed.
+            alignment: extended ? Alignment.centerLeft : Alignment.center,
+            child: DsBrandLogo(
+              height: 28,
+              markOnly: !extended,
+              semanticLabel: productName,
             ),
           ),
           Expanded(

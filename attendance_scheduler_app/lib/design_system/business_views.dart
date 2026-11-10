@@ -855,6 +855,7 @@ class DsFlightsView extends StatelessWidget {
     required this.onAdd,
     this.onManagePresets,
     this.onImportExcel,
+    this.onDownloadTemplate,
   });
 
   final DateTime month;
@@ -869,6 +870,10 @@ class DsFlightsView extends StatelessWidget {
   /// If non-null an admin "Import Excel" toolbar action is shown (F-04).
   final VoidCallback? onImportExcel;
 
+  /// If non-null an admin "Download template" toolbar action is shown, just
+  /// before "Import Excel": the month's blank plan to fill in and import.
+  final VoidCallback? onDownloadTemplate;
+
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
@@ -881,6 +886,12 @@ class DsFlightsView extends StatelessWidget {
       title: l.text('flightsTitle'),
       subtitle: l.text('flightsSubtitle'),
       actions: [
+        if (onDownloadTemplate != null)
+          DsSecondaryButton(
+            label: l.text('downloadFlightTemplate'),
+            icon: Icons.download_outlined,
+            onPressed: onDownloadTemplate!,
+          ),
         if (onImportExcel != null)
           DsSecondaryButton(
             label: l.text('importExcel'),

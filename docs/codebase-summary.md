@@ -15,7 +15,8 @@ api/v1/      endpoints/ (auth, users, flights, leaves, shift_changes, self_arran
              schedules, attendance, time_clock, holidays, calculations, reports,
              compliance) + router + deps; api/params.py (bounded year/month
              parameters → 422)
-services/    auth, user, flight (+flight_pair_derivation, flight_excel_parser),
+services/    auth, user, flight (+flight_pair_derivation, flight_excel_parser,
+             flight_plan_template / _parser / _service: the monthly Excel grid),
              leave (+leave_windows, leave_balance, leave_conflict_resolver),
              shift_change, self_arrange, schedule (+schedule_input_builder,
              schedule_history, schedule_violation_checker, schedule_autorun),
@@ -32,7 +33,7 @@ alembic/     0001 baseline … 0009 flight_unique_day_number (head; see
 scripts/     seed_demo_users.py, reset_all_passwords.py (both refuse unless
              ENVIRONMENT=dev and the database is local, app/core/script_guard.py;
              --allow-non-dev overrides; hidden password prompt)
-tests/       479 tests (pytest on SQLite, foreign keys on) — engine rules
+tests/       536 tests (pytest on SQLite, foreign keys on) — engine rules
              (bind + slack violation), solve phases, engine/checker agreement,
              roles, cross-month rules, services, endpoints, input bounds,
              RBAC/audit, user delete, sick privacy, production guard, bootstrap,
@@ -74,11 +75,13 @@ migration head); `schedule_violation_checker.recheck(..., cover_roles=)`
 ## Frontend (`attendance_scheduler_app/lib/`)
 ```
 core/         config, network (Dio + JWT interceptor, ApiException,
+              which also reads an import rejection's row errors,
               apiErrorMessage: the one error-message rule), router (go_router, auth
               guard + admin-only routes), storage (secure JWT, locale),
               constants (api_endpoints, shift_codes incl. plannedCodesFor(role)
               for the admin editor and requestableCodesFor(role) for requests),
-              utils
+              utils (file_download: streamed file + save to Downloads, shared
+              by reports and the flight plan template)
 design_system/ reusable Ds*View widgets (Schedule, Flights, Leaves, Attendance,
               Reports, Users) + dialogs, tokens, theme
 features/<x>/ data/{datasources,models,repositories} · domain/{entities,
@@ -89,11 +92,17 @@ i18n/         custom AppLocalizations (en/vi, graceful text(key) fallback)
 ```
 `auth` is the canonical clean-architecture template; the business features
 mirror it, feeding live provider state into the `design_system` views.
-Tests: `test/` — 136 tests including 3 goldens (`test/goldens/`, tagged
+Tests: `test/` — 166 tests including 3 goldens (`test/goldens/`, tagged
 `golden` in `dart_test.yaml`; run them on macOS with `flutter test --tags
 golden`, everything else with `--exclude-tags golden`); among them
 `i18n_keys_used_exist_test.dart` (every key used in `lib/` exists).
 `pubspec.lock` is tracked; CI runs `flutter pub get --enforce-lockfile`.
+
+New on 2026-11-10: the monthly flight plan as an Excel grid
+(`GET /flights/template`, upload through `POST /flights/import`, decision
+#60), the customer logo in the app shell and on the login page
+(`DsBrandLogo`, `assets/images/`), the login page's aircraft drawing
+(`DsAircraftLineArt`) and the lotus app icon.
 
 ## Entry points
 - Backend: `alembic upgrade head`, then `uvicorn app.main:app` (lifespan:

@@ -55,6 +55,17 @@ List<Override> _scheduleOverrides() => [
           .overrideWith((ref) => _FakeFlightsDataSource()),
     ];
 
+/// Asset images (the shell logo) decode outside the fake clock: without this
+/// the first test to show one captures an empty box.
+Future<void> _decodeImages(WidgetTester tester) async {
+  await tester.runAsync(() async {
+    for (final element in find.byType(Image).evaluate()) {
+      await precacheImage((element.widget as Image).image, element);
+    }
+  });
+  await tester.pumpAndSettle();
+}
+
 void main() {
   testWidgets('login desktop visual', (tester) async {
     await tester.binding.setSurfaceSize(const Size(1280, 800));
@@ -72,6 +83,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    await _decodeImages(tester);
 
     await expectLater(
       find.byKey(const Key('login-golden')),
@@ -99,6 +111,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    await _decodeImages(tester);
 
     await expectLater(
       find.byKey(const Key('schedule-golden')),
@@ -126,6 +139,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    await _decodeImages(tester);
 
     await expectLater(
       find.byKey(const Key('schedule-compact-golden')),
