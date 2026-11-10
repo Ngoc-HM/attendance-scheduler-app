@@ -250,12 +250,13 @@ class DsAuthPage extends StatelessWidget {
                       child: DsLiquidGlassSurface(
                         padding: EdgeInsets.zero,
                         borderRadius: DsRadius.xxLarge,
-                        blur: 6,
-                        // Clear, dark glass on the photo (owner's reference
-                        // 2026-11-10): barely a navy tint and a light blur,
-                        // so the photo shows through. Text that sits on the
-                        // glass itself is white.
-                        tint: DsColors.textPrimary.withValues(alpha: 0.12),
+                        blur: 4,
+                        // Clear glass on the photo (owner's reference
+                        // 2026-11-10): almost no tint and a light blur, so
+                        // the photo shows through; the edge and a sheen at
+                        // the top-left make it read as glass. Text that sits
+                        // on the glass itself is white.
+                        tint: DsColors.surface.withValues(alpha: 0.05),
                         uniformTint: true,
                         edgeLight: true,
                         child: Padding(
