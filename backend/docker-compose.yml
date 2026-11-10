@@ -1,5 +1,10 @@
 # Local dev stack: PostgreSQL + API. For production prefer a managed
 # EU/Frankfurt-region PostgreSQL (spec §9.4) and sign a DPA with the provider.
+#
+# `make dev` / `make db` start only the `db` service; the backend then runs on
+# the host and reaches it at localhost:5432 (the DATABASE_URL in .env.example).
+name: attendance-scheduler
+
 services:
   db:
     image: postgres:16
@@ -8,8 +13,10 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: attendance
+    # Loopback only: these are development credentials, so the database must
+    # not be reachable from the network.
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     # The API runs `alembic upgrade head` on start; wait until PostgreSQL

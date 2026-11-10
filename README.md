@@ -53,8 +53,17 @@ Flutter (Windows desktop)  ──HTTPS/JWT──►  FastAPI  ──►  Postgre
 **Quick start (both at once):**
 ```bash
 make install      # backend venv + deps, flutter pub get   (first time)
-make dev          # runs backend on :8035 + Flutter desktop; Ctrl-C stops both
+make dev          # PostgreSQL in Docker + backend on :8035 + Flutter desktop
 ```
+`make dev` needs Docker running. It first starts the `db` service of
+`backend/docker-compose.yml` (PostgreSQL 16 on `localhost:5432`, loopback
+only) and runs `alembic upgrade head`, then starts the backend and the client.
+It does that only when `DATABASE_URL` in `backend/.env` is a PostgreSQL on
+localhost (the `.env.example` value); a remote database is never started or
+migrated from here. Ctrl-C stops the backend and the client; PostgreSQL keeps
+running (and keeps its data) until `make db-stop`. `make db` starts only the
+database.
+
 `make dev` auto-detects the desktop device (macOS/Linux/Windows); override with
 `make dev DEVICE=windows`. See `make help` for individual targets.
 

@@ -102,4 +102,8 @@ golden`, everything else with `--exclude-tags golden`); among them
   when it has no schedule and next month from day `AUTORUN_DAY + 1`).
 - Frontend: `flutter run -d macos|windows|linux` (`API_BASE_URL` from
   `--dart-define`, else `.env`).
-- `make dev` runs both.
+- `make dev` runs the whole dev stack: `scripts/dev_db.sh` starts PostgreSQL
+  in Docker (`docker compose up db`, `localhost:5432`) and applies the
+  migrations when `DATABASE_URL` is a localhost PostgreSQL, then
+  `scripts/dev.sh` starts the backend and the client. `make db` /
+  `make db-stop` start and stop only the database.

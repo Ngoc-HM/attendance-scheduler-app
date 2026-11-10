@@ -1,6 +1,8 @@
 # Dev workflow for the Attendance & Auto-Scheduler app.
-#   make dev   -> runs the FastAPI backend (:8035) AND the Flutter desktop client.
-# Ctrl-C stops both (they share a process group).
+#   make dev   -> PostgreSQL in Docker (localhost:5432, migrated), then the
+#                 FastAPI backend (:8035) AND the Flutter desktop client.
+# Ctrl-C stops the backend and the client; PostgreSQL keeps running until
+# `make db-stop`.
 
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
@@ -20,11 +22,13 @@ else
   DEVICE ?= windows
 endif
 
-.PHONY: help dev backend frontend install test clean
+.PHONY: help dev db db-stop backend frontend install test clean
 
 help:
 	@echo "Attendance & Auto-Scheduler — dev targets:"
-	@echo "  make dev       Run backend (:$(BACKEND_PORT)) + Flutter desktop ($(DEVICE))"
+	@echo "  make dev       Run PostgreSQL (Docker) + backend (:$(BACKEND_PORT)) + Flutter desktop ($(DEVICE))"
+	@echo "  make db        Start only PostgreSQL in Docker (localhost:5432) and apply migrations"
+	@echo "  make db-stop   Stop the Docker PostgreSQL (its data is kept)"
 	@echo "  make backend   Run only the FastAPI backend (:$(BACKEND_PORT))"
 	@echo "  make frontend  Run only the Flutter desktop client ($(DEVICE))"
 	@echo "  make install   Create backend venv + install deps, flutter pub get"
@@ -35,6 +39,12 @@ help:
 
 dev:
 	@bash scripts/dev.sh $(DEVICE) $(BACKEND_PORT)
+
+db:
+	@bash scripts/dev_db.sh
+
+db-stop:
+	docker compose -f $(BACKEND_DIR)/docker-compose.yml stop db
 
 backend:
 	cd $(BACKEND_DIR) && $(VENV_PY) -m uvicorn app.main:app --reload --port $(BACKEND_PORT)

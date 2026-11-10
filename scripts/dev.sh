@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
-# Run the FastAPI backend and the Flutter desktop client together.
-# The backend runs in the background; Flutter runs in the foreground. Quitting
-# Flutter (or Ctrl-C) stops the backend too. Only the backend PID is killed —
-# never the parent `make`/shell (that was the `kill 0` footgun).
+# Run the whole development stack: PostgreSQL (Docker), the FastAPI backend and
+# the Flutter desktop client.
+# PostgreSQL is started (and migrated) first by scripts/dev_db.sh and keeps
+# running afterwards — stop it with `make db-stop`. The backend runs in the
+# background; Flutter runs in the foreground. Quitting Flutter (or Ctrl-C)
+# stops the backend too. Only the backend PID is killed — never the parent
+# `make`/shell (that was the `kill 0` footgun).
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -17,6 +20,9 @@ if [[ ! -x "$PY" ]]; then
   echo "Run 'make install' first (creates backend/.venv and installs deps)."
   exit 1
 fi
+
+# Database first: the backend cannot start without it.
+bash "$ROOT/scripts/dev_db.sh" || exit 1
 
 echo ">> backend :$PORT + Flutter desktop ($DEVICE) — quit Flutter or press Ctrl-C to stop both"
 
