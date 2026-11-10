@@ -292,8 +292,10 @@ class DsLanguageSelector extends StatelessWidget {
           child: DsLiquidGlassSurface(
             padding: EdgeInsets.zero,
             borderRadius: DsRadius.medium,
+            // On the dark glass the pill is as clear as the card it sits
+            // on (same tint and blur).
             blur: onDark ? 4 : 14,
-            tint: DsColors.surface.withValues(alpha: onDark ? 0.1 : 0.56),
+            tint: DsColors.surface.withValues(alpha: onDark ? 0.05 : 0.56),
             uniformTint: onDark,
             edgeLight: onDark,
             child: Material(
