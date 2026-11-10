@@ -1331,6 +1331,14 @@ class _LeavesTable extends StatelessWidget {
               },
           ],
       ],
+      // Staffing risk sits under the row's cells, full width, so the columns
+      // keep their widths at the minimum window; rows without it unchanged.
+      rowFooters: [
+        for (final row in rows)
+          row.staffingWarnings.isEmpty
+              ? null
+              : _LeaveStaffingWarnings(lines: row.staffingWarnings),
+      ],
     );
 
     // Fix cứng khung giao diện: bảng có chiều rộng tối thiểu cố định; nếu màn
@@ -1350,6 +1358,52 @@ class _LeavesTable extends StatelessWidget {
           child: SizedBox(width: minWidth, child: table),
         );
       },
+    );
+  }
+}
+
+/// Flight-staffing risk of one leave request, kept on its row (owner
+/// 2026-11-10: the approval toast disappears, the risk must not). Lines come
+/// translated from the backend, one per day or shift, as plain text.
+class _LeaveStaffingWarnings extends StatelessWidget {
+  const _LeaveStaffingWarnings({required this.lines});
+
+  final List<String> lines;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = dsToneColors(DsTone.warning);
+    final style = DsType.tableCell.copyWith(
+      fontSize: DsFontSize.footnote,
+      color: colors.foreground,
+    );
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: DsSpacing.x3,
+        vertical: DsSpacing.x2,
+      ),
+      decoration: BoxDecoration(
+        color: colors.background,
+        borderRadius: BorderRadius.circular(DsRadius.small),
+        border: Border.all(color: colors.foreground.withValues(alpha: 0.18)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            Icons.warning_amber_outlined,
+            color: colors.foreground,
+            size: DsFontSize.bodyLarge,
+          ),
+          const SizedBox(width: DsSpacing.x2),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [for (final line in lines) Text(line, style: style)],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

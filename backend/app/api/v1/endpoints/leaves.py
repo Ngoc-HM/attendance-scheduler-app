@@ -20,7 +20,7 @@ from app.schemas.leave import (
     LeaveRead,
     LeaveWindowRead,
 )
-from app.services import audit_service, leave_balance, leave_service
+from app.services import audit_service, leave_balance, leave_service, leave_staffing
 
 router = APIRouter()
 
@@ -31,13 +31,14 @@ def list_leaves(
     current_user: ActiveUser,
     all: bool = Query(False, description="Admin: return all users' requests"),
 ):
-    """Own leave requests; admin may pass ?all=true to see all."""
+    """Own leave requests; admin may pass ?all=true to see all, each with its
+    current flight-staffing risk (``staffing_warnings``)."""
     if all:
         # Only admins may view all requests.
         from app.models.enums import Role
         if current_user.role is not Role.M:
             raise HTTPException(status.HTTP_403_FORBIDDEN, detail=t("auth.admin_required"))
-        return leave_service.list_all(db)
+        return leave_staffing.with_staffing_warnings(db, leave_service.list_all(db))
     return leave_service.list_for_user(db, current_user.id)
 
 
@@ -54,7 +55,7 @@ def request_leave(
 @router.get("/pending", response_model=list[LeaveRead])
 def pending_leaves(db: DbSession, _admin: AdminUser):
     """Admin queue: pending requests ordered by submission time."""
-    return leave_service.list_pending(db)
+    return leave_staffing.with_staffing_warnings(db, leave_service.list_pending(db))
 
 
 # Declared before the /{leave_id}/... routes.

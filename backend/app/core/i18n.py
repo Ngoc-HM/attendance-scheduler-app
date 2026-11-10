@@ -133,9 +133,11 @@ MESSAGES: dict[str, dict[str, str]] = {
         "leave.schedule_applied": "The already-generated schedule was updated with this decision; review the warnings.",
         "leave.schedule_not_generated": "no schedule yet — this decision applies when the month is generated.",
         "leave.revoke_only_approved": "Only an approved leave can be revoked.",
-        "leave.staffing_impossible": "flights CANNOT be covered — too few group-A staff remain that day.",
-        "leave.staffing_short_ordinary": (
-            "not enough role-A staff for ordinary A and D coverage that day."
+        # Flight-staffing risk of a leave (services/leave_staffing): the
+        # month's roster exists → per short shift; no roster yet → head count.
+        "leave.staffing_short_shift": "{day}: {amount} short on the {shift} shift",
+        "leave.staffing_headcount": (
+            "{day}: {remaining} group-A staff left, {need_a} ARR + {need_d} DEP needed"
         ),
         "leave.balance_exceeded": "Approving exceeds this person's annual leave quota.",
         # --- Shift changes (decision #8) ---
@@ -294,9 +296,9 @@ MESSAGES: dict[str, dict[str, str]] = {
         "leave.schedule_applied": "Lịch đã tạo được cập nhật theo quyết định này; hãy xem các cảnh báo.",
         "leave.schedule_not_generated": "chưa có lịch — quyết định này sẽ được áp dụng khi tạo lịch tháng đó.",
         "leave.revoke_only_approved": "Chỉ hủy được đơn nghỉ đã duyệt.",
-        "leave.staffing_impossible": "KHÔNG thể phủ chuyến bay — nhóm A còn lại quá ít người ngày này.",
-        "leave.staffing_short_ordinary": (
-            "không đủ nhân sự role A để phủ ca A và D thông thường trong ngày."
+        "leave.staffing_short_shift": "{day}: thiếu {amount} người ca {shift}",
+        "leave.staffing_headcount": (
+            "{day}: còn {remaining} người nhóm A, cần {need_a} ca ARR + {need_d} ca DEP"
         ),
         "leave.balance_exceeded": "Duyệt đơn này vượt định mức phép năm của nhân sự.",
         # --- Shift changes (decision #8) ---
