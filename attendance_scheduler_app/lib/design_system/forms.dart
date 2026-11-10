@@ -256,6 +256,7 @@ class DsAuthPage extends StatelessWidget {
                         // Text that sits on the glass itself is white.
                         tint: DsColors.textPrimary.withValues(alpha: 0.26),
                         uniformTint: true,
+                        edgeLight: true,
                         child: Padding(
                           padding: const EdgeInsets.all(DsSpacing.x10),
                           child: Column(
