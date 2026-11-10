@@ -325,8 +325,6 @@ class _DsAuthContextPanel extends StatelessWidget {
             key: Key('login-photo'),
             image: AssetImage(DsAuthPage.photoAsset),
             fit: BoxFit.cover,
-            // The aircraft sits right of the photo's centre.
-            alignment: Alignment(0.2, 0),
             excludeFromSemantics: true,
           ),
         ),
