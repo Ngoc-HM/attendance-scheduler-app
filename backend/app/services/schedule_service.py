@@ -19,7 +19,7 @@ from app.models.schedule import MonthlySchedule, ShiftAssignment
 from app.models.shift_change_request import ShiftChangeRequest
 from app.models.user import User
 from app.scheduler import SchedulerEngine
-from app.scheduler.calendar_utils import build_weeks, month_days
+from app.scheduler.calendar_utils import month_days
 from app.scheduler.domain import Violation
 from app.schemas.schedule import (
     ConstraintViolation,
@@ -460,7 +460,7 @@ def _recheck_violations(db: Session, schedule: MonthlySchedule) -> list[Constrai
         grid=grid,
         roles={u.id: u.role for u in active},
         carry_streaks={uid: state.carry_streak for uid, state in boundary.items()},
-        weeks=build_weeks(days),
+        days=days,
         flight_pairs=flight_service.flight_pairs_map(db, days),
         previous_working={
             user_id: state.previous_working for user_id, state in boundary.items()

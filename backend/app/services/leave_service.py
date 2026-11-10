@@ -459,8 +459,8 @@ def conflicts_for_date(
     }
 
     # Criterion 2 input: off days these users ALREADY hold (approved) around
-    # the contested date — one month either side covers every 7-day block a
-    # request can touch.
+    # the contested date — one month either side covers the six days before
+    # and after any monthly span (the rolling 7-day windows it touches).
     window_start = target_date - timedelta(days=31)
     window_end = target_date + timedelta(days=31)
     approved = (

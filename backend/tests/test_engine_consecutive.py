@@ -6,7 +6,7 @@ from datetime import date
 
 from app.models.enums import AttendanceCode, Role
 from app.scheduler import PersonInput, SchedulerEngine, SolverInput
-from app.scheduler.calendar_utils import build_weeks, month_days
+from app.scheduler.calendar_utils import month_days
 
 
 def _solve(people, days, flight_pairs=None):
@@ -16,7 +16,6 @@ def _solve(people, days, flight_pairs=None):
             month=days[0].month,
             people=people,
             days=days,
-            weeks=build_weeks(days),
             flight_pairs=flight_pairs or {d: 0 for d in days},
             max_solve_seconds=10.0,
         )
@@ -98,7 +97,7 @@ def test_annual_leave_block_exempt_from_off_chain() -> None:
     out = SchedulerEngine().solve(
         SolverInput(
             year=2026, month=7, people=people, days=days,
-            weeks=build_weeks(days), flight_pairs={d: 0 for d in days},
+            flight_pairs={d: 0 for d in days},
             approved_off={1: leave_days},
             long_leave_off={1: set(leave_days)},
             max_solve_seconds=10.0,

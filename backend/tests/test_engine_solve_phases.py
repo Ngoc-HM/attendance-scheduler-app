@@ -15,7 +15,7 @@ from app.core.config import settings
 from app.models.enums import Role
 from app.scheduler import PersonInput, SchedulerEngine, SolverInput
 from app.scheduler import engine as engine_module
-from app.scheduler.calendar_utils import build_weeks, month_days
+from app.scheduler.calendar_utils import month_days
 
 
 def _review_instance(max_solve_seconds: float) -> SolverInput:
@@ -41,7 +41,6 @@ def _review_instance(max_solve_seconds: float) -> SolverInput:
         month=12,
         people=people,
         days=days,
-        weeks=build_weeks(days),
         flight_pairs={d: (2 if d.weekday() in (4, 5, 6) else 1) for d in days},
         holidays={date(2026, 12, 25), date(2026, 12, 26)},
         max_solve_seconds=max_solve_seconds,
@@ -56,7 +55,6 @@ def _small_instance() -> SolverInput:
         month=6,
         people=people,
         days=days,
-        weeks=build_weeks(days),
         flight_pairs={d: 1 for d in days},
         max_solve_seconds=10.0,
     )

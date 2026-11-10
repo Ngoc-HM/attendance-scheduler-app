@@ -55,14 +55,6 @@ MESSAGES: dict[str, dict[str, str]] = {
             "{day}: no group-A staff to cover the flights (need at least "
             "{need_a} on ARR and {need_d} on DEP)."
         ),
-        "schedule.violation.two_days_off_per_week_under": (
-            "{person}: {amount} day(s) off short in the 7-day block from {start} "
-            "(needs {required})."
-        ),
-        "schedule.violation.two_days_off_per_week_over": (
-            "{person}: {amount} day(s) off too many in the 7-day block from {start} "
-            "(needs {required})."
-        ),
         "schedule.violation.rolling_seven_min_two_rest": (
             "{person}: fewer than 2 rest days in the 7 days from {start}."
         ),
@@ -172,7 +164,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "selfarrange.empty_changes": "The request contains no changes.",
         "selfarrange.cell_not_found": "One of the selected days has no scheduled cell of yours.",
         "selfarrange.invalid_code": "A requested code is not allowed for your role.",
-        "selfarrange.breaks_weekly_off": "The arrangement must keep exactly the required off days in every 7-day block.",
+        "selfarrange.breaks_weekly_off": "The arrangement must keep the same number of days off in the month and must not make you work more than 5 days in any 7 consecutive days.",
         "selfarrange.cell_locked": "Leave/sick days cannot be rearranged — only regular working (AD) and off (X) days.",
         "selfarrange.not_found": "Self-arrange request not found.",
         "selfarrange.already_decided": "This self-arrange request was already decided.",
@@ -234,14 +226,6 @@ MESSAGES: dict[str, dict[str, str]] = {
         "schedule.violation.flight_staffing_no_role_a": (
             "{day}: không có nhân sự nhóm A để phủ chuyến bay (cần ít nhất "
             "{need_a} người ca ARR và {need_d} người ca DEP)."
-        ),
-        "schedule.violation.two_days_off_per_week_under": (
-            "{person}: thiếu {amount} ngày nghỉ trong block 7 ngày từ {start} "
-            "(cần {required})."
-        ),
-        "schedule.violation.two_days_off_per_week_over": (
-            "{person}: thừa {amount} ngày nghỉ trong block 7 ngày từ {start} "
-            "(cần {required})."
         ),
         "schedule.violation.rolling_seven_min_two_rest": (
             "{person}: chưa đủ 2 ngày nghỉ trong 7 ngày liền từ {start}."
@@ -350,7 +334,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "selfarrange.empty_changes": "Yêu cầu không có thay đổi nào.",
         "selfarrange.cell_not_found": "Có ngày được chọn không có ô lịch của bạn.",
         "selfarrange.invalid_code": "Có mã ca không hợp lệ với vai trò của bạn.",
-        "selfarrange.breaks_weekly_off": "Sắp xếp phải giữ đúng số ngày nghỉ quy định trong mỗi block 7 ngày.",
+        "selfarrange.breaks_weekly_off": "Sắp xếp phải giữ nguyên số ngày nghỉ trong tháng và không làm quá 5 ngày trong 7 ngày liên tiếp bất kỳ.",
         "selfarrange.cell_locked": "Không được sắp xếp lại ngày nghỉ phép/ốm — chỉ ngày làm (AD) và nghỉ (X) thường.",
         "selfarrange.not_found": "Không tìm thấy yêu cầu tự sắp ca.",
         "selfarrange.already_decided": "Yêu cầu tự sắp ca này đã được quyết định.",

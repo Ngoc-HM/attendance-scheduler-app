@@ -1,7 +1,7 @@
 """Role-aware scheduling engine tests (owner decision 2026-06-26).
 
 Verifies the per-role code domain, the cross-people A/D balance, the D>0
-fix for role-A people, and the 2-X/week rule for every role.
+fix for role-A people, and the rolling 7-day rest rule for every role.
 
 Setup: 4 role-A + 3 role-T + 2 role-M people over a 14-day month slice,
 with flight_pairs > 0 on several days.
@@ -15,8 +15,9 @@ import pytest
 
 from app.models.enums import AttendanceCode, Role
 from app.scheduler import PersonInput, SchedulerEngine, SolverInput
-from app.scheduler.calendar_utils import build_weeks, month_days
+from app.scheduler.calendar_utils import month_days
 from app.scheduler.role_codes import ROLE_CODES
+from tests.rest_invariants import assert_rest_rules
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -25,7 +26,7 @@ ROLE_A_CODES = set(ROLE_CODES[Role.A])
 ROLE_T_CODES = set(ROLE_CODES[Role.T])
 ROLE_M_CODES = set(ROLE_CODES[Role.M])
 
-# Use first 14 days of July 2026 (2 full 7-day blocks → clean 2 X per block).
+# Use the first 14 days of July 2026.
 _YEAR, _MONTH = 2026, 7
 _DAYS = month_days(_YEAR, _MONTH)[:14]
 
@@ -56,7 +57,6 @@ def solved():
             month=_MONTH,
             people=_PEOPLE,
             days=_DAYS,
-            weeks=build_weeks(_DAYS),
             flight_pairs=_FLIGHT_PAIRS,
             max_solve_seconds=30.0,
         )
@@ -134,22 +134,14 @@ def test_role_a_d_count_positive_when_flights_present(solved) -> None:
 
 
 # ---------------------------------------------------------------------------
-# 2 X per 7-day block for every role
+# Rolling 7-day rest for every role (owner 2026-11-10, replaces 2 X/block)
 # ---------------------------------------------------------------------------
 
-def test_two_x_per_block_all_roles(solved) -> None:
-    """Every person (all roles) gets exactly 2 X in each full 7-day block."""
+def test_rolling_rest_all_roles(solved) -> None:
+    """Every person (all roles) has >= 2 rest days in every rolling 7 days."""
     grid = {(a.user_id, a.day): a.code for a in solved.assignments}
-    weeks = build_weeks(_DAYS)
     for p in _PEOPLE:
-        for block in weeks:
-            if len(block) < 7:
-                continue  # skip partial blocks
-            x_count = sum(1 for d in block if grid[(p.user_id, d)] is AttendanceCode.X)
-            assert x_count == 2, (
-                f"user {p.user_id} (role {p.role}): {x_count} X in block "
-                f"starting {block[0]} (expected 2)"
-            )
+        assert_rest_rules(grid, p.user_id, _DAYS)
 
 
 # ---------------------------------------------------------------------------

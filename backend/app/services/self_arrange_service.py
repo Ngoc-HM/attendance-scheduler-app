@@ -1,15 +1,19 @@
 """Self-arrange batch logic (owner 2026-07-09).
 
 Flow: employee (T/F; A blocked) proposes a batch of own-cell changes on a
-PUBLISHED month → validated (ownership, role code domain, weekly-2-off quota)
+PUBLISHED month → validated (ownership, role code domain, rest rules)
 → pending → admin approves once more → re-validated against the CURRENT
 schedule and applied. Validation runs at BOTH ends because the schedule may
 change between submit and approve.
 
-Quota semantics (owner decision c): every 7-day block (anchored at day 1)
-must keep EXACTLY ``partial_block_off_target`` genuine X days. AL/S/CD are
-stored as their own codes in the grid, so counting X only matches decision #4
-("leave does not consume the weekly off quota").
+Rest semantics (owner 2026-11-10 — the 7-day blocks are gone): the batch
+must keep the NUMBER of X the person holds in the month (a day off may move,
+never be added or removed), and it must not create a
+``rolling_seven_min_two_rest`` or ``max_consecutive_working`` violation for
+the requester that was not there before. Both are judged with the re-check
+functions and the requester's own history, so the server, the solver and the
+admin's re-check agree. AL/S/CD are stored as their own codes and are locked
+below, so counting X only is exact.
 """
 
 from __future__ import annotations
@@ -24,14 +28,11 @@ from app.models.enums import AttendanceCode, LeaveStatus
 from app.models.schedule import MonthlySchedule, ShiftAssignment
 from app.models.self_arrange_request import SelfArrangeRequest
 from app.models.user import User
-from app.scheduler.calendar_utils import (
-    build_weeks,
-    month_days,
-    partial_block_off_target,
-)
+from app.scheduler.calendar_utils import month_days
 from app.scheduler.role_codes import codes_for
 from app.schemas.self_arrange import SelfArrangeChange, SelfArrangeCreate
-from app.services import attendance_service, schedule_service
+from app.services import attendance_service, schedule_history, schedule_service
+from app.services.schedule_violation_checker import check_consecutive, check_rolling_rest
 
 # ---------------------------------------------------------------------------
 # Validation core (shared by create and approve)
@@ -47,7 +48,7 @@ def _validate(
     """Validate a proposed batch; return (schedule, own cells by date).
 
     Raises 403 (fixed role), 404 (month not published), 400 (empty/duplicate),
-    409 (missing own cell), 422 (bad code / broken weekly-off quota).
+    409 (missing own cell), 422 (bad code / broken rest rule).
     """
     if requester.role.is_fixed:
         raise HTTPException(
@@ -98,36 +99,68 @@ def _validate(
                 detail=t("selfarrange.cell_locked"),
             )
 
-    _validate_weekly_off(own, changes, year, month)
+    _validate_rest(db, requester, own, changes, year, month)
     return schedule, own
 
 
-def _validate_weekly_off(
+def _validate_rest(
+    db: Session,
+    requester: User,
     own: dict[date, ShiftAssignment],
     changes: list[SelfArrangeChange],
     year: int,
     month: int,
 ) -> None:
-    """Every AFFECTED 7-day block must keep exactly its X target after the batch."""
-    new_codes = {c.work_date: c.code for c in changes}
-    changed_dates = set(new_codes)
-    for block in build_weeks(month_days(year, month)):
-        if not changed_dates.intersection(block):
-            continue
-        target = partial_block_off_target(len(block))
-        got = 0
-        for d in block:
-            code = new_codes.get(d)
-            if code is None:
-                cell = own.get(d)
-                code = cell.code if cell is not None else None
-            if code is AttendanceCode.X:
-                got += 1
-        if got != target:
-            raise HTTPException(
-                status.HTTP_422_UNPROCESSABLE_CONTENT,
-                detail=t("selfarrange.breaks_weekly_off"),
-            )
+    """Same month X count, and no new 7-day / 5-in-a-row breach (with history)."""
+    boundary = schedule_history.build_boundary_states(db, [requester], year, month)
+    state = boundary.get(requester.id)
+    check_rest_batch(
+        requester,
+        own,
+        changes,
+        month_days(year, month),
+        carry_streak=state.carry_streak if state else 0,
+        previous_working=state.previous_working if state else {},
+    )
+
+
+def _rest_breaches(
+    grid: dict[tuple[int, date], AttendanceCode],
+    requester: User,
+    days: list[date],
+    carry_streak: int,
+    previous_working: dict[date, bool],
+) -> set[tuple[str, date | None]]:
+    roles = {requester.id: requester.role}
+    found = check_rolling_rest(grid, roles, days, {requester.id: previous_working})
+    found += check_consecutive(grid, roles, {requester.id: carry_streak}, days)
+    return {(v.rule, v.day) for v in found}
+
+
+def check_rest_batch(
+    requester: User,
+    own: dict[date, ShiftAssignment],
+    changes: list[SelfArrangeChange],
+    days: list[date],
+    *,
+    carry_streak: int,
+    previous_working: dict[date, bool],
+) -> None:
+    """Pure part of ``_validate_rest``; raises 422 ``breaks_weekly_off``."""
+    before = {(requester.id, d): cell.code for d, cell in own.items()}
+    after = {**before, **{(requester.id, c.work_date): c.code for c in changes}}
+
+    def x_count(grid: dict[tuple[int, date], AttendanceCode]) -> int:
+        return sum(1 for code in grid.values() if code is AttendanceCode.X)
+
+    new_breaches = _rest_breaches(
+        after, requester, days, carry_streak, previous_working
+    ) - _rest_breaches(before, requester, days, carry_streak, previous_working)
+    if x_count(after) != x_count(before) or new_breaches:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=t("selfarrange.breaks_weekly_off"),
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -199,7 +232,7 @@ def decide(
             for c in req.changes
         ]
         # Re-validate against the CURRENT schedule — it may have changed since
-        # submit; employees must never end up violating the weekly quota.
+        # submit; employees must never end up breaking a rest rule.
         schedule, own = _validate(db, requester, req.year, req.month, changes)
         for c in changes:
             cell = own[c.work_date]

@@ -9,8 +9,10 @@ Truly HARD (can never break, decision #2):
     #5 approved leave/holidays pinned OFF     — here
 
 SOFT with penalized slack (violations reported via ``SlackRegistry``):
-    #2 two X per 7-day block                  — ``constraints_off_days``
-       two rest days in every rolling 7 days  — ``constraints_rolling_rest``
+    #2 two rest days in every rolling 7 days  — ``constraints_rolling_rest``
+       (replaces the old "2 X per 7-day block 1–7, 8–14, …" quota, owner
+       2026-11-10: the number of X is whatever this rule needs, shaped by the
+       soft objectives)
     #3 max 5 consecutive working (+ §5.5)     — ``constraints_consecutive``
     #4 fixed-group (role A) staffing per fp   — ``constraints_staffing``
        at least 2 pure-A days per A person     — ``constraints_role_a_distribution``
@@ -27,7 +29,6 @@ from app.scheduler import (
     constraints_comp_days,
     constraints_consecutive,
     constraints_off_chain,
-    constraints_off_days,
     constraints_role_a_distribution,
     constraints_rolling_rest,
     constraints_staffing,
@@ -45,7 +46,6 @@ def add_all(
 ) -> None:
     one_status_per_day(model, x, inp)
     respect_approved_off(model, x, inp)
-    constraints_off_days.add(model, x, inp, registry)
     constraints_rolling_rest.add(model, x, inp, registry)
     constraints_consecutive.add(model, x, inp, registry)
     constraints_off_chain.add(model, x, inp, registry)

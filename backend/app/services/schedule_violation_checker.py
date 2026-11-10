@@ -10,7 +10,7 @@ Rules mirrored (engine module in brackets):
 
 * max 5 consecutive working days, carry included   [constraints_consecutive]
 * >= 2 rest days in every rolling 7 days           [constraints_rolling_rest]
-* genuine-X quota per 7-day block                  [constraints_off_days]
+  (the old "2 X per 7-day block" quota is gone, owner 2026-11-10)
 * flight staffing floor for role A                 [constraints_staffing]
 * >= 2 pure A days per role-A person / full month  [constraints_role_a_distribution]
 * owed comp days (CD) granted, none unearned       [constraints_comp_days]
@@ -27,7 +27,6 @@ from __future__ import annotations
 from datetime import date, timedelta
 
 from app.models.enums import AttendanceCode, Role
-from app.scheduler.calendar_utils import partial_block_off_target
 from app.scheduler.constraints_role_a_distribution import (
     MIN_A_DAYS,
     MIN_FULL_MONTH_DAYS,
@@ -48,7 +47,7 @@ def recheck(
     grid: dict[tuple[int, date], AttendanceCode],
     roles: dict[int, Role],
     carry_streaks: dict[int, int],
-    weeks: list[list[date]],
+    days: list[date],
     flight_pairs: dict[date, int],
     previous_working: dict[int, dict[date, bool]] | None = None,
     carry_comps: dict[int, int] | None = None,
@@ -65,23 +64,22 @@ def recheck(
     really worked.
     """
     warnings: list[Violation] = []
-    warnings += check_consecutive(grid, roles, carry_streaks, weeks)
-    warnings += check_rolling_rest(grid, roles, weeks, previous_working or {})
-    warnings += check_off_quota(grid, roles, weeks)
-    warnings += check_staffing(grid, {**(cover_roles or {}), **roles}, weeks, flight_pairs)
-    warnings += check_min_a_days(grid, roles, weeks)
-    warnings += check_comp_days(grid, roles, weeks, carry_comps or {})
-    warnings += check_off_chain(grid, roles, weeks, annual_off or {}, prev_codes)
+    warnings += check_consecutive(grid, roles, carry_streaks, days)
+    warnings += check_rolling_rest(grid, roles, days, previous_working or {})
+    warnings += check_staffing(grid, {**(cover_roles or {}), **roles}, days, flight_pairs)
+    warnings += check_min_a_days(grid, roles, days)
+    warnings += check_comp_days(grid, roles, days, carry_comps or {})
+    warnings += check_off_chain(grid, roles, days, annual_off or {}, prev_codes)
     return warnings
 
 
-def _days(weeks: list[list[date]]) -> list[date]:
-    return sorted({d for block in weeks for d in block})
+def _days(days: list[date]) -> list[date]:
+    return sorted(set(days))
 
 
-def check_rolling_rest(grid, roles, weeks, previous_working) -> list[Violation]:
+def check_rolling_rest(grid, roles, days, previous_working) -> list[Violation]:
     """Every rolling 7 calendar days must contain at least 2 rest days."""
-    days = _days(weeks)
+    days = _days(days)
     if not days:
         return []
 
@@ -119,9 +117,9 @@ def check_rolling_rest(grid, roles, weeks, previous_working) -> list[Violation]:
     return warnings
 
 
-def check_consecutive(grid, roles, carry_streaks, weeks) -> list[Violation]:
+def check_consecutive(grid, roles, carry_streaks, days) -> list[Violation]:
     """§5.3 #3 + §5.5 — no run of more than 5 working days (carry included)."""
-    days = _days(weeks)
+    days = _days(days)
     warnings: list[Violation] = []
     for uid in roles:
         # Role F is T-like (owner 2026-07-22): the consecutive rule applies.
@@ -154,65 +152,13 @@ def check_consecutive(grid, roles, carry_streaks, weeks) -> list[Violation]:
     return warnings
 
 
-# Leave/sick codes that occupy block days without consuming the genuine-X
-# quota (decision #4) AND shrink the block's X target: the engine's pins
-# (approved leave) and sick days, which nobody chooses. A CD does not consume
-# the quota either, but it is placed by choice, so like in the engine it does
-# not shrink the target — it competes with the weekly X.
-TARGET_CAP_CODES = {AttendanceCode.AL, AttendanceCode.S}
-
-
-def check_off_quota(grid, roles, weeks) -> list[Violation]:
-    """§5.3 #2 — genuine X per 7-day block must meet the pro-rated target.
-
-    AL/CD/S days do not consume the quota (decision #4) — only X counts.
-    The target shrinks when leave fills the block (mirrors the engine's cap,
-    2026-07-17): a person on a 6-day leave has only 1 day left for genuine X.
-    Like the engine, only AL (and S) shrink it: 6 AL + 1 CD in a block still
-    misses its one weekly X.
-    """
-    warnings: list[Violation] = []
-    for uid in roles:
-        for block in weeks:
-            leave_days = sum(
-                1 for d in block if grid.get((uid, d)) in TARGET_CAP_CODES
-            )
-            target = min(
-                partial_block_off_target(len(block)), len(block) - leave_days
-            )
-            got = sum(1 for d in block if grid.get((uid, d)) is AttendanceCode.X)
-            if got != target:
-                warnings.append(
-                    Violation(
-                        rule="two_days_off_per_week",
-                        message=(
-                            f"User {uid}: {got} off day(s) instead of {target} "
-                            f"in block starting {block[0]}"
-                        ),
-                        day=block[0],
-                        user_id=uid,
-                        key=(
-                            "two_days_off_per_week_under"
-                            if got < target
-                            else "two_days_off_per_week_over"
-                        ),
-                        params={
-                            "start": block[0],
-                            "required": target,
-                            "amount": abs(target - got),
-                        },
-                    )
-                )
-    return warnings
-
-
-def check_staffing(grid, roles, weeks, flight_pairs) -> list[Violation]:
+def check_staffing(grid, roles, days, flight_pairs) -> list[Violation]:
     """§5.3 #4 — daily A/D coverage must meet at least the per-pairs minimum.
 
     Scoped to ROLE-A people only (owner decision 2026-06-26), kept in sync
     with ``constraints_staffing``.  Only UNDER-coverage warns; extra is fine.
     """
-    days = _days(weeks)
+    days = _days(days)
     role_a_ids = [uid for uid, role in roles.items() if role is Role.A]
     warnings: list[Violation] = []
     for d in days:
@@ -252,13 +198,13 @@ def check_staffing(grid, roles, weeks, flight_pairs) -> list[Violation]:
     return warnings
 
 
-def check_min_a_days(grid, roles, weeks) -> list[Violation]:
+def check_min_a_days(grid, roles, days) -> list[Violation]:
     """Decision #14 — every role-A person keeps >= 2 pure A days in a full month.
 
     Mirrors ``constraints_role_a_distribution``: partial-month grids (tests,
     diagnostics) are exempt exactly like in the engine.
     """
-    days = _days(weeks)
+    days = _days(days)
     if len(days) < MIN_FULL_MONTH_DAYS:
         return []
     warnings: list[Violation] = []
@@ -281,7 +227,7 @@ def check_min_a_days(grid, roles, weeks) -> list[Violation]:
     return warnings
 
 
-def check_comp_days(grid, roles, weeks, carry_comps) -> list[Violation]:
+def check_comp_days(grid, roles, days, carry_comps) -> list[Violation]:
     """§5.3 #6 / decision #13 — owed comp days are granted, none invented.
 
     Mirrors ``constraints_comp_days``: for every person, whatever the role
@@ -289,7 +235,7 @@ def check_comp_days(grid, roles, weeks, carry_comps) -> list[Violation]:
     CD count must equal the comp debt carried in; fewer is a shortfall, more
     is an unearned rest day.
     """
-    days = _days(weeks)
+    days = _days(days)
     warnings: list[Violation] = []
     for uid in roles:
         cd = sum(1 for d in days if grid.get((uid, d)) is AttendanceCode.CD)
@@ -315,7 +261,7 @@ def check_comp_days(grid, roles, weeks, carry_comps) -> list[Violation]:
     return warnings
 
 
-def check_off_chain(grid, roles, weeks, annual_off, prev_codes=None) -> list[Violation]:
+def check_off_chain(grid, roles, days, annual_off, prev_codes=None) -> list[Violation]:
     """Customer rule 2026-06-12 — no more than 5 consecutive OFF days.
 
     Mirrors ``constraints_off_chain``: any 6-day window that is entirely off
@@ -325,7 +271,7 @@ def check_off_chain(grid, roles, weeks, annual_off, prev_codes=None) -> list[Vio
     (oldest first, ending on its last day). Reported once per off-run, at its
     first non-exempt all-off window.
     """
-    days = _days(weeks)
+    days = _days(days)
     if not days:
         return []
     window = MAX_CONSECUTIVE_OFF + 1

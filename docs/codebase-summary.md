@@ -25,16 +25,17 @@ services/    auth, user, flight (+flight_pair_derivation, flight_excel_parser,
              holiday, calculation (+carry_over_math), report (+report_table,
              report_serializers), compliance, audit, demo_user_seed
 scheduler/   domain (SolverInput/Output), engine (CP-SAT), role_codes (per-role
-             domains), constraints + constraints_off_days / _rolling_rest /
-             _consecutive / _off_chain / _staffing / _comp_days /
+             domains and role groups), constraints + constraints_rolling_rest
+             / _consecutive / _off_chain / _staffing / _comp_days /
              _role_a_distribution, objectives + objective_balance /
-             _premium_off / _off_pairing, slack_registry, calendar_utils
+             _monthly_off_target / _group_cover / _premium_off /
+             _off_pairing / _pair_points_fair, slack_registry, calendar_utils
 alembic/     0001 baseline … 0009 flight_unique_day_number (head; see
              design-decisions "Migration strategy")
 scripts/     seed_demo_users.py, reset_all_passwords.py (both refuse unless
              ENVIRONMENT=dev and the database is local, app/core/script_guard.py;
              --allow-non-dev overrides; hidden password prompt)
-tests/       547 tests (pytest on SQLite, foreign keys on) — engine rules
+tests/       560 tests (pytest on SQLite, foreign keys on) — engine rules
              (bind + slack violation), solve phases, engine/checker agreement,
              roles, cross-month rules, services, endpoints, input bounds,
              RBAC/audit, user delete, sick privacy, production guard, bootstrap,
@@ -93,13 +94,15 @@ i18n/         custom AppLocalizations (en/vi, graceful text(key) fallback)
 ```
 `auth` is the canonical clean-architecture template; the business features
 mirror it, feeding live provider state into the `design_system` views.
-Tests: `test/` — 173 tests including 3 goldens (`test/goldens/`, tagged
+Tests: `test/` — 179 tests including 3 goldens (`test/goldens/`, tagged
 `golden` in `dart_test.yaml`; run them on macOS with `flutter test --tags
 golden`, everything else with `--exclude-tags golden`); among them
 `i18n_keys_used_exist_test.dart` (every key used in `lib/` exists).
 `pubspec.lock` is tracked; CI runs `flutter pub get --enforce-lockfile`.
 
-New on 2026-11-10: the monthly flight plan as an Excel grid
+New on 2026-11-10: rest rules without month blocks (decision #62: the
+rolling 7-day rule, days off per month = the month's Saturdays + Sundays,
+preferred pairs Fri+Sat > Sat+Sun > Sun+Mon); the monthly flight plan as an Excel grid
 (`GET /flights/template`, upload through `POST /flights/import`, decision
 #60), the customer logo in the app shell and on the login page
 (`DsBrandLogo`, `assets/images/`), the login page's aircraft photo

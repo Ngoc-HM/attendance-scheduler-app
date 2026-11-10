@@ -303,13 +303,15 @@ class AppLocalizations {
       // --- Self-arrange ---
       'selfArrangeTitle': 'Self-arrange shifts',
       'selfArrangeHint':
-          'Tap your own cells to swap work/off. Every 7-day block must keep '
-          'exactly its required off days. Changes apply after admin approval.',
+          'Tap your own cells to swap work/off. Keep the same number of days '
+          'off in the month and work at most 5 days in any 7. Changes apply '
+          'after admin approval.',
       'selfArrangeSubmit': 'Submit for approval',
       'selfArrangeNote': 'Note (optional)',
       'selfArrangeSubmitted': 'Request submitted — waiting for admin approval.',
       'selfArrangeQuotaBroken':
-          'A 7-day block would not keep its required off days.',
+          'Keep the same number of days off, and at most 5 working days in '
+          'any 7.',
       'selfArrangeNoDraft': 'No changes yet.',
       'selfArrangeDiscard': 'Discard draft',
       'selfArrangeHistory': 'My requests',
@@ -723,13 +725,15 @@ class AppLocalizations {
       // --- Self-arrange ---
       'selfArrangeTitle': 'Tự sắp xếp ca',
       'selfArrangeHint':
-          'Chạm vào ô của bạn để đổi làm/nghỉ. Mỗi block 7 ngày phải giữ đúng '
-          'số ngày nghỉ quy định. Thay đổi có hiệu lực sau khi admin duyệt.',
+          'Chạm vào ô của bạn để đổi làm/nghỉ. Giữ nguyên số ngày nghỉ trong '
+          'tháng và không làm quá 5 ngày trong 7 ngày liên tiếp bất kỳ. Thay '
+          'đổi có hiệu lực sau khi admin duyệt.',
       'selfArrangeSubmit': 'Gửi admin duyệt',
       'selfArrangeNote': 'Ghi chú (không bắt buộc)',
       'selfArrangeSubmitted': 'Đã gửi yêu cầu — chờ admin duyệt.',
       'selfArrangeQuotaBroken':
-          'Có block 7 ngày không giữ đúng số ngày nghỉ quy định.',
+          'Phải giữ nguyên số ngày nghỉ và không làm quá 5 ngày trong 7 ngày '
+          'liên tiếp bất kỳ.',
       'selfArrangeNoDraft': 'Chưa có thay đổi.',
       'selfArrangeDiscard': 'Huỷ nháp',
       'selfArrangeHistory': 'Yêu cầu của tôi',

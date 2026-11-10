@@ -11,7 +11,7 @@ from datetime import timedelta
 
 from app.models.enums import Role
 from app.scheduler import PersonInput, SchedulerEngine, SolverInput
-from app.scheduler.calendar_utils import build_weeks, month_days
+from app.scheduler.calendar_utils import month_days
 
 
 def _solve(people, days, flight_pairs=None, approved_off=None):
@@ -21,7 +21,6 @@ def _solve(people, days, flight_pairs=None, approved_off=None):
             month=days[0].month,
             people=people,
             days=days,
-            weeks=build_weeks(days),
             flight_pairs=flight_pairs or {d: 0 for d in days},
             approved_off=approved_off or {},
             max_solve_seconds=15.0,
@@ -55,7 +54,6 @@ def test_violations_carry_rule_day_and_user_metadata() -> None:
             month=6,
             people=[PersonInput(1, Role.T, carry_streak=6)],
             days=days,
-            weeks=build_weeks(days),
             flight_pairs={d: 0 for d in days},
             previous_working={1: worked},
             max_solve_seconds=15.0,

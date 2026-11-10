@@ -6,11 +6,13 @@ three agreed criteria in order:
 
 1. **Outstanding comp days** — higher ``carry_comp`` first (the caller passes
    the values ``schedule_history`` derives, never the stored column).
-2. **Weekly rest entitlement** — whoever already holds FEWER approved off days
-   in the 7-day block(s) the request touches ranks higher (everyone is owed
-   2 days per block; the person with less of it has the stronger claim).
-3. **Weekend pairing** — a span that forms Sat+Sun ranks above Fri+Sat, which
-   ranks above Sun+Mon (§5.4 #8 ordering).
+2. **Rest entitlement** — whoever already holds FEWER approved off days in
+   the rolling 7-day windows the request touches ranks higher: the six days
+   before and after the span (owner 2026-11-10 — the fixed 7-day blocks are
+   gone; every 7 consecutive days owe 2 rest days, so the person with less
+   rest around the contested days has the stronger claim).
+3. **Weekend pairing** — a span that forms Fri+Sat ranks above Sat+Sun, which
+   ranks above Sun+Mon (owner 2026-11-10, the engine's pair order).
 
 Then a stable tie-break by (created_at, id) so the result is deterministic.
 The admin makes the final call; this ranking is advisory only (spec §3 fixed
@@ -31,41 +33,38 @@ def _span(start: date, end: date) -> list[date]:
     return [start + timedelta(days=i) for i in range((end - start).days + 1)]
 
 
-def _block_key(d: date) -> tuple[int, int, int]:
-    """7-day block anchored at day 1 of the month (decision #7)."""
-    return (d.year, d.month, (d.day - 1) // 7)
+# A 7-day window holding any day of the span reaches this far either side.
+AROUND_DAYS = 6
 
 
-def offs_already_in_blocks(
+def offs_already_around(
     start: date, end: date, approved_off: Iterable[date]
 ) -> int:
-    """Approved off days the user already holds in the blocks this span touches.
+    """Approved off days the user already holds in the 7-day windows the
+    span touches, i.e. within six days before ``start`` or after ``end``.
 
     The span's own days are excluded so a re-ranked, already-approved request
     does not count against itself.
     """
+    lo = start - timedelta(days=AROUND_DAYS)
+    hi = end + timedelta(days=AROUND_DAYS)
     own = set(_span(start, end))
-    blocks = {_block_key(d) for d in own}
-    return sum(
-        1 for d in approved_off if d not in own and _block_key(d) in blocks
-    )
+    return sum(1 for d in approved_off if d not in own and lo <= d <= hi)
 
 
 def weekend_pair_score(start: date, end: date) -> int:
-    """3 for a span containing Sat+Sun, 2 for Fri+Sat, 1 for Sun+Mon, else 0."""
+    """3 for a span containing Fri+Sat, 2 for Sat+Sun, 1 for Sun+Mon, else 0."""
     days = _span(start, end)
-    weekdays = {d.weekday() for d in days}
     pairs = {
         (days[i].weekday(), days[i + 1].weekday()) for i in range(len(days) - 1)
     }
-    if (SATURDAY, SUNDAY) in pairs:
-        return 3
     if (FRIDAY, SATURDAY) in pairs:
+        return 3
+    if (SATURDAY, SUNDAY) in pairs:
         return 2
     if (SUNDAY, MONDAY) in pairs:
         return 1
-    _ = weekdays  # single-day spans never pair
-    return 0
+    return 0  # single-day spans never pair
 
 
 def rank(
@@ -90,7 +89,7 @@ def rank(
 
     def sort_key(req: LeaveRequest) -> tuple:
         carry = carry_comp_by_user.get(req.user_id, 0)
-        held = offs_already_in_blocks(
+        held = offs_already_around(
             req.start_date, req.end_date, approved.get(req.user_id, set())
         )
         weekend = weekend_pair_score(req.start_date, req.end_date)

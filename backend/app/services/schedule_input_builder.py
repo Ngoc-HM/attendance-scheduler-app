@@ -3,8 +3,8 @@
 Pure data assembly — no solving here, so it is testable against a DB fixture
 without running OR-Tools. Pulls together every §5.1 input:
 
-    people (active users + carry_* + previous-month codes), days, 7-day
-    blocks, flight_pairs (F-04), approved leave (F-05/06), holidays
+    people (active users + carry_* + previous-month codes), days,
+    flight_pairs (F-04), approved leave (F-05/06), holidays
     (premium-off markers, decision #5).
 """
 
@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.models.enums import UserStatus
 from app.models.user import User
-from app.scheduler.calendar_utils import build_weeks, month_days
+from app.scheduler.calendar_utils import month_days
 from app.scheduler.domain import PersonInput, SolverInput
 from app.services import flight_service, holiday_service, leave_service, schedule_history
 
@@ -47,7 +47,6 @@ def build(db: Session, year: int, month: int) -> SolverInput:
         month=month,
         people=people,
         days=days,
-        weeks=build_weeks(days),
         flight_pairs=flight_service.flight_pairs_map(db, days),
         approved_off=leave_service.approved_off_map(db, year, month),
         holidays=holiday_service.holiday_dates(db, year, month),
