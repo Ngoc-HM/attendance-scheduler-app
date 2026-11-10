@@ -76,6 +76,7 @@ class DsLiquidGlassSurface extends StatelessWidget {
     this.borderRadius = DsRadius.xLarge,
     this.blur = 22,
     this.tint = DsColors.glassBase,
+    this.uniformTint = false,
   });
 
   final Widget child;
@@ -83,6 +84,10 @@ class DsLiquidGlassSurface extends StatelessWidget {
   final double borderRadius;
   final double blur;
   final Color tint;
+
+  /// Paint [tint] evenly instead of the default strong-to-light gradient:
+  /// a clearer pane for glass that sits on a photo (the login card).
+  final bool uniformTint;
 
   @override
   Widget build(BuildContext context) {
@@ -108,12 +113,18 @@ class DsLiquidGlassSurface extends StatelessWidget {
               color: tint,
               borderRadius: radius,
               border: Border.all(color: DsColors.glassBorder, width: 1.4),
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [DsColors.glassStrong, tint, DsColors.glassHighlight],
-                stops: const [0, 0.5, 1],
-              ),
+              gradient: uniformTint
+                  ? null
+                  : LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        DsColors.glassStrong,
+                        tint,
+                        DsColors.glassHighlight,
+                      ],
+                      stops: const [0, 0.5, 1],
+                    ),
             ),
             child: Stack(
               children: [

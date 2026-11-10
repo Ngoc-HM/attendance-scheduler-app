@@ -236,7 +236,7 @@ class DsAuthPage extends StatelessWidget {
                 final wide = constraints.maxWidth >= DsBreakpoints.desktop;
                 return Align(
                   alignment: wide
-                      ? const Alignment(0.94, 0.86)
+                      ? const Alignment(0.86, 0.68)
                       : Alignment.center,
                   child: SingleChildScrollView(
                     padding: const EdgeInsets.all(DsSpacing.x6),
@@ -245,52 +245,51 @@ class DsAuthPage extends StatelessWidget {
                       child: DsLiquidGlassSurface(
                         padding: EdgeInsets.zero,
                         borderRadius: DsRadius.xxLarge,
-                        blur: 24,
-                        tint: DsColors.surface.withValues(alpha: 0.62),
-                        // The photo is dark: a light veil keeps the form's
-                        // text readable through the glass.
-                        child: ColoredBox(
-                          color: DsColors.surface.withValues(alpha: 0.4),
-                          child: Padding(
-                            padding: const EdgeInsets.all(DsSpacing.x8),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    // Shrinks beside the selector when the card
-                                    // is narrow.
-                                    const Flexible(
-                                      child: DsBrandLogo(height: 30),
-                                    ),
-                                    const SizedBox(width: DsSpacing.x4),
-                                    DsLanguageSelector(
-                                      languageCode: languageCode,
-                                      onChanged: onLanguageChanged,
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: DsSpacing.x6),
-                                Text(
-                                  title,
-                                  style: Theme.of(
-                                    context,
-                                  ).textTheme.headlineMedium,
-                                ),
-                                const SizedBox(height: DsSpacing.x2),
-                                Text(
-                                  subtitle,
-                                  style: Theme.of(context).textTheme.bodyMedium,
-                                ),
-                                const SizedBox(height: DsSpacing.x8),
-                                form,
-                                const SizedBox(height: DsSpacing.x4),
-                                Center(child: footer),
-                              ],
-                            ),
+                        blur: 18,
+                        // Clear glass: an even, half-white pane lets the
+                        // photo show through while the dark text stays
+                        // readable on it.
+                        tint: DsColors.surface.withValues(alpha: 0.5),
+                        uniformTint: true,
+                        child: Padding(
+                          padding: const EdgeInsets.all(DsSpacing.x8),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  // Shrinks beside the selector when the card
+                                  // is narrow.
+                                  const Flexible(
+                                    child: DsBrandLogo(height: 30),
+                                  ),
+                                  const SizedBox(width: DsSpacing.x4),
+                                  DsLanguageSelector(
+                                    languageCode: languageCode,
+                                    onChanged: onLanguageChanged,
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: DsSpacing.x6),
+                              Text(
+                                title,
+                                style: Theme.of(
+                                  context,
+                                ).textTheme.headlineMedium,
+                              ),
+                              const SizedBox(height: DsSpacing.x2),
+                              Text(
+                                subtitle,
+                                style: Theme.of(context).textTheme.bodyMedium,
+                              ),
+                              const SizedBox(height: DsSpacing.x8),
+                              form,
+                              const SizedBox(height: DsSpacing.x4),
+                              Center(child: footer),
+                            ],
                           ),
                         ),
                       ),
