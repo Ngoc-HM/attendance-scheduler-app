@@ -15,7 +15,7 @@ from app.models.holiday import Holiday
 from app.models.schedule import MonthlySchedule, ShiftAssignment
 from app.models.user import User
 from app.scheduler import PersonInput, SchedulerEngine, SolverInput
-from app.scheduler.calendar_utils import build_weeks, month_days
+from app.scheduler.calendar_utils import month_days
 from app.services import carry_over_math
 from app.services.schedule_history import build_boundary_states
 from app.services.user_service import next_user_code
@@ -89,7 +89,6 @@ def test_planned_ad_becomes_cd_and_actual_overrides_plan(client) -> None:
                     )
                 ],
                 days=days,
-                weeks=build_weeks(days),
                 flight_pairs={day: 0 for day in days},
                 previous_working={user.id: state.previous_working},
                 max_solve_seconds=10,

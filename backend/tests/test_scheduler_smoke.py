@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from app.models.enums import Role
 from app.scheduler import PersonInput, SchedulerEngine, SolverInput
-from app.scheduler.calendar_utils import build_weeks, month_days
+from app.scheduler.calendar_utils import month_days
 
 
 def test_engine_returns_one_status_per_cell() -> None:
@@ -24,7 +24,6 @@ def test_engine_returns_one_status_per_cell() -> None:
         month=6,
         people=people,
         days=days,
-        weeks=build_weeks(days),
         flight_pairs={d: 0 for d in days},
         max_solve_seconds=5.0,
     )

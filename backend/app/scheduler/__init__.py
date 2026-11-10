@@ -5,7 +5,7 @@ Public surface:
     SchedulerEngine             – builds & solves the CP-SAT model (``engine``)
 
 Hard constraints live in ``constraints`` (§5.3), soft objectives in
-``objectives`` (§5.4), and calendar helpers (week partition §5.1, consecutive
+``objectives`` (§5.4), and calendar helpers (month days §5.1, consecutive
 streak §5.5) in ``calendar_utils``.
 """
 

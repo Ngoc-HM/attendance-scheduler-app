@@ -6,7 +6,8 @@ from datetime import date
 
 from app.models.enums import AttendanceCode, Role
 from app.scheduler import PersonInput, SchedulerEngine, SolverInput
-from app.scheduler.calendar_utils import build_weeks, month_days
+from app.scheduler.calendar_utils import month_days
+from tests.rest_invariants import assert_rest_rules
 
 SAT, SUN = 5, 6
 
@@ -18,7 +19,6 @@ def _solve(people, days, flight_pairs=None, holidays=None):
             month=days[0].month,
             people=people,
             days=days,
-            weeks=build_weeks(days),
             flight_pairs=flight_pairs or {d: 0 for d in days},
             holidays=holidays or set(),
             max_solve_seconds=15.0,
@@ -44,13 +44,12 @@ def test_balance_spread_is_minimal_across_fixed_group() -> None:
 
 
 def test_weekend_offs_not_all_piled_up_under_flights() -> None:
-    """Owner decision 2026-06-18: Sat/Sun are ordinary working days. The two
-    weekly offs may sit adjacently (off-pairing, 2026-07-01) with NO weekend
-    bias, so what actually keeps a weekend STAFFED is the flight demand: with
-    2 pairs every day the fixed group is never all off on the same Sat/Sun."""
+    """Days off prefer Fri+Sat / Sat+Sun / Sun+Mon pairs (owner 2026-11-10),
+    but what keeps a weekend STAFFED is the flight demand: with 2 pairs every
+    day the fixed group is never all off on the same Sat/Sun."""
     days = month_days(2026, 6)
-    # Six people: 2 pairs every day need 3 workers, and with 2 X per 7-day
-    # block each person works 5 of 7 days (6 x 5 = 30 >= 7 x 3).
+    # Six people: 2 pairs every day need 3 workers; with 2 rest days in every
+    # 7 each person works 5 of 7 days (6 x 5 = 30 >= 7 x 3).
     fixed_ids = (1, 2, 3, 4, 5, 6)
     people = [PersonInput(u, Role.A) for u in fixed_ids]
     out = _solve(people, days, flight_pairs={d: 2 for d in days})
@@ -58,12 +57,9 @@ def test_weekend_offs_not_all_piled_up_under_flights() -> None:
     assert out.feasible and not out.violations
     grid = {(a.user_id, a.day): a.code for a in out.assignments}
 
-    # Quota still holds: exactly 2 OFF days in each full 7-day block.
+    # The rest rules hold for everyone.
     for u in fixed_ids:
-        for block in build_weeks(days):
-            if len(block) >= 7:
-                offs = sum(1 for d in block if grid[(u, d)] is AttendanceCode.X)
-                assert offs == 2, f"user {u} block {block[0]}: {offs} offs"
+        assert_rest_rules(grid, u, days)
 
     # Staffing floor (§5.3 #4: 2 pairs → 1 A + 2 D) keeps the weekend covered —
     # the whole fixed group is never off on the same Sat/Sun.
@@ -79,7 +75,7 @@ def test_weekend_offs_not_all_piled_up_under_flights() -> None:
 def test_premium_off_balances_against_carry() -> None:
     """Decision #6: the person who already enjoyed premium offs yields
     weekend/holiday offs to the other."""
-    days = month_days(2026, 2)  # Feb 2026: exactly 4 full blocks
+    days = month_days(2026, 2)  # Feb 2026: exactly 4 weeks
     fresh = PersonInput(1, Role.T, carry_premium_off=0)
     served = PersonInput(2, Role.T, carry_premium_off=6)
     out = _solve([fresh, served], days)

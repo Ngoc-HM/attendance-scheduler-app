@@ -1,13 +1,13 @@
 """Role F is T-like (owner decision 2026-07-22).
 
-F shares T's working domain {AD, X}, so it MUST obey the same weekly-rest and
-consecutive-working rules as T — NOT only the weekly-2-off rule. This module
+F shares T's working domain {AD, X}, so it MUST obey the same rolling 7-day
+rest and consecutive-working rules as T. This module
 regresses the 2026-07-22 bug where F was exempted from the consecutive rule,
 letting the solver produce 6+ working days in a row before 2 off days.
 
 Assertions:
   * F assignments use only {AD, X}.
-  * Exactly 2 X per full 7-day block (weekly-2-off, like every role).
+  * At least 2 rest days in every rolling 7 days (owner 2026-11-10).
   * No 6-consecutive-day all-working window (the max-5 rule, same as T).
 """
 
@@ -19,11 +19,12 @@ import pytest
 
 from app.models.enums import AttendanceCode, Role
 from app.scheduler import PersonInput, SchedulerEngine, SolverInput
-from app.scheduler.calendar_utils import build_weeks, month_days
+from app.scheduler.calendar_utils import month_days
 from app.scheduler.role_codes import ROLE_CODES
+from tests.rest_invariants import assert_rest_rules
 
 _YEAR, _MONTH = 2026, 7
-_DAYS = month_days(_YEAR, _MONTH)[:14]  # two full 7-day blocks
+_DAYS = month_days(_YEAR, _MONTH)[:14]  # a two-week slice
 _F_IDS = (40, 41, 42)                   # 3 role-F people
 
 _PEOPLE = [PersonInput(u, Role.F) for u in _F_IDS]
@@ -40,7 +41,6 @@ def solved():
             month=_MONTH,
             people=_PEOPLE,
             days=_DAYS,
-            weeks=build_weeks(_DAYS),
             flight_pairs=_FLIGHT_PAIRS,
             max_solve_seconds=30.0,
         )
@@ -59,27 +59,19 @@ def test_role_f_codes_only(solved) -> None:
             )
 
 
-def test_role_f_two_x_per_block(solved) -> None:
-    """Every F person gets exactly 2 X in each full 7-day block."""
+def test_role_f_rolling_seven_day_rest(solved) -> None:
+    """Every F person has at least 2 rest days in every rolling 7 days."""
     grid = {(a.user_id, a.day): a.code for a in solved.assignments}
     for p in _PEOPLE:
-        for block in build_weeks(_DAYS):
-            if len(block) < 7:
-                continue
-            x_count = sum(
-                1 for d in block if grid[(p.user_id, d)] is AttendanceCode.X
-            )
-            assert x_count == 2, (
-                f"user {p.user_id}: {x_count} X in block starting {block[0]} "
-                f"(expected 2)"
-            )
+        assert_rest_rules(grid, p.user_id, _DAYS)
 
 
 def test_role_f_no_six_consecutive_working(solved) -> None:
     """No 6-day window is fully working — the max-5-consecutive rule (§5.3 #3).
 
     This is the 2026-07-22 regression: previously F was exempted here, so the
-    solver placed offs only to satisfy 2-X/block and left 6+ day work streaks.
+    solver placed offs only to satisfy the old 2-X/block quota and left 6+ day
+    work streaks.
     """
     grid = {(a.user_id, a.day): a.code for a in solved.assignments}
     for p in _PEOPLE:

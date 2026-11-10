@@ -192,8 +192,10 @@ ngày trong tháng được gán đúng MỘT trạng thái.
   - **Tập ngày D:** các ngày của tháng đang xếp, mỗi ngày biết thứ trong
     tuần (T2…CN).
 
-  - **Tuần:** tháng được chia thành các tuần (≈4 tuần). Định nghĩa tuần
-    thống nhất một cách và dùng nhất quán để áp ràng buộc nghỉ.
+  - **Tuần:** không chia tháng thành tuần cố định. Quy tắc nghỉ áp dụng
+    trên MỌI cửa sổ 7 ngày lịch liên tiếp, kể cả vắt qua hai tháng (chủ
+    dự án chốt 10/11/2026; trước đó tháng được chia thành các block 7
+    ngày tính từ ngày 1).
 
   - **flightPairs\[d\]:** số cặp chuyến bay của ngày d (0, 1 hoặc 2) —
     từ module nhập lịch bay (F-04).
@@ -220,8 +222,14 @@ ngày trong tháng được gán đúng MỘT trạng thái.
 
 1.  Mỗi người mỗi ngày đúng 1 trạng thái.
 
-2.  Mỗi tuần, mỗi người có ĐÚNG 2 ngày nghỉ (X). T7 và CN không mặc định
-    là nghỉ; 2 ngày nghỉ có thể rơi vào bất kỳ ngày nào trong tuần.
+2.  Trong 7 ngày lịch liên tiếp bất kỳ, mỗi người không làm quá 5 ngày
+    (tối thiểu 2 ngày nghỉ). T7 và CN không mặc định là nghỉ. Số ngày
+    nghỉ (X) của mỗi người trong tháng bằng số ngày T7 và CN của tháng đó
+    (như bảng WR giấy: "TTL 23 WORKING DAYS", mỗi người 8 X trong tháng
+    7/2026), giống nhau cho mọi vai trò; nghỉ phép vào ngày thường không
+    làm giảm số X, còn ngày T7/CN nằm trong đợt nghỉ phép được tính là một
+    X. (Chốt 10/11/2026, thay cho "mỗi tuần ĐÚNG 2 ngày nghỉ" tính theo
+    block.)
 
 3.  Không ai làm quá 5 ngày LÀM VIỆC liên tục (chuỗi ≥ 6 ngày là không
     hợp lệ). Tính chuỗi phải cộng dồn carryStreak\[p\] từ tháng trước
@@ -254,8 +262,10 @@ ngày trong tháng được gán đúng MỘT trạng thái.
     lệch |tổng ca A - tổng ca D| của chính từng người trong lịch tự động,
     trong giới hạn nhu cầu chuyến bay thực tế.
 
-8.  Ghép 2 ngày nghỉ trong tuần thành cặp liền kề theo thứ tự: (1) T7+CN
-    tốt nhất; (2) T6+T7; (3) CN+T2.
+8.  Ghép ngày nghỉ thành cặp 2 ngày liền kề theo thứ tự ưu tiên: (1)
+    T6+T7; (2) T7+CN; (3) CN+T2. Lượt nghỉ cặp ưu tiên được chia đều giữa
+    các nhân sự cùng nhóm; mỗi nhóm cố giữ ít nhất một người đi làm mỗi
+    ngày. (Chốt 10/11/2026; thứ tự cũ là T7+CN, T6+T7, CN+T2.)
 
 9.  Khi nhiều người cùng xin nghỉ một ngày (xung đột), ưu tiên: (a)
     người có carryComp\[p\] lớn hơn; (b) đảm bảo quyền nghỉ 2
@@ -279,9 +289,9 @@ tháng:
     trước thì sang tháng mới chỉ được làm tối đa 1 ngày nữa rồi phải
     nghỉ.
 
-Ngoài quota theo block tuần của tháng, hệ thống kiểm tra mọi cửa sổ 7
-ngày liên tục với 6 ngày lịch sử trước tháng để bảo đảm quy tắc nghỉ vẫn
-đúng tại cả biên block và biên tháng.
+Hệ thống kiểm tra mọi cửa sổ 7 ngày liên tục với 6 ngày lịch sử trước
+tháng để bảo đảm quy tắc nghỉ vẫn đúng tại biên tháng; ngày chưa có lịch
+sử thì không tính.
 
 ## 5.6. Khi không tìm được lời giải hợp lệ (infeasible)
 

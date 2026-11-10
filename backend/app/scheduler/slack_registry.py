@@ -1,6 +1,6 @@
 """Slack-variable registry — the always-feasible architecture (decision #2).
 
-Staffing and off-day rules are modeled as SOFT constraints: each gets a slack
+Staffing and rest rules are modeled as SOFT constraints: each gets a slack
 variable with a very large penalty, so the CP-SAT model always has a solution.
 After solving, any slack > 0 is translated into a ``Violation`` (§5.6 #12–14)
 that tells the admin exactly which rule broke, where, and for whom — instead

@@ -19,7 +19,7 @@ from app.core.i18n import MESSAGES, t
 from app.models.enums import AttendanceCode, Role
 from app.models.user import User
 from app.scheduler import constraints
-from app.scheduler.calendar_utils import build_weeks, month_days
+from app.scheduler.calendar_utils import month_days
 from app.scheduler.domain import PersonInput, SolverInput, Violation
 from app.scheduler.engine import SchedulerEngine
 from app.scheduler.role_codes import codes_for
@@ -83,7 +83,6 @@ def _full_month_input(people: list[PersonInput]) -> SolverInput:
         month=11,
         people=people,
         days=days,
-        weeks=build_weeks(days),
         flight_pairs={d: 2 for d in days},
     )
 
@@ -108,8 +107,6 @@ def _all_solver_violations() -> list[Violation]:
 SOLVER_TEXTS = {
     ("flight_staffing", "flight_staffing"),
     ("flight_staffing", "flight_staffing_no_role_a"),
-    ("two_days_off_per_week", "two_days_off_per_week_under"),
-    ("two_days_off_per_week", "two_days_off_per_week_over"),
     ("rolling_seven_min_two_rest", "rolling_seven_min_two_rest"),
     ("max_consecutive_working", "max_consecutive_working"),
     ("max_consecutive_working_carry", "max_consecutive_working_carry"),
@@ -126,20 +123,19 @@ SOLVER_TEXTS = {
 
 def _all_checker_violations() -> list[Violation]:
     days = month_days(2026, 11)
-    weeks = build_weeks(days)
     grid: dict[tuple[int, date], AttendanceCode] = {}
     for d in days:
-        # 1 (role A): works D every day → consecutive, rolling rest, off quota
-        #   under, no pure A, owed comp not granted, staffing short of ARR.
+        # 1 (role A): works D every day → consecutive, rolling rest, no pure
+        #   A, owed comp not granted, staffing short of ARR.
         grid[(1, d)] = D
-        # 3 (role T): off every day → off chain, off quota over, CD excess.
+        # 3 (role T): off every day → off chain, CD excess.
         grid[(3, d)] = X
     grid[(3, days[-1])] = CD
     with_role_a = recheck(
         grid=grid,
         roles={1: Role.A, 3: Role.T},
         carry_streaks={1: 3},
-        weeks=weeks,
+        days=days,
         flight_pairs={d: 2 for d in days},
         carry_comps={1: 2},
     )
@@ -147,7 +143,7 @@ def _all_checker_violations() -> list[Violation]:
         grid={(3, d): AD for d in days},
         roles={3: Role.T},
         carry_streaks={},
-        weeks=weeks,
+        days=days,
         flight_pairs={days[0]: 1},
     )
     return with_role_a + without_role_a
@@ -156,8 +152,6 @@ def _all_checker_violations() -> list[Violation]:
 CHECKER_TEXTS = {
     ("flight_staffing", "flight_staffing"),
     ("flight_staffing", "flight_staffing_no_role_a"),
-    ("two_days_off_per_week", "two_days_off_per_week_under"),
-    ("two_days_off_per_week", "two_days_off_per_week_over"),
     ("rolling_seven_min_two_rest", "rolling_seven_min_two_rest"),
     ("max_consecutive_working", "max_consecutive_working"),
     ("max_consecutive_off", "max_consecutive_off"),
@@ -249,7 +243,7 @@ def test_solver_and_checker_read_the_same_for_the_same_rule() -> None:
             grid={(1, d): (D if d == day else X) for d in days},
             roles={1: Role.A, 2: Role.A},
             carry_streaks={},
-            weeks=build_weeks(days),
+            days=days,
             flight_pairs={day: 2},
         )
         if v.rule == "flight_staffing" and v.params.get("shift") == "D"

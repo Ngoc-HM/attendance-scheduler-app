@@ -3,8 +3,9 @@
 After a schedule is published, flexible roles (T, F — and technically M)
 propose a BATCH rearrangement of their OWN cells: a list of
 ``{"work_date": iso, "code": value}`` changes stored as JSON. A single cell
-change always breaks the weekly-2-off quota, so only a set of changes can be
-valid — hence the batch shape instead of one row per cell.
+change always changes the month's number of days off (owner 2026-11-10: it
+must stay the same), so only a set of changes can be valid — hence the batch
+shape instead of one row per cell.
 
 Admin approves once more (owner decision b); approval applies every cell to
 the published schedule. Reuses the pending/approved/rejected lifecycle.

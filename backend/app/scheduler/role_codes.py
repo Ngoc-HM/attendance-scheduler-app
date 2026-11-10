@@ -5,7 +5,7 @@ Each person's assignable code set depends on their role:
     Role.A (fixed group)  → {A, D, X, CD}        full flight rules
     Role.T (flexible)     → {AD, X, CD}           full day, no shift split
     Role.M (admin)        → {O/D, X, CD}          office duty
-    Role.F (split from T) → {AD, X, CD}           T-like: weekly-2-off AND the
+    Role.F (split from T) → {AD, X, CD}           T-like: rolling 7-day rest AND the
                                               max-5-consecutive rule apply to F
                                               (owner 2026-07-22)
 
@@ -22,7 +22,10 @@ AD appears in T/F and O/D appears in role M.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
+
 from app.models.enums import AttendanceCode, Role
+from app.scheduler.domain import PersonInput
 
 # Maps each role to its EXCLUSIVE assignable code domain.
 # These are the ONLY variables the solver creates for that person (§5.1).
@@ -70,3 +73,15 @@ def codes_for(role: Role) -> tuple[AttendanceCode, ...]:
 def working_codes_for(role: Role) -> tuple[AttendanceCode, ...]:
     """Return the WORKING (non-rest) codes for a role — used for streak logic."""
     return tuple(c for c in ROLE_CODES[role] if c not in OFF_CODES)
+
+
+def role_groups(people: Iterable[PersonInput]) -> list[list[PersonInput]]:
+    """People grouped by role, groups of 2+ only (owner 2026-11-10).
+
+    A role group shares duties, so cover and fair turns are judged inside
+    it; a person alone in a role has no one to share with.
+    """
+    by_role: dict[Role, list[PersonInput]] = {}
+    for p in people:
+        by_role.setdefault(p.role, []).append(p)
+    return [group for group in by_role.values() if len(group) >= 2]

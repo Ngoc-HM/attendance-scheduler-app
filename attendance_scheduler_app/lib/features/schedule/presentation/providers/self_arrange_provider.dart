@@ -42,30 +42,43 @@ class SelfArrangeState {
     return null;
   }
 
-  /// 7-day blocks anchored at day 1 (mirrors `calendar_utils.build_weeks`):
-  /// block index → (X count after draft, required target). Only genuine X
-  /// counts — AL/S/CD are their own codes and never consume the quota.
-  ///
-  /// A full block needs exactly 2 X. The month's leftover days (29–31) have
-  /// no quota (owner 2026-11-10): there the draft must only keep the number
-  /// of X the plan already has, so the target is that number.
-  Map<int, (int, int)> blockOffCounts() {
-    if (myAssignments.isEmpty) return const {};
-    final byBlock = <int, List<ShiftAssignment>>{};
-    for (final a in myAssignments) {
-      byBlock.putIfAbsent((a.workDate.day - 1) ~/ 7, () => []).add(a);
-    }
-    return byBlock.map((block, cells) {
-      final target = cells.length >= 7
-          ? 2
-          : cells.where((a) => a.code == 'X').length;
-      final got = cells.where((a) => codeFor(a.workDate) == 'X').length;
-      return MapEntry(block, (got, target));
-    });
+  /// Codes that count as a working day (mirrors the backend
+  /// `AttendanceCode.is_working`); everything else is rest.
+  static const _workingCodes = {'A', 'D', 'A/D', 'AD', 'O/D', 'T', 'B'};
+
+  /// Days off (X) after the draft and in the plan. Only genuine X counts —
+  /// AL/S/CD are their own codes and are not the employee's to move.
+  (int, int) monthOffCount() {
+    final target = myAssignments.where((a) => a.code == 'X').length;
+    final got = myAssignments.where((a) => codeFor(a.workDate) == 'X').length;
+    return (got, target);
   }
 
-  bool get draftKeepsQuota =>
-      blockOffCounts().values.every((c) => c.$1 == c.$2);
+  /// Start dates of every run of 7 own days holding more than 5 working
+  /// days, reading each day's code through [codeOf].
+  Set<DateTime> _overworkedWindows(String? Function(ShiftAssignment) codeOf) {
+    final found = <DateTime>{};
+    for (var i = 0; i + 7 <= myAssignments.length; i++) {
+      final working = myAssignments
+          .sublist(i, i + 7)
+          .where((a) => _workingCodes.contains(codeOf(a)))
+          .length;
+      if (working > 5) found.add(myAssignments[i].workDate);
+    }
+    return found;
+  }
+
+  /// The draft rule (owner 2026-11-10; the server checks it again with the
+  /// previous month's days): days off are moved, never added or removed,
+  /// and the draft creates no 7 days with more than 5 working days that the
+  /// plan did not already have.
+  bool get draftKeepsQuota {
+    final (got, target) = monthOffCount();
+    if (got != target) return false;
+    final before = _overworkedWindows((a) => a.code);
+    final after = _overworkedWindows((a) => codeFor(a.workDate));
+    return after.difference(before).isEmpty;
+  }
 
   SelfArrangeState copyWith({
     List<ShiftAssignment>? myAssignments,

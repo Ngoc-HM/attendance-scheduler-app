@@ -15,7 +15,7 @@ from app.scheduler import (
     constraints_off_chain,
     objective_premium_off,
 )
-from app.scheduler.calendar_utils import build_weeks, month_days
+from app.scheduler.calendar_utils import month_days
 from app.scheduler.role_codes import codes_for
 from app.scheduler.slack_registry import SlackRegistry
 from app.services.carry_over_math import premium_off_count
@@ -42,7 +42,6 @@ def test_rolling_seven_days_crosses_month_boundary() -> None:
             month=7,
             people=[PersonInput(1, Role.T, carry_streak=2)],
             days=days,
-            weeks=build_weeks(days),
             flight_pairs={day: 0 for day in days},
             previous_working={1: previous},
             max_solve_seconds=10,
@@ -77,7 +76,7 @@ def test_manual_recheck_flags_cross_month_rolling_rest() -> None:
     warnings = check_rolling_rest(
         grid,
         {1: Role.T},
-        build_weeks(days),
+        days,
         {1: previous},
     )
 
@@ -93,7 +92,6 @@ def test_each_role_a_person_gets_two_a_days_and_near_equal_a_d() -> None:
             month=8,
             people=people,
             days=days,
-            weeks=build_weeks(days),
             # Equal A/D flight demand leaves the solver free to make each
             # person's monthly A and D totals genuinely near-equal.
             flight_pairs={day: 1 for day in days},
@@ -133,7 +131,6 @@ def test_cd_counts_toward_consecutive_off_limit() -> None:
         month=9,
         people=[person],
         days=days,
-        weeks=build_weeks(days),
         flight_pairs={day: 0 for day in days},
     )
     model = cp_model.CpModel()
@@ -191,10 +188,12 @@ def _restore_leave(grid, approved):
     }
 
 
-def test_five_day_monthly_leave_in_one_block_no_violation() -> None:
-    """C3 / ruling R1: a 5-day monthly leave Tue 9 – Sat 13 Feb 2027 fills
-    block 8–14, so the two weekly X land on Mon 8 and Sun 14 — X AL AL AL AL
-    AL X is a legal 7-day off-run because it holds approved leave."""
+def test_five_day_monthly_leave_is_rest_no_violation() -> None:
+    """C3 / ruling R1: a 5-day monthly leave Tue 9 – Sat 13 Feb 2027 is legal
+    next to X days (an off-run holding approved leave). Since owner
+    2026-11-10 the leave counts as rest for the rolling 7-day rule, so the
+    week no longer gets two X on top (supersedes decision #4): the person
+    on leave needs fewer X than a colleague with the same role."""
     days = month_days(2027, 2)
     approved = {1: {date(2027, 2, d): AttendanceCode.AL for d in range(9, 14)}}
     inp = SolverInput(
@@ -202,23 +201,23 @@ def test_five_day_monthly_leave_in_one_block_no_violation() -> None:
         month=2,
         people=[PersonInput(1, Role.T), PersonInput(2, Role.T)],
         days=days,
-        weeks=build_weeks(days),
         flight_pairs={day: 0 for day in days},
         approved_off=approved,
         max_solve_seconds=10,
     )
-    out = SchedulerEngine().solve(inp)
+    out = SchedulerEngine(num_workers=1).solve(inp)
 
     assert out.feasible and out.violations == []
     grid = _restore_leave(_grid(out), approved)
-    assert [grid[(1, date(2027, 2, d))] for d in range(8, 15)] == [
-        AttendanceCode.X, *[AttendanceCode.AL] * 5, AttendanceCode.X,
-    ]
+    x_count = {
+        uid: sum(1 for d in days if grid[(uid, d)] is AttendanceCode.X) for uid in (1, 2)
+    }
+    assert x_count[1] < x_count[2], x_count
     assert recheck(
         grid=grid,
         roles={1: Role.T, 2: Role.T},
         carry_streaks={},
-        weeks=build_weeks(days),
+        days=days,
         flight_pairs={day: 0 for day in days},
     ) == []
 
@@ -231,7 +230,6 @@ def test_off_chain_crosses_month_boundary() -> None:
     approved leave in those July days the run is exempt (ruling R1).
     """
     days = month_days(2026, 8)
-    weeks = build_weeks(days)
     X, CD, AD, AL = (
         AttendanceCode.X, AttendanceCode.CD, AttendanceCode.AD, AttendanceCode.AL,
     )
@@ -244,7 +242,6 @@ def test_off_chain_crosses_month_boundary() -> None:
             month=8,
             people=[PersonInput(1, Role.T, prev_codes=prev_codes)],
             days=days,
-            weeks=weeks,
             flight_pairs={day: 0 for day in days},
             max_solve_seconds=10,
         )
@@ -256,7 +253,7 @@ def test_off_chain_crosses_month_boundary() -> None:
     assert [(v.rule, v.day) for v in engine] == [
         ("max_consecutive_off", date(2026, 7, 27))
     ]
-    checker = check_off_chain(grid, {1: Role.T}, weeks, {}, prev_codes={1: prev})
+    checker = check_off_chain(grid, {1: Role.T}, days, {}, prev_codes={1: prev})
     assert [(v.rule, v.day) for v in checker] == [
         ("max_consecutive_off", date(2026, 7, 27))
     ]
@@ -269,7 +266,7 @@ def test_off_chain_crosses_month_boundary() -> None:
     # Ruling R1: the same run holding approved leave is legal for both.
     leave = (AD, AL, AL, AL, AL, AL)
     assert _fixed_grid_violations(inp_for(leave), grid) == []
-    assert check_off_chain(grid, {1: Role.T}, weeks, {}, prev_codes={1: leave}) == []
+    assert check_off_chain(grid, {1: Role.T}, days, {}, prev_codes={1: leave}) == []
 
 
 def test_premium_off_ignores_pinned_al() -> None:
@@ -283,7 +280,6 @@ def test_premium_off_ignores_pinned_al() -> None:
         month=8,
         people=[PersonInput(1, Role.T), PersonInput(2, Role.T)],
         days=days,
-        weeks=build_weeks(days),
         flight_pairs={day: 0 for day in days},
         approved_off=approved,
     )

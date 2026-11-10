@@ -132,19 +132,36 @@ def test_approved_self_arrange_updates_seeded_actuals(client: TestClient) -> Non
     t_user = _make_user(client, admin, "sync_sa_t1", "T")["id"]
     schedule = _generate_and_publish(client, admin, 2028, 6)
 
-    # Swap one X and one AD inside the same full 7-day block: the block keeps
-    # its weekly-off count, so the batch is valid.
+    # Swap one X and one AD so the month keeps its X count and no 7-day
+    # window gets more than 5 working days (owner 2026-11-10): the batch is
+    # valid. No history before June 2028, as in the server's check.
+    from app.models.enums import AttendanceCode, Role
+    from app.services.schedule_violation_checker import (
+        check_consecutive,
+        check_rolling_rest,
+    )
+
     own = {
         date.fromisoformat(a["work_date"]): a["code"]
         for a in schedule["assignments"] if a["user_id"] == t_user
     }
+
+    def clean(codes: dict[date, str]) -> bool:
+        grid = {(t_user, d): AttendanceCode(c) for d, c in codes.items()}
+        days = sorted(codes)
+        roles = {t_user: Role.T}
+        return not (
+            check_rolling_rest(grid, roles, days, {})
+            + check_consecutive(grid, roles, {}, days)
+        )
+
     off_day = work_day = None
-    for start in (1, 8, 15, 22):
-        block = [date(2028, 6, d) for d in range(start, start + 7)]
-        offs = [d for d in block if own[d] == "X"]
-        works = [d for d in block if own[d] == "AD"]
-        if offs and works:
-            off_day, work_day = offs[0], works[0]
+    for off in sorted(d for d, c in own.items() if c == "X"):
+        for work in sorted(d for d, c in own.items() if c == "AD"):
+            if clean({**own, off: "AD", work: "X"}):
+                off_day, work_day = off, work
+                break
+        if off_day is not None:
             break
     assert off_day is not None and work_day is not None
 

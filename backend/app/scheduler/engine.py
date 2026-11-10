@@ -5,7 +5,7 @@ constraints §5.3 → soft objectives §5.4 → slack penalties), runs OR-Tools 
 two phases (slack only, then the soft objectives at that slack) within the
 time limit and returns a ``SolverOutput`` with the solver status.
 
-Always-feasible architecture (locked decision #2): staffing and off-day rules
+Always-feasible architecture (locked decision #2): staffing and rest rules
 carry penalized slack, so a solution is returned even when rules cannot all
 hold — each broken rule comes back as a ``Violation`` (§5.6 #12–14) for the
 admin to resolve without automatically forcing a double shift.
@@ -14,7 +14,7 @@ Role-aware model (owner decision 2026-06-26):
     Role.A (fixed group): {A, D, X, CD}  — full flight rules + comp days.
     Role.T (flexible):    {AD, X, CD}     — full-day duty, no shift split.
     Role.M (admin):       {O/D, X, CD}    — office duty.
-    Role.F (split of T):  {AD, X, CD}     — T-like: weekly-2-off AND the
+    Role.F (split of T):  {AD, X, CD}     — T-like: rolling 7-day rest AND the
                                             max-5-consecutive-working rule
                                             apply (owner 2026-07-22).
 
@@ -25,7 +25,7 @@ it is no longer used as the per-person var domain inside the engine.
 Flight-staffing demand and A-versus-D balance are scoped to role-A people
 only. Emergency A/D is outside the automatic solver domain. Comp days (CD
 granted against carried debt — holiday work earns it for every role, owner D1
-2026-11-06), off-day (2 X/block), rolling-seven-day rest, consecutive-working,
+2026-11-06), rolling-seven-day rest, consecutive-working,
 and off-chain rules apply to ALL roles, using each role's own working-code set.
 """
 

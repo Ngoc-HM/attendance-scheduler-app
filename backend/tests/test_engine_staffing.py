@@ -12,7 +12,7 @@ from datetime import date
 
 from app.models.enums import AttendanceCode, Role
 from app.scheduler import PersonInput, SchedulerEngine, SolverInput
-from app.scheduler.calendar_utils import build_weeks, month_days
+from app.scheduler.calendar_utils import month_days
 from app.services.schedule_violation_checker import check_staffing
 
 DEMAND = {0: (0, 0), 1: (1, 1), 2: (1, 2)}  # minimum (A, D) per flight pairs
@@ -26,7 +26,6 @@ def _solve(people, days, flight_pairs):
             month=days[0].month,
             people=people,
             days=days,
-            weeks=build_weeks(days),
             flight_pairs=flight_pairs,
             max_solve_seconds=15.0,
         )
@@ -127,7 +126,6 @@ def test_one_role_a_on_leave_two_pair_day_is_feasible() -> None:
             month=9,
             people=people,
             days=days,
-            weeks=build_weeks(days),
             flight_pairs=fp,
             approved_off={1: {leave_day: AttendanceCode.AL}},
             max_solve_seconds=10.0,
@@ -148,14 +146,12 @@ def test_no_role_a_users_reports_shortfall() -> None:
     people = [PersonInput(2, Role.T), PersonInput(3, Role.M)]
     fp = {d: (2 if d.day % 2 else 1) for d in days}
     fp[date(2026, 9, 7)] = 0
-    weeks = build_weeks(days)
     out = SchedulerEngine().solve(
         SolverInput(
             year=2026,
             month=9,
             people=people,
             days=days,
-            weeks=weeks,
             flight_pairs=fp,
             max_solve_seconds=10.0,
         )
@@ -163,7 +159,7 @@ def test_no_role_a_users_reports_shortfall() -> None:
 
     assert out.feasible
     grid = {(a.user_id, a.day): a.code for a in out.assignments}
-    checker = check_staffing(grid, {2: Role.T, 3: Role.M}, weeks, fp)
+    checker = check_staffing(grid, {2: Role.T, 3: Role.M}, days, fp)
     engine = [v for v in out.violations if v.rule == "flight_staffing"]
     assert len(engine) == len(checker) == len(days) - 1
     assert date(2026, 9, 7) not in {v.day for v in engine}

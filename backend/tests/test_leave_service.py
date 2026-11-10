@@ -161,17 +161,30 @@ class TestConflictRank:
         ranked = rank([req_a, req_b], {2: 1})
         assert ranked[0].user_id == 2  # user_b has carry_comp=1 > 0
 
-    def test_fewer_offs_already_held_in_block_ranks_first(self):
-        """Criterion (b): the person with less of their weekly rest entitlement wins."""
+    def test_fewer_offs_already_held_around_ranks_first(self):
+        """Criterion (b): the person with less rest in the 7-day windows the
+        span touches wins (owner 2026-11-10 — rolling, not blocks)."""
         req_a = self._make_req(1, user_id=1)
         req_b = self._make_req(2, user_id=2)
-        # User 1 already holds 2 approved offs in the same 7-day block (May 1–7).
+        # User 1 already holds 2 approved offs within six days of May 1–3.
         held = {1: {date(2025, 5, 5), date(2025, 5, 6)}, 2: set()}
         ranked = rank([req_a, req_b], {1: 0, 2: 0}, held)
         assert ranked[0].user_id == 2
 
+    def test_offs_around_reach_six_days_across_the_month(self):
+        """April 25 shares a 7-day window with May 1 (block 1–7 never saw it);
+        April 24 does not."""
+        from app.services.leave_conflict_resolver import offs_already_around
+
+        start, end = date(2025, 5, 1), date(2025, 5, 3)
+        assert offs_already_around(start, end, {date(2025, 4, 25)}) == 1
+        assert offs_already_around(start, end, {date(2025, 4, 24)}) == 0
+        assert offs_already_around(start, end, {date(2025, 5, 9)}) == 1
+        assert offs_already_around(start, end, {date(2025, 5, 10)}) == 0
+        assert offs_already_around(start, end, {date(2025, 5, 2)}) == 0  # own day
+
     def test_weekend_pairing_breaks_ties(self):
-        """Criterion (c): Sat+Sun > Fri+Sat > Sun+Mon > no pair."""
+        """Criterion (c): Fri+Sat > Sat+Sun > Sun+Mon > no pair (owner 2026-11-10)."""
         from datetime import datetime
         from types import SimpleNamespace
 
@@ -187,8 +200,8 @@ class TestConflictRank:
         sun_mon = req(3, 3, date(2025, 5, 4), date(2025, 5, 5))   # Sun–Mon
         midweek = req(4, 4, date(2025, 5, 6), date(2025, 5, 7))   # Tue–Wed
         carry = {i: 0 for i in range(1, 5)}
-        ranked = rank([midweek, sun_mon, fri_sat, sat_sun], carry)
-        assert [r.id for r in ranked] == [1, 2, 3, 4]
+        ranked = rank([midweek, sun_mon, sat_sun, fri_sat], carry)
+        assert [r.id for r in ranked] == [2, 1, 3, 4]
 
 
 # ---------------------------------------------------------------------------
@@ -685,34 +698,41 @@ def test_leave_spanning_two_months_updates_only_existing_schedule(client):
     admin = _bearer(_token(client, "admin", "admin123"))
     users = _role_a_users(client, admin, "b4_span_a")
     _generate(client, admin, 2039, 7)
-    leave_id = _file_leave(client, "b4_span_a1", date(2039, 7, 30), date(2039, 8, 1))
     july = [date(2039, 7, 30), date(2039, 7, 31)]
-    expected = _after_approve(_planned(client, admin, users[0], july))
+    # 30–31 July 2039 is a Sat+Sun, a preferred day-off pair (owner
+    # 2026-11-10): pick someone of the four who works at least one of them.
+    i, me = next(
+        (i, uid) for i, uid in enumerate(users, start=1)
+        if set(_planned(client, admin, uid, july).values()) != {"X"}
+    )
+    leave_id = _file_leave(client, f"b4_span_a{i}", date(2039, 7, 30), date(2039, 8, 1))
+    expected = _after_approve(_planned(client, admin, me, july))
     assert "AL" in expected.values(), expected
 
     warnings = _approve(client, admin, leave_id)
 
-    assert _planned(client, admin, users[0], july) == expected
+    assert _planned(client, admin, me, july) == expected
     assert any("updated" in w for w in warnings)
     assert any(w.startswith("2039-08:") for w in warnings)
     assert client.get(f"{V}/schedules/2039/8", headers=admin).status_code == 404
 
     # August picks the approved day up when it is generated later.
     _generate(client, admin, 2039, 8)
-    assert _planned(client, admin, users[0], [date(2039, 8, 1)]) == {"2039-08-01": "AL"}
+    assert _planned(client, admin, me, [date(2039, 8, 1)]) == {"2039-08-01": "AL"}
 
 
 def test_approve_keeps_the_weekly_off_days(client):
-    """Decision #4 / D5: leave does not replace the weekly X. Approving after
-    generation writes AL only over the non-X cells of the span, so the block
-    keeps its genuine X and the re-check reports no off-quota breach for it."""
+    """Approving after generation writes AL only over the non-X cells of the
+    span, so the person's planned X days stay where they were. (The block
+    quota that motivated this, decision #4, is gone since owner 2026-11-10;
+    the re-check must still not report a rest-rule breach for the span.)"""
     admin = _bearer(_token(client, "admin", "admin123"))
     users = _role_a_users(client, admin, "f1_keepx_a")
     _generate(client, admin, 2042, 3)
     me = users[0]
 
-    # A 4-day span inside one 7-day block that holds at least one of this
-    # person's X days and at least one working day.
+    # A 4-day span that holds at least one of this person's X days and at
+    # least one working day.
     plan = _planned(client, admin, me, [date(2042, 3, d) for d in range(1, 29)])
 
     def codes(start: int) -> set[str]:
@@ -725,16 +745,15 @@ def test_approve_keeps_the_weekly_off_days(client):
         if "X" in codes(s) and codes(s) != {"X"}
     )
     span = [date(2042, 3, first + i) for i in range(4)]
-    block_start = date(2042, 3, (first - 1) // 7 * 7 + 1)
     before = _planned(client, admin, me, span)
 
     leave_id = _file_leave(client, "f1_keepx_a1", span[0], span[-1])
     warnings = _approve(client, admin, leave_id)
 
     assert any("updated" in w for w in warnings)
-    # Lines are rendered text: "<code> (<name>): ... 7-day block from <start>".
+    # Leave is rest: it cannot create a rest-rule breach for this person.
     assert not any(
-        "(F1_Keepx_A1): " in w and f"7-day block from {block_start}" in w
+        "(F1_Keepx_A1): " in w and ("7 days" in w or "7 ngày" in w)
         for w in warnings
     ), warnings
     assert _planned(client, admin, me, span) == _after_approve(before)

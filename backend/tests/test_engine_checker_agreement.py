@@ -20,7 +20,7 @@ from ortools.sat.python import cp_model
 
 from app.models.enums import AttendanceCode, Role
 from app.scheduler import PersonInput, SchedulerEngine, SolverInput, constraints
-from app.scheduler.calendar_utils import build_weeks, month_days, trailing_work_streak
+from app.scheduler.calendar_utils import month_days, trailing_work_streak
 from app.scheduler.domain import Violation
 from app.scheduler.role_codes import codes_for
 from app.scheduler.slack_registry import SlackRegistry
@@ -29,7 +29,6 @@ from app.services.schedule_violation_checker import recheck
 AL = AttendanceCode.AL
 
 ENGINE_RULES = {
-    "two_days_off_per_week": "off_quota",
     "rolling_seven_min_two_rest": "rolling",
     "max_consecutive_working": "consecutive",
     "max_consecutive_working_carry": "consecutive",
@@ -53,8 +52,8 @@ def _instance(seed: int, *, full_month: bool = False) -> SolverInput:
     rng = random.Random(seed)
     year, month = rng.choice([(2027, 2), (2027, 3), (2027, 8), (2028, 1)])
     length = rng.choice([14, 21, 28])
-    # A full 30/31-day month ends with leftover days that carry no off quota
-    # (owner 2026-11-10); engine and checker must agree there too.
+    # Also a full 30/31-day month, so the whole month (no 7-day blocks since
+    # owner 2026-11-10) is compared, the last days included.
     days = month_days(year, month) if full_month else month_days(year, month)[:length]
     first = days[0]
 
@@ -127,7 +126,6 @@ def _instance(seed: int, *, full_month: bool = False) -> SolverInput:
         month=month,
         people=people,
         days=days,
-        weeks=build_weeks(days),
         flight_pairs={d: rng.choice([0, 1, 1, 2]) for d in days},
         approved_off=approved,
         holidays={rng.choice(days)},
@@ -166,7 +164,7 @@ def _checker_warnings(
         grid=persisted,
         roles={p.user_id: p.role for p in inp.people},
         carry_streaks={p.user_id: p.carry_streak for p in inp.people},
-        weeks=inp.weeks,
+        days=inp.days,
         flight_pairs=inp.flight_pairs,
         previous_working=inp.previous_working,
         carry_comps={p.user_id: p.carry_comp for p in inp.people},

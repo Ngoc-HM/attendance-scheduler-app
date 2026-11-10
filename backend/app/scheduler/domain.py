@@ -35,7 +35,6 @@ class SolverInput:
     month: int
     people: list[PersonInput]
     days: list[date]                       # every day of the month (§5.1)
-    weeks: list[list[date]]                # partition of ``days`` into weeks (§5.1)
     flight_pairs: dict[date, int]          # flightPairs[d] ∈ {0,1,2} (§5.3 #4)
     # Pre-pinned off cells: approved leave (AL/CD) (§5.3 #5). Holidays are NOT
     # pinned off — they are normal working days (decision #5).

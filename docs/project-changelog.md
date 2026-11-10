@@ -42,6 +42,16 @@
   Re-check violations now carry their real rule name (was `manual_recheck`)
   with `day` and `user_id` filled; shift-change, leave and self-arrange
   warnings use the same text.
+- Rest rules (decision #62): the month is no longer cut into 7-day blocks.
+  The rest rule is "at most 5 working days in any 7 consecutive days" across
+  months; the "exactly 2 days off per block" quota and the forced day off in
+  the leftover days (29–31) are gone. Days off come as pairs of consecutive
+  days, preferred Fri+Sat, then Sat+Sun, then Sun+Mon, shared out fairly
+  within each role group; every person gets as many days off as the month
+  has Saturdays and Sundays (the paper roster's "TTL working days"), and a
+  role group keeps someone working every day when it can. Self-arrange
+  keeps the month's number of days off and may not create more than 5
+  working days in 7.
 
 ## 2026-11-10 — End-to-end run follow-ups
 

@@ -9,7 +9,8 @@ from __future__ import annotations
 
 from app.models.enums import AttendanceCode, Role
 from app.scheduler import PersonInput, SchedulerEngine, SolverInput
-from app.scheduler.calendar_utils import build_weeks, month_days
+from app.scheduler.calendar_utils import month_days
+from tests.rest_invariants import assert_rest_rules
 
 
 def _solve(people, days, flight_pairs=None):
@@ -19,7 +20,6 @@ def _solve(people, days, flight_pairs=None):
             month=days[0].month,
             people=people,
             days=days,
-            weeks=build_weeks(days),
             flight_pairs=flight_pairs or {d: 0 for d in days},
             max_solve_seconds=10.0,
         )
@@ -54,8 +54,10 @@ def test_no_comp_debt_means_no_cd() -> None:
     assert _count(_grid(out), 1, days, AttendanceCode.CD) == 0
 
 
-def test_cd_is_on_top_of_weekly_off_quota() -> None:
-    """CD does not consume the 2 X/week quota — each full week still has 2 X."""
+def test_cd_is_rest_for_the_seven_day_rule() -> None:
+    """Owed CDs are granted on top of the month's X target (8 Saturdays +
+    Sundays in July 2026, owner 2026-11-10) and count as rest for the rolling
+    7-day rule."""
     days = month_days(2026, 7)
     people = [PersonInput(1, Role.A, carry_comp=2)]
     out = _solve(people, days)
@@ -63,9 +65,8 @@ def test_cd_is_on_top_of_weekly_off_quota() -> None:
     assert out.feasible and not out.violations
     grid = _grid(out)
     assert _count(grid, 1, days, AttendanceCode.CD) == 2
-    for week in build_weeks(days):
-        if len(week) == 7:  # full block target = 2 X (decision #7)
-            assert sum(grid[(1, d)] is AttendanceCode.X for d in week) == 2
+    assert_rest_rules(grid, 1, days)
+    assert _count(grid, 1, days, AttendanceCode.X) == 8
 
 
 def test_cd_counts_as_rest_not_work() -> None:

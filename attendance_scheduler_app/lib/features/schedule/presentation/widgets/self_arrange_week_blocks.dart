@@ -5,9 +5,10 @@ import '../../../../i18n/app_localizations.dart';
 import '../../domain/entities/schedule_entities.dart';
 import '../providers/self_arrange_provider.dart';
 
-/// Week-block editor for the self-arrange tab: 7-day blocks anchored at day 1,
-/// each own cell tappable to flip X↔AD in the local draft. Non-flexible codes
-/// (AL/S/CD…) render disabled. A per-block "X got/target" badge shows quota.
+/// Editor for the self-arrange tab: the month in rows of 7 days (layout
+/// only), each own cell tappable to flip X↔AD in the local draft.
+/// Non-flexible codes (AL/S/CD…) render disabled. One "X got/target" badge
+/// shows whether the month still has its number of days off.
 class SelfArrangeWeekBlocks extends StatelessWidget {
   const SelfArrangeWeekBlocks({
     super.key,
@@ -24,50 +25,43 @@ class SelfArrangeWeekBlocks extends StatelessWidget {
     for (final a in state.myAssignments) {
       byBlock.putIfAbsent((a.workDate.day - 1) ~/ 7, () => []).add(a);
     }
-    final counts = state.blockOffCounts();
+    final (got, target) = state.monthOffCount();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        if (state.myAssignments.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(bottom: DsSpacing.x3),
+            child: DsBadge(
+              key: const Key('self-arrange-off-count'),
+              label: 'X $got/$target',
+              tone: got == target ? DsTone.success : DsTone.danger,
+            ),
+          ),
         for (final block in byBlock.keys.toList()..sort())
           Padding(
             padding: const EdgeInsets.only(bottom: DsSpacing.x3),
-            child: _blockCard(context, byBlock[block]!, counts[block]),
+            child: _blockCard(context, byBlock[block]!),
           ),
       ],
     );
   }
 
-  Widget _blockCard(
-    BuildContext context,
-    List<ShiftAssignment> cells,
-    (int, int)? count,
-  ) {
+  Widget _blockCard(BuildContext context, List<ShiftAssignment> cells) {
     final l = AppLocalizations.of(context);
-    final ok = count == null || count.$1 == count.$2;
     return DsSurface(
       padding: const EdgeInsets.all(DsSpacing.x3),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  '${cells.first.workDate.day}–${cells.last.workDate.day}',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w600,
-                    color: DsColors.textSecondary,
-                    fontSize: DsFontSize.footnote,
-                  ),
-                ),
-              ),
-              if (count != null)
-                DsBadge(
-                  label: 'X ${count.$1}/${count.$2}',
-                  tone: ok ? DsTone.success : DsTone.danger,
-                ),
-            ],
+          Text(
+            '${cells.first.workDate.day}–${cells.last.workDate.day}',
+            style: const TextStyle(
+              fontWeight: FontWeight.w600,
+              color: DsColors.textSecondary,
+              fontSize: DsFontSize.footnote,
+            ),
           ),
           const SizedBox(height: DsSpacing.x2),
           Wrap(
@@ -84,7 +78,8 @@ class SelfArrangeWeekBlocks extends StatelessWidget {
     final code = state.codeFor(a.workDate) ?? a.code;
     final changed = state.draft.containsKey(a.workDate);
     final editable = a.code == 'X' || a.code == 'AD';
-    final weekend = a.workDate.weekday == DateTime.saturday ||
+    final weekend =
+        a.workDate.weekday == DateTime.saturday ||
         a.workDate.weekday == DateTime.sunday;
     final off = code == 'X';
 
@@ -95,10 +90,10 @@ class SelfArrangeWeekBlocks extends StatelessWidget {
       backgroundColor: !editable
           ? DsColors.surfaceMuted
           : off
-              ? DsColors.successSoft
-              : weekend
-                  ? DsColors.primarySoft
-                  : DsColors.surfaceSubtle,
+          ? DsColors.successSoft
+          : weekend
+          ? DsColors.primarySoft
+          : DsColors.surfaceSubtle,
       selectedColor: off ? DsColors.successSoft : DsColors.primarySoft,
       side: BorderSide(
         color: changed ? DsColors.primary : DsColors.border,
