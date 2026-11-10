@@ -189,7 +189,20 @@ class DsLiquidGlassSurface extends StatelessWidget {
               border: edgeLight
                   ? null
                   : Border.all(color: DsColors.glassBorder, width: 1.4),
-              gradient: uniformTint
+              gradient: edgeLight
+                  // A pane lit from the top-left: a faint sheen there,
+                  // fading into the plain tint.
+                  ? LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        DsColors.surface.withValues(alpha: 0.16),
+                        tint,
+                        tint,
+                      ],
+                      stops: const [0, 0.45, 1],
+                    )
+                  : uniformTint
                   ? null
                   : LinearGradient(
                       begin: Alignment.topLeft,
