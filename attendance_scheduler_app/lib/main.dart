@@ -6,6 +6,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'app.dart';
+import 'core/storage/locale_storage.dart';
+import 'i18n/locale_provider.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -26,5 +28,17 @@ Future<void> main() async {
   // Load runtime config (API base URL). Optional; a non-empty
   // --dart-define=API_BASE_URL wins over it (see AppConfig).
   await dotenv.load(fileName: '.env', isOptional: true);
-  runApp(const ProviderScope(child: AttendanceSchedulerApp()));
+
+  // Open in the language this device last showed, so the login screen does
+  // not fall back to English (the user's own preference applies at login).
+  final lastLanguage = await LocaleStorage().readLast();
+  runApp(
+    ProviderScope(
+      overrides: [
+        if (lastLanguage != null)
+          initialLanguageProvider.overrideWithValue(lastLanguage),
+      ],
+      child: const AttendanceSchedulerApp(),
+    ),
+  );
 }

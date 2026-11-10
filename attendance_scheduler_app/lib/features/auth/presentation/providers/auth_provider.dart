@@ -178,7 +178,8 @@ class AuthController extends StateNotifier<AuthState> {
     }
   }
 
-  /// Common teardown: drop the token, the user's language, the session and
+  /// Common teardown: drop the token, unbind the language from the user
+  /// (it stays as shown, see LocaleController), drop the session and
   /// every provider holding the previous person's data. [error] is the
   /// reason shown on the login page (null for a deliberate logout).
   Future<void> _endSession(String? error) async {

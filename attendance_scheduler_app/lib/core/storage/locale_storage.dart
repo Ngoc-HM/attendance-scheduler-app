@@ -3,7 +3,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 final localeStorageProvider = Provider<LocaleStorage>((ref) => LocaleStorage());
 
-/// Stores one preferred UI language per user on this device.
+/// Stores one preferred UI language per user on this device, plus the
+/// language the device last showed (the login screen opens in it).
 ///
 /// Language preferences deliberately survive logout; only the access token is
 /// cleared. This is non-sensitive UI state, so platform preferences are more
@@ -31,6 +32,33 @@ class LocaleStorage {
     try {
       final preferences = await SharedPreferences.getInstance();
       await preferences.setString(_key(userId), languageCode);
+    } catch (_) {
+      // Platform preferences unavailable; the current session still works.
+    }
+  }
+
+  static const _lastKey = 'last_language';
+  String? _lastMemory;
+
+  /// The language this device last showed, or null when none was stored.
+  Future<String?> readLast() async {
+    if (_lastMemory != null) return _lastMemory;
+    try {
+      final preferences = await SharedPreferences.getInstance();
+      final value = preferences.getString(_lastKey);
+      if (value == 'en' || value == 'vi') _lastMemory = value;
+    } catch (_) {
+      // Platform preferences unavailable: nothing remembered.
+    }
+    return _lastMemory;
+  }
+
+  Future<void> writeLast(String languageCode) async {
+    if (languageCode != 'en' && languageCode != 'vi') return;
+    _lastMemory = languageCode;
+    try {
+      final preferences = await SharedPreferences.getInstance();
+      await preferences.setString(_lastKey, languageCode);
     } catch (_) {
       // Platform preferences unavailable; the current session still works.
     }
