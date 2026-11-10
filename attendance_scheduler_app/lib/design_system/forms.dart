@@ -281,6 +281,7 @@ class DsAuthPage extends StatelessWidget {
                                   DsLanguageSelector(
                                     languageCode: languageCode,
                                     onChanged: onLanguageChanged,
+                                    onDark: true,
                                   ),
                                 ],
                               ),
