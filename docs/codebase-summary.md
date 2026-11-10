@@ -101,8 +101,8 @@ golden`, everything else with `--exclude-tags golden`); among them
 New on 2026-11-10: the monthly flight plan as an Excel grid
 (`GET /flights/template`, upload through `POST /flights/import`, decision
 #60), the customer logo in the app shell and on the login page
-(`DsBrandLogo`, `assets/images/`), the login page's aircraft drawing
-(`DsAircraftLineArt`) and the lotus app icon.
+(`DsBrandLogo`, `assets/images/`), the login page's aircraft photo
+(`assets/images/login_aircraft.jpg`) and the lotus app icon.
 
 ## Entry points
 - Backend: `alembic upgrade head`, then `uvicorn app.main:app` (lifespan:

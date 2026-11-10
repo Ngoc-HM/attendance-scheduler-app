@@ -61,6 +61,8 @@ flutter:
     # Customer logo in the app shell header (full wordmark + lotus mark).
     - assets/images/vietnam_airlines_logo.png
     - assets/images/vietnam_airlines_mark.png
+    # Login page photo (context panel of wide windows).
+    - assets/images/login_aircraft.jpg
 
   # NOTE: add these when implementing the related features:
   #   file_picker   -> F-04 Excel flight import

@@ -73,11 +73,6 @@ class AppLocalizations {
       'registerSubtitle': 'New accounts require administrator approval.',
       'loginFailedTitle': 'Login failed',
       'registrationFailedTitle': 'Registration failed',
-      'authPanelSubtitle':
-          'Monthly flight staffing and attendance for the Frankfurt team.',
-      'authFeatureSchedule': 'Automatic monthly roster',
-      'authFeatureBalance': 'Balanced ARR and DEP duties',
-      'authFeatureAttendance': 'Attendance and leave control',
       'scheduleTitle': 'Schedule',
       'scheduleSubtitle': 'Monthly roster for the Frankfurt team',
       'publishSchedule': 'Publish schedule',
@@ -499,11 +494,6 @@ class AppLocalizations {
       'registerSubtitle': 'Tài khoản mới cần quản trị viên phê duyệt.',
       'loginFailedTitle': 'Đăng nhập thất bại',
       'registrationFailedTitle': 'Đăng ký thất bại',
-      'authPanelSubtitle':
-          'Phân lịch chuyến bay và chấm công hàng tháng cho đội Frankfurt.',
-      'authFeatureSchedule': 'Tự động xếp lịch tháng',
-      'authFeatureBalance': 'Cân bằng ca ARR và DEP',
-      'authFeatureAttendance': 'Quản lý chấm công và nghỉ phép',
       'scheduleTitle': 'Lịch làm',
       'scheduleSubtitle': 'Lịch làm hàng tháng của đội Frankfurt',
       'publishSchedule': 'Công bố lịch',
