@@ -38,8 +38,8 @@
   `core.business_time.business_today()` / `business_now()` — the date in
   `TIMEZONE` — never from `date.today()` or a hard-coded zone, because the
   container may run in UTC.
-- Rows another request may change concurrently (leave / shift-change /
-  self-arrange decisions, the role-code counter) are read with
+- Rows another request may change concurrently (leave / shift-change
+  decisions, the role-code counter) are read with
   `with_for_update()`, and a decision commits its status together with the
   cells it changes.
 

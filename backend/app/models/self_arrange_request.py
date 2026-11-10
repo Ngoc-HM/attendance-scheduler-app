@@ -1,5 +1,9 @@
 """Self-arrange requests (owner 2026-07-09).
 
+FEATURE REMOVED (owner 2026-11-10): there is no API or UI for self-arrange
+any more. The model and its table are kept for the history of existing rows,
+which user deletion, the data export and the retention purge still handle.
+
 After a schedule is published, flexible roles (T, F — and technically M)
 propose a BATCH rearrangement of their OWN cells: a list of
 ``{"work_date": iso, "code": value}`` changes stored as JSON. A single cell

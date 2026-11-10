@@ -20,9 +20,7 @@ import 'package:attendance_scheduler_app/features/auth/presentation/providers/au
 import 'package:attendance_scheduler_app/features/flights/data/datasources/flights_remote_datasource.dart';
 import 'package:attendance_scheduler_app/features/flights/data/models/flight_day_model.dart';
 import 'package:attendance_scheduler_app/features/schedule/data/datasources/schedule_remote_datasource.dart';
-import 'package:attendance_scheduler_app/features/schedule/data/datasources/self_arrange_remote_datasource.dart';
 import 'package:attendance_scheduler_app/features/schedule/domain/entities/schedule_entities.dart';
-import 'package:attendance_scheduler_app/features/schedule/domain/entities/self_arrange_entities.dart';
 import 'package:attendance_scheduler_app/features/schedule/presentation/pages/schedule_page.dart';
 import 'package:attendance_scheduler_app/features/schedule/presentation/providers/schedule_provider.dart';
 import 'package:attendance_scheduler_app/features/schedule/presentation/widgets/shift_change_dialog.dart';
@@ -310,55 +308,10 @@ class _FakeFlightsDataSource extends FlightsRemoteDataSource {
   Future<List<FlightDayModel>> listDays(int year, int month) async => [];
 }
 
-class _FakeSelfArrangeDataSource extends SelfArrangeRemoteDataSource {
-  _FakeSelfArrangeDataSource({
-    this.batches = const [],
-    this.decideWarnings = const [],
-  }) : super(Dio());
-
-  final List<SelfArrangeBatch> batches;
-  final List<String> decideWarnings;
-  final decided = <(int, String)>[];
-
-  /// Holds the [decide] response until completed.
-  Completer<void>? decideGate;
-
-  @override
-  Future<List<SelfArrangeBatch>> list({
-    bool all = false,
-    bool pendingOnly = false,
-  }) async => [
-    // The backend no longer lists a batch once it is decided.
-    for (final b in batches)
-      if (!decided.any((d) => d.$1 == b.id)) b,
-  ];
-
-  @override
-  Future<SelfArrangeBatch> decide({
-    required int id,
-    required String status,
-  }) async {
-    final gate = decideGate;
-    if (gate != null) await gate.future;
-    decided.add((id, status));
-    final b = batches.firstWhere((b) => b.id == id);
-    return SelfArrangeBatch(
-      id: b.id,
-      requesterId: b.requesterId,
-      year: b.year,
-      month: b.month,
-      changes: b.changes,
-      status: status,
-      warnings: decideWarnings,
-    );
-  }
-}
-
 Future<void> _pump(
   WidgetTester tester, {
   required User user,
   required _FakeScheduleDataSource ds,
-  _FakeSelfArrangeDataSource? selfArrange,
   UserManagementDataSource? users,
   int initialMonth = _june,
 }) async {
@@ -375,9 +328,6 @@ Future<void> _pump(
           users ?? _FakeUserDataSource(),
         ),
         flightsDataSourceProvider.overrideWithValue(_FakeFlightsDataSource()),
-        selfArrangeRemoteDataSourceProvider.overrideWithValue(
-          selfArrange ?? _FakeSelfArrangeDataSource(),
-        ),
       ],
       child: MaterialApp(
         localizationsDelegates: const [
@@ -999,57 +949,6 @@ void main() {
       expect(ds.fetchedMonths, [_june, _june], reason: 'grid reloaded once');
     });
 
-    SelfArrangeBatch batch() => SelfArrangeBatch(
-      id: 51,
-      requesterId: _t2,
-      year: 2026,
-      month: _june,
-      changes: [SelfArrangeChange(workDate: DateTime(2026, 6, 4), code: 'X')],
-      status: 'pending',
-    );
-
-    for (final (status, tooltip) in [
-      ('approved', 'Approve'),
-      ('rejected', 'Reject'),
-    ]) {
-      testWidgets('deciding ($status) the only self-arrange batch toasts and '
-          'reloads once', (tester) async {
-        final ds = _FakeScheduleDataSource();
-        final selfArrange = _FakeSelfArrangeDataSource(batches: [batch()]);
-        await _pump(tester, user: _admin, ds: ds, selfArrange: selfArrange);
-        await openPanel(tester);
-
-        await tester.tap(find.byTooltip(tooltip));
-        await tester.pumpAndSettle();
-
-        expect(selfArrange.decided, [(51, status)]);
-        expect(find.text('Request decided.'), findsOneWidget);
-        expect(ds.fetchedMonths, [_june, _june], reason: 'grid reloaded once');
-        await _drainToast(tester);
-      });
-    }
-
-    testWidgets('approving the only self-arrange batch shows its warnings', (
-      tester,
-    ) async {
-      final ds = _FakeScheduleDataSource();
-      final selfArrange = _FakeSelfArrangeDataSource(
-        batches: [batch()],
-        decideWarnings: const ['2026-06-04: off chain too long'],
-      );
-      await _pump(tester, user: _admin, ds: ds, selfArrange: selfArrange);
-      await openPanel(tester);
-
-      await tester.tap(find.byTooltip('Approve'));
-      await tester.pumpAndSettle();
-
-      expect(
-        find.textContaining('2026-06-04: off chain too long'),
-        findsOneWidget,
-      );
-      expect(ds.fetchedMonths, [_june, _june], reason: 'grid reloaded once');
-      await _drainToast(tester);
-    });
     // The row's context is gone before the answer arrives: the feedback and
     // the reload must not depend on it.
     testWidgets('closing the panel while a shift change is decided still '
@@ -1067,26 +966,6 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Request approved.'), findsOneWidget);
-      expect(ds.fetchedMonths, [_june, _june], reason: 'grid reloaded once');
-      await _drainToast(tester);
-    });
-
-    testWidgets('closing the panel while a self-arrange batch is decided '
-        'still toasts and reloads', (tester) async {
-      final ds = _FakeScheduleDataSource();
-      final selfArrange = _FakeSelfArrangeDataSource(batches: [batch()]);
-      await _pump(tester, user: _admin, ds: ds, selfArrange: selfArrange);
-      await openPanel(tester);
-
-      selfArrange.decideGate = Completer<void>();
-      await tester.tap(find.byTooltip('Approve'));
-      await tester.pump();
-      await openPanel(tester); // toggles the panel closed
-      expect(find.byTooltip('Approve'), findsNothing);
-      selfArrange.decideGate!.complete();
-      await tester.pumpAndSettle();
-
-      expect(find.text('Request decided.'), findsOneWidget);
       expect(ds.fetchedMonths, [_june, _june], reason: 'grid reloaded once');
       await _drainToast(tester);
     });

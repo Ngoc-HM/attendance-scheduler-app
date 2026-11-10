@@ -35,9 +35,8 @@ class ApiEndpoints {
   static const String shiftChanges = '/shift-changes';
   static String shiftChangeDecide(int id) => '/shift-changes/$id/decide';
 
-  // Self-arrange batch requests (owner 2026-07-09)
-  static const String selfArrange = '/self-arrange';
-  static String selfArrangeDecide(int id) => '/self-arrange/$id/decide';
+  // Admin navigation badges: items waiting for a decision (owner 2026-11-10)
+  static const String pendingCounts = '/pending-counts';
 
   // Time clock — check-in/out (owner 2026-07-09)
   static const String clockCheckIn = '/attendance/clock/check-in';

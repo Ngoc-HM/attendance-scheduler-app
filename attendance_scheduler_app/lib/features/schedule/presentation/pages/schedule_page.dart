@@ -11,11 +11,8 @@ import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../../flights/data/datasources/flights_remote_datasource.dart';
 import '../../../flights/data/models/flight_day_model.dart';
 import '../../domain/entities/schedule_entities.dart';
-import '../../domain/entities/self_arrange_entities.dart';
 import '../providers/schedule_provider.dart';
-import '../providers/self_arrange_provider.dart';
 import '../providers/shift_change_provider.dart';
-import '../widgets/self_arrange_pending_panel.dart';
 import '../widgets/shift_change_dialog.dart';
 import '../widgets/violation_line.dart';
 
@@ -51,7 +48,6 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
         .load(_month.year, _month.month, isAdmin: isAdmin);
     if (isAdmin) {
       ref.read(shiftChangeControllerProvider.notifier).load(all: true);
-      ref.read(selfArrangeAdminControllerProvider.notifier).load();
     } else {
       ref.read(shiftChangeControllerProvider.notifier).load();
     }
@@ -187,8 +183,6 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
             codeById: {for (final p in scheduleState.people) p.id: p.code},
             onDecided: _onShiftChangeDecided,
           ),
-          // Batch self-arrange approvals (owner 2026-07-09).
-          SelfArrangePendingPanel(onDecided: _onSelfArrangeDecided),
         ],
         if (isAdmin)
           Padding(
@@ -488,22 +482,6 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
           ),
         ],
       ),
-    );
-  }
-
-  /// A self-arrange batch was decided (admin panel): reload the grid and
-  /// surface the backend's rule recheck warnings (F-09 parity).
-  void _onSelfArrangeDecided(SelfArrangeBatch decided) {
-    if (!mounted) return;
-    final l = AppLocalizations.of(context);
-    _loadMonth();
-    final hasWarnings = decided.warnings.isNotEmpty;
-    DsFeedback.show(
-      context,
-      hasWarnings
-          ? '${l.text('selfArrangeDecided')} ${decided.warnings.join('; ')}'
-          : l.text('selfArrangeDecided'),
-      tone: hasWarnings ? DsTone.warning : DsTone.success,
     );
   }
 

@@ -9,9 +9,6 @@ extension UserRoleX on UserRole {
   bool get isAdmin => this == UserRole.m;
   bool get isFixed => this == UserRole.a;
 
-  /// T and F may propose their own shift arrangement (admin approves).
-  bool get canSelfArrange => this == UserRole.t || this == UserRole.f;
-
   /// Backend enum value: `UserRole.m` → `'M'`, `UserRole.t` → `'T'`, ...
   String get apiValue => name.toUpperCase();
 

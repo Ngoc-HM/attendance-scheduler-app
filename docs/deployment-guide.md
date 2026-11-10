@@ -151,15 +151,15 @@ overrides on purpose. Both prompt for the password without echo when
 
 ## Access control (§9.5) and sickness (§9.1)
 - Role-based: normal users see only their own data (`/attendance/me`, own
-  leaves / shift-changes / self-arrange / time clock / export); admins
+  leaves / shift-changes / time clock / export); admins
   (role M) manage everyone. A user disabled mid-session is signed out by the
   client at the next refused request (decision #56).
 - **Sick `S` is special-category health data:**
   - written only by admins into ACTUAL attendance, every write audited;
   - never stored with a free-text note (the API drops it), and the A/D cover
     row of a colleague carries no note either (decision #53);
-  - never accepted in the PLANNED schedule (override, shift-change and
-    self-arrange reject it), and any legacy S of another person is masked
+  - never accepted in the PLANNED schedule (override and shift-change
+    reject it), and any legacy S of another person is masked
     as X when a non-admin reads a schedule;
   - visible to the person themself in `/attendance/me` (data-subject access)
     and to admins in the month-wide grid and exports.
@@ -170,7 +170,7 @@ overrides on purpose. Both prompt for the password without echo when
 ## Audit log (§9.5)
 - Every admin mutation writes an `audit_logs` row (actor, action, entity,
   id, detail): user create/update/delete, account approval, schedule
-  generate/override/publish, leave / shift-change / self-arrange decisions,
+  generate/override/publish, leave / shift-change decisions,
   attendance and S writes, holiday CRUD, manual flight entry, preset CRUD,
   Excel import, report export, month-close, retention purge, data export.
   The autorun records `actor_id = NULL` (system).
@@ -186,8 +186,9 @@ overrides on purpose. Both prompt for the password without echo when
 ## Retention & data-subject rights (§9.3, Art. 15/17/20)
 - `DATA_RETENTION_MONTHS` (default 36) defines how long personnel records are
   kept. `POST /api/v1/compliance/retention/purge` (admin, audited) deletes
-  attendance, schedule cells, time-clock entries, leave / shift-change /
-  self-arrange requests and audit rows dated before the cutoff. The cutoff
+  attendance, schedule cells, time-clock entries, leave / shift-change
+  requests, the rows of the removed self-arrange feature (#63) and audit
+  rows dated before the cutoff. The cutoff
   can never be more recent than the legal floor of 24 months (ArbZG §16(2)
   working-time records); `DATA_RETENTION_MIN_MONTHS` may raise the floor but
   never lower it. Run the purge monthly from a scheduler of your choice, e.g.
@@ -204,15 +205,15 @@ overrides on purpose. Both prompt for the password without echo when
   (§26 BDSG) documentation.
 
 ## Features outside the original specification — legal review needed
-Two owner-requested features (2026-07-09) are not in `PROJECT_OVERVIEW.md`
+One owner-requested feature (2026-07-09) is not in `PROJECT_OVERVIEW.md`
 and must be part of the DPO / works-council review before rollout:
 - **Time clock** (`/attendance/clock/*`): real check-in/out timestamps per
   person per day. This is behaviour monitoring in the §87(1) No.6 BetrVG
   sense.
-- **Self-arrange** (`/self-arrange`): employees propose batch changes to
-  their own published cells; admins approve.
-Both are own-data-only for employees, audited, included in the data export
-and covered by the retention purge.
+It is own-data-only for employees, audited, included in the data export
+and covered by the retention purge. (Self-arrange, the second such feature,
+was removed on 2026-11-10 — decision #63; its old rows stay in the export
+and the purge.)
 
 ## AI Act (§9.6)
 The scheduler is **rule-based (OR-Tools CP-SAT)** — it performs NO AI/ML

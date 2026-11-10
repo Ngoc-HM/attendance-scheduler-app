@@ -53,9 +53,9 @@ Living status of the full-implementation plan
 ## Remaining before production
 | Item | Owner | Notes |
 |------|-------|-------|
-| Betriebsrat agreement (§9.2) | customer | now also covers time clock + self-arrange |
+| Betriebsrat agreement (§9.2) | customer | now also covers the time clock (self-arrange was removed, #63) |
 | Staffing exact vs minimum, extra role-A person (D7) | customer | see design-decisions "Open questions" |
-| Weekend preference for paired offs (D6) | owner / customer | engine stays adjacency-only until decided |
+| Weekend preference for paired offs (D6) | owner | decided 2026-11-10: Fri+Sat > Sat+Sun > Sun+Mon (#62) |
 | Real annual-leave quota | customer | 30 days is a placeholder (decision #30) |
 | 2026-11 customer notes | owner / customer | listed in design-decisions "Open questions" |
 | Confirm the 2026-11-08 provisional rulings | owner / customer | leave next to weekly offs (#41), comp days before the cut-off (#43), disabled users' past cells as cover (I2, #44), no holiday-work penalty (R5) |

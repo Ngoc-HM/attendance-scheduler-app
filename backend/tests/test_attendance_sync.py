@@ -1,9 +1,9 @@
 """B5 — edits to a PUBLISHED roster reach the actuals seeded from it.
 
 Publishing seeds ``AttendanceRecord`` rows (``recorded_by`` NULL) from the
-roster. A later admin override, approved shift change or approved
-self-arrange batch must move those untouched seeded actuals along with the
-planned cell, but never a cell an admin recorded by hand.
+roster. A later admin override or approved shift change must move those
+untouched seeded actuals along with the planned cell, but never a cell an
+admin recorded by hand.
 """
 
 from __future__ import annotations
@@ -123,64 +123,6 @@ def test_approved_shift_change_updates_seeded_actual(client: TestClient) -> None
     assert dec.status_code == 200, dec.text
 
     assert _actual(client, admin, u, "2028-04-10")["code"] == wanted
-
-
-def test_approved_self_arrange_updates_seeded_actuals(client: TestClient) -> None:
-    admin = _admin_headers(client)
-    for i in (1, 2, 3, 4):
-        _make_user(client, admin, f"sync_sa_a{i}", "A")
-    t_user = _make_user(client, admin, "sync_sa_t1", "T")["id"]
-    schedule = _generate_and_publish(client, admin, 2028, 6)
-
-    # Swap one X and one AD so the month keeps its X count and no 7-day
-    # window gets more than 5 working days (owner 2026-11-10): the batch is
-    # valid. No history before June 2028, as in the server's check.
-    from app.models.enums import AttendanceCode, Role
-    from app.services.schedule_violation_checker import (
-        check_consecutive,
-        check_rolling_rest,
-    )
-
-    own = {
-        date.fromisoformat(a["work_date"]): a["code"]
-        for a in schedule["assignments"] if a["user_id"] == t_user
-    }
-
-    def clean(codes: dict[date, str]) -> bool:
-        grid = {(t_user, d): AttendanceCode(c) for d, c in codes.items()}
-        days = sorted(codes)
-        roles = {t_user: Role.T}
-        return not (
-            check_rolling_rest(grid, roles, days, {})
-            + check_consecutive(grid, roles, {}, days)
-        )
-
-    off_day = work_day = None
-    for off in sorted(d for d, c in own.items() if c == "X"):
-        for work in sorted(d for d, c in own.items() if c == "AD"):
-            if clean({**own, off: "AD", work: "X"}):
-                off_day, work_day = off, work
-                break
-        if off_day is not None:
-            break
-    assert off_day is not None and work_day is not None
-
-    req = client.post(
-        f"{V}/self-arrange", headers=_login(client, "sync_sa_t1"),
-        json={"year": 2028, "month": 6, "changes": [
-            {"work_date": off_day.isoformat(), "code": "AD"},
-            {"work_date": work_day.isoformat(), "code": "X"},
-        ]},
-    )
-    assert req.status_code == 201, req.text
-    dec = client.post(
-        f"{V}/self-arrange/{req.json()['id']}/decide", headers=admin,
-        json={"status": "approved"},
-    )
-    assert dec.status_code == 200, dec.text
-
-    assert _actual(client, admin, t_user, off_day.isoformat())["code"] == "AD"
-    assert _actual(client, admin, t_user, work_day.isoformat())["code"] == "X"
 
 
 def test_republish_resyncs_untouched_seeded_actuals(client: TestClient) -> None:

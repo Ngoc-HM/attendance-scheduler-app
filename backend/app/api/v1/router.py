@@ -12,9 +12,9 @@ from app.api.v1.endpoints import (
     flights,
     holidays,
     leaves,
+    pending_counts,
     reports,
     schedules,
-    self_arrange,
     shift_changes,
     time_clock,
     users,
@@ -37,5 +37,7 @@ api_router.include_router(
 )
 api_router.include_router(reports.router, prefix="/reports", tags=["reports"])
 api_router.include_router(shift_changes.router, prefix="/shift-changes", tags=["shift-changes"])
-api_router.include_router(self_arrange.router, prefix="/self-arrange", tags=["self-arrange"])
 api_router.include_router(compliance.router, prefix="/compliance", tags=["compliance"])
+api_router.include_router(
+    pending_counts.router, prefix="/pending-counts", tags=["pending-counts"]
+)

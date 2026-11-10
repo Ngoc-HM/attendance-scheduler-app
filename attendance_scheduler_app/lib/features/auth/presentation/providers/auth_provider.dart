@@ -7,10 +7,10 @@ import '../../../../i18n/locale_provider.dart';
 import '../../../attendance/presentation/providers/attendance_provider.dart';
 import '../../../attendance/presentation/providers/time_clock_provider.dart';
 import '../../../flights/presentation/providers/flights_provider.dart';
+import '../../../home/presentation/providers/pending_counts_provider.dart';
 import '../../../leaves/presentation/providers/leaves_provider.dart';
 import '../../../reports/presentation/providers/reports_provider.dart';
 import '../../../schedule/presentation/providers/schedule_provider.dart';
-import '../../../schedule/presentation/providers/self_arrange_provider.dart';
 import '../../../schedule/presentation/providers/shift_change_provider.dart';
 import '../../../users/presentation/providers/users_provider.dart';
 import '../../data/repositories/auth_repository_impl.dart';
@@ -204,13 +204,12 @@ void resetUserScopedProviders(Ref ref) {
     ..invalidate(leavesControllerProvider)
     ..invalidate(attendanceControllerProvider)
     ..invalidate(timeClockControllerProvider)
-    ..invalidate(selfArrangeControllerProvider)
-    ..invalidate(selfArrangeAdminControllerProvider)
     ..invalidate(scheduleControllerProvider)
     ..invalidate(shiftChangeControllerProvider)
     ..invalidate(reportsControllerProvider)
     ..invalidate(flightsControllerProvider)
-    ..invalidate(usersControllerProvider);
+    ..invalidate(usersControllerProvider)
+    ..invalidate(pendingCountsProvider);
 }
 
 final authControllerProvider = StateNotifierProvider<AuthController, AuthState>(

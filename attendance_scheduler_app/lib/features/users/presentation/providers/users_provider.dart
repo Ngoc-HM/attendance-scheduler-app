@@ -1,16 +1,22 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../auth/domain/entities/user.dart';
+import '../../../home/presentation/providers/pending_counts_provider.dart';
 import '../../data/user_management_datasource.dart';
 
 /// Holds the admin user list as an [AsyncValue] and exposes mutating actions
 /// (create / approve / update / delete) that refresh the list (F-01, F-03).
 class UsersController extends StateNotifier<AsyncValue<List<User>>> {
-  UsersController(this._ds) : super(const AsyncValue.loading()) {
+  UsersController(this._ds, {this.onDecided})
+      : super(const AsyncValue.loading()) {
     load();
   }
 
   final UserManagementDataSource _ds;
+
+  /// Runs after a change that can settle a pending account — approve, a
+  /// status change, a delete — so the nav badge drops at once.
+  final void Function()? onDecided;
 
   Future<void> load() async {
     // Guard against the autoDispose lifecycle: navigating away (or the page
@@ -44,6 +50,7 @@ class UsersController extends StateNotifier<AsyncValue<List<User>>> {
   /// Activates a pending account with the role the admin picked (F-03).
   Future<void> approve(int id, UserRole role) async {
     await _ds.approve(id, role: role.apiValue);
+    onDecided?.call();
     await load();
   }
 
@@ -51,6 +58,7 @@ class UsersController extends StateNotifier<AsyncValue<List<User>>> {
   /// become empty). Throws on hard errors (including last-admin lockout).
   Future<List<String>> setStatus(int id, String status) async {
     final result = await _ds.update(id, {'status': status});
+    onDecided?.call();
     await load();
     return result.warnings;
   }
@@ -75,7 +83,9 @@ class UsersController extends StateNotifier<AsyncValue<List<User>>> {
   /// would carry the deleted account's token and come back 401.
   Future<void> delete(int id, {bool reload = true}) async {
     await _ds.delete(id);
-    if (reload) await load();
+    if (!reload) return;
+    onDecided?.call();
+    await load();
   }
 }
 
@@ -84,5 +94,8 @@ class UsersController extends StateNotifier<AsyncValue<List<User>>> {
 /// hidden behind a stale cached list until a manual refresh (F-01).
 final usersControllerProvider =
     StateNotifierProvider.autoDispose<UsersController, AsyncValue<List<User>>>(
-      (ref) => UsersController(ref.watch(userManagementDataSourceProvider)),
+      (ref) => UsersController(
+        ref.watch(userManagementDataSourceProvider),
+        onDecided: () => refreshPendingCounts(ref),
+      ),
     );

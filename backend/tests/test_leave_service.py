@@ -697,15 +697,18 @@ def test_leave_spanning_two_months_updates_only_existing_schedule(client):
     """Review Focus 1: only July has a schedule; August is named, not created."""
     admin = _bearer(_token(client, "admin", "admin123"))
     users = _role_a_users(client, admin, "b4_span_a")
-    _generate(client, admin, 2039, 7)
+    schedule_id = _generate(client, admin, 2039, 7)
     july = [date(2039, 7, 30), date(2039, 7, 31)]
     # 30–31 July 2039 is a Sat+Sun, a preferred day-off pair (owner
-    # 2026-11-10): pick someone of the four who works at least one of them.
-    i, me = next(
-        (i, uid) for i, uid in enumerate(users, start=1)
-        if set(_planned(client, admin, uid, july).values()) != {"X"}
+    # 2026-11-10): whether the solver lets any of the four work it depends on
+    # who else is active in the shared test DB, so give one a working cell.
+    me = users[0]
+    res = client.post(
+        f"{V}/schedules/{schedule_id}/override", headers=admin,
+        json={"user_id": me, "work_date": "2039-07-31", "code": "A"},
     )
-    leave_id = _file_leave(client, f"b4_span_a{i}", date(2039, 7, 30), date(2039, 8, 1))
+    assert res.status_code == 200, res.text
+    leave_id = _file_leave(client, "b4_span_a1", date(2039, 7, 30), date(2039, 8, 1))
     expected = _after_approve(_planned(client, admin, me, july))
     assert "AL" in expected.values(), expected
 
@@ -951,13 +954,11 @@ def _long_text_cases():
     from app.models.attendance import AttendanceRecord
     from app.models.flight import Flight, FlightPreset
     from app.models.leave import LeaveRequest
-    from app.models.self_arrange_request import SelfArrangeRequest
     from app.models.shift_change_request import ShiftChangeRequest
     from app.models.user import User
     from app.schemas.attendance import AttendanceUpsert
     from app.schemas.flight import FlightPresetUpsert, FlightUpsert
     from app.schemas.leave import LeaveCreate
-    from app.schemas.self_arrange import SelfArrangeCreate
     from app.schemas.shift_change import ShiftChangeCreate
     from app.schemas.user import UserUpdate
 
@@ -976,13 +977,6 @@ def _long_text_cases():
             "post", "/shift-changes",
             {"work_date": "2061-05-04", "kind": "change_code", "requested_code": "X"},
             id="shift-change-note",
-        ),
-        pytest.param(
-            SelfArrangeRequest.__table__.c.note, SelfArrangeCreate, "note",
-            "post", "/self-arrange",
-            {"year": 2061, "month": 5,
-             "changes": [{"work_date": "2061-05-04", "code": "X"}]},
-            id="self-arrange-note",
         ),
         pytest.param(
             AttendanceRecord.__table__.c.note, AttendanceUpsert, "note",

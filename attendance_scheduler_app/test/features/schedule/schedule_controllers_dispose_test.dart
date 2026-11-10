@@ -11,11 +11,8 @@ import 'dart:core' as core;
 
 import 'package:attendance_scheduler_app/core/network/api_exception.dart';
 import 'package:attendance_scheduler_app/features/schedule/data/datasources/schedule_remote_datasource.dart';
-import 'package:attendance_scheduler_app/features/schedule/data/datasources/self_arrange_remote_datasource.dart';
 import 'package:attendance_scheduler_app/features/schedule/domain/entities/schedule_entities.dart';
-import 'package:attendance_scheduler_app/features/schedule/domain/entities/self_arrange_entities.dart';
 import 'package:attendance_scheduler_app/features/schedule/presentation/providers/schedule_provider.dart';
-import 'package:attendance_scheduler_app/features/schedule/presentation/providers/self_arrange_provider.dart';
 import 'package:attendance_scheduler_app/features/schedule/presentation/providers/shift_change_provider.dart';
 import 'package:attendance_scheduler_app/features/users/data/user_management_datasource.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -46,15 +43,6 @@ final _request = ShiftChangeRequest(
   status: 'approved',
   strictReview: false,
   warnings: const [],
-);
-
-const _batch = SelfArrangeBatch(
-  id: 1,
-  requesterId: 7,
-  year: 2026,
-  month: 11,
-  changes: [],
-  status: 'approved',
 );
 
 /// Every call is parked until the test completes [pending].
@@ -151,33 +139,6 @@ class _Users implements UserManagementDataSource {
   dynamic noSuchMethod(Invocation i) => super.noSuchMethod(i);
 }
 
-class _SelfArrangeDs implements SelfArrangeRemoteDataSource {
-  _SelfArrangeDs(this.gate);
-
-  final _Gate gate;
-
-  @override
-  Future<SelfArrangeBatch> create({
-    required int year,
-    required int month,
-    required List<SelfArrangeChange> changes,
-    String? note,
-  }) => gate.next();
-
-  @override
-  Future<List<SelfArrangeBatch>> list({
-    bool all = false,
-    bool pendingOnly = false,
-  }) => gate.next();
-
-  @override
-  Future<SelfArrangeBatch> decide({required int id, required String status}) =>
-      gate.next();
-
-  @override
-  dynamic noSuchMethod(Invocation i) => super.noSuchMethod(i);
-}
-
 void main() {
   test('ScheduleController: load/generate/override/publish/refreshViolations '
       'failing after dispose throw nothing', () async {
@@ -233,47 +194,5 @@ void main() {
     await expectLater(load, completes);
     await expectLater(submit, completes);
     await expectLater(decide, completes);
-  });
-
-  test('SelfArrangeController: load/submit after dispose throw nothing',
-      () async {
-    final gate = _Gate();
-    final ctrl = SelfArrangeController(_ScheduleDs(gate), _SelfArrangeDs(gate));
-
-    final load = ctrl.load(2026, 11, 7); // fetchSchedule fails → list()
-    ctrl.dispose();
-    await gate.failAll();
-    await expectLater(load, completes);
-
-    final ok = SelfArrangeController(
-      _ScheduleDs(gate)..ready = _schedule,
-      _SelfArrangeDs(gate),
-    );
-    final loading = ok.load(2026, 11, 7);
-    await pumpEventQueue();
-    gate.answer(const <SelfArrangeBatch>[]);
-    await loading;
-    ok.toggle(DateTime(2026, 11, 2));
-    final submit = ok.submit(2026, 11);
-    ok.dispose();
-    gate.answer(_batch); // create; the list reload is skipped once disposed
-
-    await expectLater(submit, completes);
-  });
-
-  test('SelfArrangeAdminController: load/decide after dispose throw nothing',
-      () async {
-    final gate = _Gate();
-    final ctrl = SelfArrangeAdminController(_SelfArrangeDs(gate));
-
-    final load = ctrl.load();
-    final decide = ctrl.decide(1, 'approved');
-    ctrl.dispose();
-    gate
-      ..answer(const <SelfArrangeBatch>[])
-      ..fail();
-
-    await expectLater(load, completes);
-    expect(await decide, isNull);
   });
 }

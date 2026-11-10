@@ -91,6 +91,9 @@ is not a perk and not a choice).
 
 ## Self-arrange (employee moves own days off)
 
+> Built as described, then the whole self-arrange feature was removed later
+> the same day (owner, decision #63). Kept here as the record of the plan.
+
 Blocks are gone, so the batch rule becomes:
 
 - the number of X in the month stays the same (move, never add or remove);

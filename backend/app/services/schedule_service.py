@@ -445,8 +445,7 @@ def _recheck_violations(db: Session, schedule: MonthlySchedule) -> list[Constrai
             user_id=a.user_id,
             rule="disabled_user_duty",
             # The rendered text starts with the day, like the staffing lines,
-            # so the text-only callers (shift change, leave, self-arrange)
-            # show it.
+            # so the text-only callers (shift change, leave) show it.
             message=f"{a.work_date}: disabled user still on duty ({a.code.value})",
             params={"code": a.code.value},
         )

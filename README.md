@@ -107,7 +107,7 @@ on-demand rule check (`GET /schedules/{id}/violations`) / publish, the monthly
 autorun (00:05 on the day after the leave window closes, day 21 by default,
 catching up on later days and at startup, and drafting a current month that
 has no schedule),
-leave + shift-change + self-arrange requests, leave decisions written straight
+leave + shift-change requests, leave decisions written straight
 into an already-generated schedule, annual-leave quota and remaining balance,
 holiday work earning a comp day for every role, attendance with sick A/D
 backfill and seeded actuals that follow every roster edit (hidden from

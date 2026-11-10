@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../home/presentation/providers/pending_counts_provider.dart';
 import '../../data/datasources/schedule_remote_datasource.dart';
 import '../../domain/entities/schedule_entities.dart';
 
@@ -43,9 +44,13 @@ class ShiftChangeState {
 }
 
 class ShiftChangeController extends StateNotifier<ShiftChangeState> {
-  ShiftChangeController(this._ds) : super(const ShiftChangeState());
+  ShiftChangeController(this._ds, {this.onDecided})
+      : super(const ShiftChangeState());
 
   final ScheduleRemoteDataSource _ds;
+
+  /// Runs after every successful decision (the nav badge refresh).
+  final void Function()? onDecided;
 
   Future<void> load({bool all = false}) async {
     state = state.copyWith(
@@ -95,6 +100,7 @@ class ShiftChangeController extends StateNotifier<ShiftChangeState> {
     state = state.copyWith(isMutating: true, clearError: true);
     try {
       final updated = await _ds.decideShiftChange(id: id, status: status);
+      onDecided?.call();
       if (!mounted) return updated;
       final newList = [
         for (final r in state.requests)
@@ -112,5 +118,8 @@ class ShiftChangeController extends StateNotifier<ShiftChangeState> {
 
 final shiftChangeControllerProvider =
     StateNotifierProvider<ShiftChangeController, ShiftChangeState>(
-  (ref) => ShiftChangeController(ref.watch(scheduleRemoteDataSourceProvider)),
+  (ref) => ShiftChangeController(
+    ref.watch(scheduleRemoteDataSourceProvider),
+    onDecided: () => refreshPendingCounts(ref),
+  ),
 );
