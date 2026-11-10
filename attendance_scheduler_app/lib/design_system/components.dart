@@ -68,6 +68,65 @@ class _DsGlassGlow extends StatelessWidget {
   }
 }
 
+/// The light on a glass pane's edge: a nearly clear outline, a bright glint
+/// running from the top-left corner along the top and left sides, a fainter
+/// one at the bottom-right, each with a soft halo.
+class _GlassEdgeLightPainter extends CustomPainter {
+  const _GlassEdgeLightPainter(this.radius);
+
+  final double radius;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final edge = RRect.fromRectAndRadius(
+      (Offset.zero & size).deflate(0.6),
+      Radius.circular(radius),
+    );
+    const light = DsColors.surface;
+    final glint = LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: [
+        light,
+        light.withValues(alpha: 0.42),
+        light.withValues(alpha: 0),
+        light.withValues(alpha: 0),
+        light.withValues(alpha: 0.5),
+      ],
+      stops: const [0, 0.2, 0.42, 0.74, 1],
+    ).createShader(Offset.zero & size);
+
+    // The clear outline, all the way round.
+    canvas.drawRRect(
+      edge,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1
+        ..color = light.withValues(alpha: 0.2),
+    );
+    // The halo of the glint, then the glint itself.
+    canvas.drawRRect(
+      edge,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 4
+        ..shader = glint
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5),
+    );
+    canvas.drawRRect(
+      edge,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.4
+        ..shader = glint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_GlassEdgeLightPainter oldDelegate) =>
+      oldDelegate.radius != radius;
+}
+
 class DsLiquidGlassSurface extends StatelessWidget {
   const DsLiquidGlassSurface({
     super.key,
@@ -77,6 +136,7 @@ class DsLiquidGlassSurface extends StatelessWidget {
     this.blur = 22,
     this.tint = DsColors.glassBase,
     this.uniformTint = false,
+    this.edgeLight = false,
   });
 
   final Widget child;
@@ -89,9 +149,23 @@ class DsLiquidGlassSurface extends StatelessWidget {
   /// a clearer pane for glass that sits on a photo (the login card).
   final bool uniformTint;
 
+  /// Replace the solid white border by a nearly clear edge that catches the
+  /// light: bright at the top-left corner, fading along the sides, with a
+  /// fainter glint at the bottom-right (the login card).
+  final bool edgeLight;
+
   @override
   Widget build(BuildContext context) {
     final radius = BorderRadius.circular(borderRadius);
+    final surface = _surface(radius);
+    if (!edgeLight) return surface;
+    return CustomPaint(
+      foregroundPainter: _GlassEdgeLightPainter(borderRadius),
+      child: surface,
+    );
+  }
+
+  Widget _surface(BorderRadius radius) {
     return DecoratedBox(
       decoration: BoxDecoration(
         borderRadius: radius,
@@ -112,7 +186,9 @@ class DsLiquidGlassSurface extends StatelessWidget {
             decoration: BoxDecoration(
               color: tint,
               borderRadius: radius,
-              border: Border.all(color: DsColors.glassBorder, width: 1.4),
+              border: edgeLight
+                  ? null
+                  : Border.all(color: DsColors.glassBorder, width: 1.4),
               gradient: uniformTint
                   ? null
                   : LinearGradient(
@@ -128,25 +204,26 @@ class DsLiquidGlassSurface extends StatelessWidget {
             ),
             child: Stack(
               children: [
-                Positioned(
-                  top: 0,
-                  left: 18,
-                  right: 18,
-                  child: IgnorePointer(
-                    child: Container(
-                      height: 1,
-                      decoration: const BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [
-                            Color(0x00FFFFFF),
-                            Color(0xFFFFFFFF),
-                            Color(0x00FFFFFF),
-                          ],
+                if (!edgeLight)
+                  Positioned(
+                    top: 0,
+                    left: 18,
+                    right: 18,
+                    child: IgnorePointer(
+                      child: Container(
+                        height: 1,
+                        decoration: const BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              Color(0x00FFFFFF),
+                              Color(0xFFFFFFFF),
+                              Color(0x00FFFFFF),
+                            ],
+                          ),
                         ),
                       ),
                     ),
                   ),
-                ),
                 Padding(padding: padding, child: child),
               ],
             ),
