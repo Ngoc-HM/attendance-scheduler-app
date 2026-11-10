@@ -158,26 +158,69 @@ class DsBrandLogo extends StatelessWidget {
     super.key,
     required this.height,
     this.markOnly = false,
+    this.onDark = false,
     this.semanticLabel,
   });
 
   static const logoAsset = 'assets/images/vietnam_airlines_logo.png';
   static const markAsset = 'assets/images/vietnam_airlines_mark.png';
 
+  /// Share of the full logo's width taken by the lotus (115 of 558 px).
+  static const _markShare = 115 / 558;
+
   final double height;
   final bool markOnly;
+
+  /// On a dark surface the teal wordmark turns white and the lotus stays
+  /// gold — the way the airline paints it on the fuselage.
+  final bool onDark;
   final String? semanticLabel;
 
   @override
   Widget build(BuildContext context) {
-    return Image.asset(
+    final logo = Image.asset(
       markOnly ? markAsset : logoAsset,
       height: height,
       fit: BoxFit.contain,
       filterQuality: FilterQuality.medium,
       semanticLabel: semanticLabel,
     );
+    if (!onDark || markOnly) return logo;
+    return Stack(
+      children: [
+        // The whole logo in white …
+        Image.asset(
+          logoAsset,
+          height: height,
+          fit: BoxFit.contain,
+          filterQuality: FilterQuality.medium,
+          color: DsColors.surface,
+          colorBlendMode: BlendMode.srcIn,
+          semanticLabel: semanticLabel,
+        ),
+        // … with the gold lotus drawn over its white copy.
+        Positioned.fill(
+          child: ClipRect(
+            clipper: const _LeftShareClipper(_markShare),
+            child: ExcludeSemantics(child: logo),
+          ),
+        ),
+      ],
+    );
   }
+}
+
+class _LeftShareClipper extends CustomClipper<Rect> {
+  const _LeftShareClipper(this.share);
+
+  final double share;
+
+  @override
+  Rect getClip(Size size) =>
+      Rect.fromLTWH(0, 0, size.width * share, size.height);
+
+  @override
+  bool shouldReclip(_LeftShareClipper oldClipper) => oldClipper.share != share;
 }
 
 class _DsSideNavigation extends StatelessWidget {
@@ -216,7 +259,9 @@ class _DsSideNavigation extends StatelessWidget {
         children: [
           Container(
             height: 72,
-            padding: EdgeInsets.symmetric(horizontal: extended ? DsSpacing.x5 : DsSpacing.x4),
+            padding: EdgeInsets.symmetric(
+              horizontal: extended ? DsSpacing.x5 : DsSpacing.x4,
+            ),
             decoration: const BoxDecoration(
               border: Border(bottom: BorderSide(color: DsColors.border)),
             ),
@@ -340,7 +385,9 @@ class _DsNavigationItem extends StatelessWidget {
         borderRadius: BorderRadius.circular(DsRadius.medium),
         child: Container(
           height: DsControlHeight.touch,
-          padding: EdgeInsets.symmetric(horizontal: extended ? DsSpacing.x3 : 0),
+          padding: EdgeInsets.symmetric(
+            horizontal: extended ? DsSpacing.x3 : 0,
+          ),
           decoration: BoxDecoration(
             border: selected
                 ? const Border(

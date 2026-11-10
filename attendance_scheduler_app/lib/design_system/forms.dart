@@ -246,11 +246,10 @@ class DsAuthPage extends StatelessWidget {
                         padding: EdgeInsets.zero,
                         borderRadius: DsRadius.xxLarge,
                         blur: 10,
-                        // Clear glass, like a pane on the photo (owner's
-                        // reference 2026-11-10): a light, even tint and a
-                        // soft blur. A third white is about as clear as it
-                        // gets while the dark text stays readable.
-                        tint: DsColors.surface.withValues(alpha: 0.32),
+                        // Clear, dark glass on the photo (owner's reference
+                        // 2026-11-10): a light navy tint and a soft blur.
+                        // Text that sits on the glass itself is white.
+                        tint: DsColors.textPrimary.withValues(alpha: 0.26),
                         uniformTint: true,
                         child: Padding(
                           padding: const EdgeInsets.all(DsSpacing.x8),
@@ -265,7 +264,10 @@ class DsAuthPage extends StatelessWidget {
                                   // Shrinks beside the selector when the card
                                   // is narrow.
                                   const Flexible(
-                                    child: DsBrandLogo(height: 30),
+                                    child: DsBrandLogo(
+                                      height: 30,
+                                      onDark: true,
+                                    ),
                                   ),
                                   const SizedBox(width: DsSpacing.x4),
                                   DsLanguageSelector(
@@ -277,19 +279,34 @@ class DsAuthPage extends StatelessWidget {
                               const SizedBox(height: DsSpacing.x6),
                               Text(
                                 title,
-                                style: Theme.of(
-                                  context,
-                                ).textTheme.headlineMedium,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .headlineMedium
+                                    ?.copyWith(color: DsColors.surface),
                               ),
                               const SizedBox(height: DsSpacing.x2),
                               Text(
                                 subtitle,
-                                style: Theme.of(context).textTheme.bodyMedium,
+                                style: Theme.of(context).textTheme.bodyMedium
+                                    ?.copyWith(
+                                      color: DsColors.surface.withValues(
+                                        alpha: 0.88,
+                                      ),
+                                    ),
                               ),
                               const SizedBox(height: DsSpacing.x8),
-                              form,
+                              Theme(data: _onGlassTheme(context), child: form),
                               const SizedBox(height: DsSpacing.x4),
-                              Center(child: footer),
+                              // The footer link is on the glass: white.
+                              Center(
+                                child: ColorFiltered(
+                                  colorFilter: const ColorFilter.mode(
+                                    DsColors.surface,
+                                    BlendMode.srcIn,
+                                  ),
+                                  child: footer,
+                                ),
+                              ),
                             ],
                           ),
                         ),
@@ -304,6 +321,35 @@ class DsAuthPage extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Theme for the login card's content on dark glass: field labels float
+/// INSIDE the white field (an outlined field's label straddles its border and
+/// would be half on the glass), and text buttons on the glass are white.
+ThemeData _onGlassTheme(BuildContext context) {
+  final theme = Theme.of(context);
+  const radius = BorderRadius.all(Radius.circular(DsRadius.medium));
+  UnderlineInputBorder border(Color color, [double width = 0]) =>
+      UnderlineInputBorder(
+        borderRadius: radius,
+        borderSide: width == 0
+            ? BorderSide.none
+            : BorderSide(color: color, width: width),
+      );
+  return theme.copyWith(
+    inputDecorationTheme: theme.inputDecorationTheme.copyWith(
+      contentPadding: const EdgeInsets.fromLTRB(14, 8, 14, 8),
+      border: border(DsColors.borderStrong),
+      enabledBorder: border(DsColors.borderStrong),
+      focusedBorder: border(DsColors.primary, 2),
+      errorBorder: border(DsColors.danger, 2),
+      focusedErrorBorder: border(DsColors.danger, 2),
+      errorStyle: const TextStyle(color: DsColors.surface),
+    ),
+    textButtonTheme: TextButtonThemeData(
+      style: TextButton.styleFrom(foregroundColor: DsColors.surface),
+    ),
+  );
 }
 
 class DsFormDialog extends StatelessWidget {
