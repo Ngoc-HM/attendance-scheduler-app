@@ -231,6 +231,11 @@ class DsAuthPage extends StatelessWidget {
             key: Key('login-photo'),
             image: AssetImage(photoAsset),
             fit: BoxFit.cover,
+            // Show more of the clouds below the aircraft than of the sky
+            // above it: that is where the card sits.
+            alignment: Alignment(0, 0.6),
+            // The photo is smaller than a desktop window: smooth upscaling.
+            filterQuality: FilterQuality.high,
             excludeFromSemantics: true,
           ),
           SafeArea(
@@ -241,7 +246,7 @@ class DsAuthPage extends StatelessWidget {
                 final wide = constraints.maxWidth >= DsBreakpoints.desktop;
                 return Align(
                   alignment: wide
-                      ? const Alignment(0.86, 0.68)
+                      ? const Alignment(0.86, 0.9)
                       : Alignment.center,
                   child: SingleChildScrollView(
                     padding: const EdgeInsets.all(DsSpacing.x6),
@@ -250,11 +255,13 @@ class DsAuthPage extends StatelessWidget {
                       child: DsLiquidGlassSurface(
                         padding: EdgeInsets.zero,
                         borderRadius: DsRadius.xxLarge,
-                        blur: 10,
+                        blur: 14,
                         // Clear, dark glass on the photo (owner's reference
-                        // 2026-11-10): a light navy tint and a soft blur.
-                        // Text that sits on the glass itself is white.
-                        tint: DsColors.textPrimary.withValues(alpha: 0.26),
+                        // 2026-11-10): a navy tint and a soft blur. Text
+                        // that sits on the glass itself is white, so the
+                        // tint is deep enough for it on a bright photo too
+                        // (the current one is mostly white clouds).
+                        tint: DsColors.textPrimary.withValues(alpha: 0.46),
                         uniformTint: true,
                         child: Padding(
                           padding: const EdgeInsets.all(DsSpacing.x10),
