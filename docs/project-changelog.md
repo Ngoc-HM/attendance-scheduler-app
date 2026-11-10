@@ -30,6 +30,10 @@
 - App icon (macOS icon set and Windows `.ico`): the lotus on a white tile,
   re-sharpened from the 115 px lotus in the received logo; a larger source
   logo would give a crisper icon.
+- Language: the app remembers the language it last showed on this device,
+  so the login screen opens in it after a restart or a logout instead of
+  falling back to English; each user's own preference is still applied at
+  login, and a user without one keeps the language shown (decision #61).
 
 ## 2026-11-10 — End-to-end run follow-ups
 

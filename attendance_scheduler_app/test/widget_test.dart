@@ -4,6 +4,7 @@ import 'package:attendance_scheduler_app/app.dart';
 import 'package:attendance_scheduler_app/core/storage/token_storage.dart';
 import 'package:attendance_scheduler_app/design_system/design_system.dart';
 import 'package:attendance_scheduler_app/i18n/app_localizations.dart';
+import 'package:attendance_scheduler_app/i18n/locale_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -53,6 +54,24 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   }
+
+  testWidgets('login opens in the language the device last showed', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          tokenStorageProvider.overrideWithValue(_EmptyTokenStorage()),
+          initialLanguageProvider.overrideWithValue('vi'),
+        ],
+        child: const AttendanceSchedulerApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Đăng nhập'), findsNWidgets(2));
+    expect(find.text('Log in'), findsNothing);
+  });
 
   testWidgets('English is default and Vietnamese can be selected', (
     WidgetTester tester,

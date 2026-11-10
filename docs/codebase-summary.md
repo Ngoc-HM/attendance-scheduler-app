@@ -92,7 +92,7 @@ i18n/         custom AppLocalizations (en/vi, graceful text(key) fallback)
 ```
 `auth` is the canonical clean-architecture template; the business features
 mirror it, feeding live provider state into the `design_system` views.
-Tests: `test/` — 166 tests including 3 goldens (`test/goldens/`, tagged
+Tests: `test/` — 173 tests including 3 goldens (`test/goldens/`, tagged
 `golden` in `dart_test.yaml`; run them on macOS with `flutter test --tags
 golden`, everything else with `--exclude-tags golden`); among them
 `i18n_keys_used_exist_test.dart` (every key used in `lib/` exists).
