@@ -22,7 +22,8 @@ class ApiException implements Exception {
   }
 
   /// The backend `detail` of an error body, or null. A string detail is
-  /// returned as is; FastAPI's 422 list is flattened to its `msg`s; a body
+  /// returned as is; FastAPI's 422 list is flattened to its `msg`s; an
+  /// import rejection (`{message, errors}`) lists its first errors; a body
   /// fetched as bytes (file downloads) is decoded as UTF-8 JSON first.
   static String? detailOf(Object? data) {
     var body = data;
@@ -45,7 +46,27 @@ class ApiException implements Exception {
       ];
       return messages.isEmpty ? null : messages.join('; ');
     }
+    if (detail is Map) return _messageWithErrors(detail);
     return detail?.toString();
+  }
+
+  /// Most row errors shown from one rejected import; the rest are counted.
+  static const _maxListedErrors = 5;
+
+  /// `{message, errors: [...]}` (a rejected Excel import) as one sentence:
+  /// the message, then the first row/cell errors.
+  static String? _messageWithErrors(Map<dynamic, dynamic> detail) {
+    final message = detail['message']?.toString();
+    final errors = [
+      if (detail['errors'] is List)
+        for (final item in detail['errors'] as List) item.toString(),
+    ];
+    if (errors.isEmpty) return message;
+    final listed = errors.take(_maxListedErrors).join('; ');
+    final more = errors.length > _maxListedErrors
+        ? ' (+${errors.length - _maxListedErrors})'
+        : '';
+    return [?message, '$listed$more'].join(' ');
   }
 
   @override

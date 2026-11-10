@@ -4,17 +4,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/constants/api_endpoints.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../../core/network/api_exception.dart';
+import '../../../../core/utils/file_download.dart';
 
 final reportsDataSourceProvider = Provider<ReportsRemoteDataSource>(
   (ref) => ReportsRemoteDataSource(ref.watch(dioProvider)),
 );
 
 /// Result from a report download — raw bytes + suggested filename.
-class ReportDownload {
-  const ReportDownload({required this.bytes, required this.filename});
-  final List<int> bytes;
-  final String filename;
-}
+typedef ReportDownload = FileDownload;
 
 /// Remote calls for Reports (F-15).
 ///
@@ -36,7 +33,7 @@ class ReportsRemoteDataSource {
       );
       return ReportDownload(
         bytes: response.data as List<int>,
-        filename: _extractFilename(response, 'attendance_${year}_${_two(month)}.$format'),
+        filename: filenameFromContentDisposition(response, 'attendance_${year}_${_two(month)}.$format'),
       );
     } on DioException catch (e) {
       // The error body arrives as bytes (responseType.bytes); fromDio
@@ -55,7 +52,7 @@ class ReportsRemoteDataSource {
       );
       return ReportDownload(
         bytes: response.data as List<int>,
-        filename: _extractFilename(response, 'attendance_$year.$format'),
+        filename: filenameFromContentDisposition(response, 'attendance_$year.$format'),
       );
     } on DioException catch (e) {
       // The error body arrives as bytes (responseType.bytes); fromDio
@@ -65,13 +62,6 @@ class ReportsRemoteDataSource {
   }
 
   // ---------------------------------------------------------------------------
-
-  /// Parse Content-Disposition: attachment; filename="foo.csv" → "foo.csv".
-  static String _extractFilename(Response<dynamic> response, String fallback) {
-    final header = response.headers.value('content-disposition') ?? '';
-    final match = RegExp(r'filename="?([^";]+)"?').firstMatch(header);
-    return match?.group(1) ?? fallback;
-  }
 
   static String _two(int v) => v.toString().padLeft(2, '0');
 }

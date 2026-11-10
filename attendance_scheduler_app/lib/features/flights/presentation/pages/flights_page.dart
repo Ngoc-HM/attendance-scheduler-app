@@ -16,7 +16,8 @@ import '../widgets/month_batch_dialog.dart';
 /// Flights page (F-04) — live data from GET /flights/days.
 ///
 /// Admin primary action: "Add flight" opens the month-batch preset grid.
-/// Admin secondary actions: import an .xlsx flight plan, manage presets.
+/// Admin secondary actions: download the month's .xlsx template, import a
+/// filled .xlsx flight plan, manage presets.
 /// All users: month navigation + table view.
 class FlightsPage extends ConsumerWidget {
   const FlightsPage({super.key});
@@ -68,8 +69,54 @@ class FlightsPage extends ConsumerWidget {
             ? () => context.push(AppRoute.flightPresets)
             : null,
         onImportExcel: isAdmin ? () => _importExcel(context, ref, l) : null,
+        onDownloadTemplate:
+            isAdmin ? () => _downloadTemplate(context, ref, l) : null,
       ),
     );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Flight-plan template (GET /flights/template)
+  // ---------------------------------------------------------------------------
+
+  /// Download the shown month's blank plan to the downloads folder. With no
+  /// active preset the backend would answer 422, so once presets are loaded
+  /// that case gets the same hint as "Add flight" without a request.
+  Future<void> _downloadTemplate(
+    BuildContext context,
+    WidgetRef ref,
+    AppLocalizations l,
+  ) async {
+    final presets = ref.read(flightPresetsControllerProvider).valueOrNull;
+    if (presets != null && !presets.any((p) => p.isActive)) {
+      DsFeedback.show(context, l.text('noPresetsMessage'), tone: DsTone.primary);
+      return;
+    }
+
+    try {
+      final path = await ref
+          .read(flightsControllerProvider.notifier)
+          .downloadTemplate();
+      if (context.mounted) {
+        DsFeedback.show(
+          context,
+          '${l.text('flightTemplateSaved')} $path',
+          tone: DsTone.success,
+        );
+      }
+    } on ApiException catch (e) {
+      if (context.mounted) {
+        DsFeedback.show(context, apiErrorMessage(l, e), tone: DsTone.danger);
+      }
+    } catch (_) {
+      if (context.mounted) {
+        DsFeedback.show(
+          context,
+          l.text('flightTemplateFailed'),
+          tone: DsTone.danger,
+        );
+      }
+    }
   }
 
   // ---------------------------------------------------------------------------

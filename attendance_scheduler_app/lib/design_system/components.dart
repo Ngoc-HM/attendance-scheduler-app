@@ -338,10 +338,20 @@ class DsPageHeader extends StatelessWidget {
             Expanded(child: titleBlock),
             if (actions.isNotEmpty) ...[
               const SizedBox(width: DsSpacing.x6),
-              Wrap(
-                spacing: DsSpacing.x2,
-                runSpacing: DsSpacing.x2,
-                children: actions,
+              // A Wrap in a Row gets unbounded width and never wraps: with
+              // many actions it squeezed the title to nothing and overflowed.
+              // Capped, the actions wrap onto a second (right-aligned) line
+              // and the title keeps at least a third of the header.
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: constraints.maxWidth * 2 / 3,
+                ),
+                child: Wrap(
+                  alignment: WrapAlignment.end,
+                  spacing: DsSpacing.x2,
+                  runSpacing: DsSpacing.x2,
+                  children: actions,
+                ),
               ),
             ],
           ],

@@ -1,6 +1,7 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/utils/file_download.dart';
 import '../../../../design_system/view_models.dart';
 import '../../data/datasources/flights_remote_datasource.dart';
 import '../../data/models/flight_day_model.dart';
@@ -34,8 +35,10 @@ class FlightsState {
 }
 
 class FlightsController extends StateNotifier<FlightsState> {
-  FlightsController(this._ds)
-      : super(
+  /// [saveFile] defaults to the system downloads folder; tests pass a fake.
+  FlightsController(this._ds, {DownloadedFileSaver? saveFile})
+      : _saveFile = saveFile ?? saveToDownloads,
+        super(
           FlightsState(
             month: DateTime(DateTime.now().year, DateTime.now().month),
             rows: const AsyncValue.loading(),
@@ -45,6 +48,7 @@ class FlightsController extends StateNotifier<FlightsState> {
   }
 
   final FlightsRemoteDataSource _ds;
+  final DownloadedFileSaver _saveFile;
 
   /// Nothing is stored once the controller is disposed (logout invalidates
   /// this provider, possibly mid-request); a response for a month the page
@@ -91,10 +95,30 @@ class FlightsController extends StateNotifier<FlightsState> {
 
   /// Admin: import from an .xlsx [file] then reload. Returns how many flights
   /// the backend created from the sheet (for the success toast).
+  ///
+  /// A filled template covers one month: when every imported flight falls in
+  /// a single month other than the one shown, the page switches to it so the
+  /// admin sees what was imported. Flights spanning several months leave the
+  /// page where it is.
   Future<int> importExcel(PlatformFile file) async {
     final flights = await _ds.importExcel(file);
+    if (!mounted) return flights.length;
+    final months = {
+      for (final f in flights) DateTime(f.day.year, f.day.month),
+    };
+    if (months.length == 1 && months.single != state.month) {
+      state = state.copyWith(month: months.single);
+    }
     await load();
     return flights.length;
+  }
+
+  /// Admin: download the blank flight-plan template for the month shown,
+  /// save it (downloads folder by default) and return the saved path.
+  Future<String> downloadTemplate() async {
+    final month = state.month;
+    final download = await _ds.downloadTemplate(month.year, month.month);
+    return _saveFile(download.bytes, download.filename);
   }
 
   /// Admin: apply a batch of day→presets changes (which may span several

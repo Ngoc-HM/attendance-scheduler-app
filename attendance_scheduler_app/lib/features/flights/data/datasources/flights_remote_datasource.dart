@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/constants/api_endpoints.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../../core/network/api_exception.dart';
+import '../../../../core/utils/file_download.dart';
 import '../models/flight_day_model.dart';
 import '../models/flight_preset_model.dart';
 
@@ -80,6 +81,30 @@ class FlightsRemoteDataSource {
       // `fromDio` keeps the backend's (localized) `detail` — e.g. "file too
       // large" or a bad sheet layout — instead of Dio's generic message.
       throw ApiException.fromDio(e, 'Excel import failed');
+    }
+  }
+
+  /// GET /flights/template?year=&month= — the month's blank flight plan
+  /// (.xlsx) for staff to fill in and upload through [importExcel]. Admin only;
+  /// 422 with a translated detail when no active flight preset exists.
+  Future<FileDownload> downloadTemplate(int year, int month) async {
+    try {
+      final response = await _dio.get(
+        ApiEndpoints.flightsTemplate,
+        queryParameters: {'year': year, 'month': month},
+        options: Options(responseType: ResponseType.bytes),
+      );
+      return FileDownload(
+        bytes: response.data as List<int>,
+        filename: filenameFromContentDisposition(
+          response,
+          'flight-plan-$year-${month.toString().padLeft(2, '0')}.xlsx',
+        ),
+      );
+    } on DioException catch (e) {
+      // The error body arrives as bytes (responseType.bytes); fromDio
+      // decodes it so the user sees the backend's detail.
+      throw ApiException.fromDio(e, 'Failed to download the flight template');
     }
   }
 
