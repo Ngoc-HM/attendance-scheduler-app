@@ -33,8 +33,8 @@ void main() {
     expect(find.text('Username'), findsOneWidget);
   });
 
-  // Login shows the customer's logo; the aircraft drawing sits in the context
-  // panel, which only wide windows have.
+  // Login shows the customer's logo; the aircraft photo fills the context
+  // panel, which only wide windows have, and carries no text.
   for (final (width, hasPanel) in [(1280.0, true), (800.0, false)]) {
     testWidgets('login shows the logo at width $width', (tester) async {
       await tester.binding.setSurfaceSize(Size(width, 800));
@@ -45,9 +45,11 @@ void main() {
 
       expect(find.byType(DsBrandLogo), findsOneWidget);
       expect(
-        find.byType(DsAircraftLineArt),
+        find.byKey(const Key('login-photo')),
         hasPanel ? findsOneWidget : findsNothing,
       );
+      expect(find.text('Roster FRA'), findsNothing);
+      expect(find.text('Automatic monthly roster'), findsNothing);
       expect(tester.takeException(), isNull);
     });
   }
@@ -86,7 +88,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(_contentLabel(tester), 'Third');
 
-    await tester.pumpWidget(const _NavigationHarness(index: 1, label: 'Second'));
+    await tester.pumpWidget(
+      const _NavigationHarness(index: 1, label: 'Second'),
+    );
     await tester.pumpAndSettle();
     expect(_contentLabel(tester), 'Second');
   });
@@ -103,7 +107,9 @@ void main() {
       await tester.binding.setSurfaceSize(Size(width, 800));
       addTearDown(() => tester.binding.setSurfaceSize(null));
 
-      await tester.pumpWidget(const _NavigationHarness(index: 0, label: 'First'));
+      await tester.pumpWidget(
+        const _NavigationHarness(index: 0, label: 'First'),
+      );
       await tester.pumpAndSettle();
 
       final logo = tester.widget<Image>(

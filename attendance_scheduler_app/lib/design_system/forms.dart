@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../i18n/app_localizations.dart';
-import 'aircraft_line_art.dart';
 import 'components.dart';
 import 'navigation.dart';
 import 'tokens.dart';
@@ -206,6 +204,9 @@ class DsAuthPage extends StatelessWidget {
     required this.onLanguageChanged,
   });
 
+  /// Photo in the context panel of wide windows.
+  static const photoAsset = 'assets/images/login_aircraft.jpg';
+
   final String title;
   final String subtitle;
   final Widget form;
@@ -223,7 +224,7 @@ class DsAuthPage extends StatelessWidget {
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(DsSpacing.x6),
               child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 1040),
+                constraints: const BoxConstraints(maxWidth: 1120),
                 child: LayoutBuilder(
                   builder: (context, constraints) {
                     final showContext =
@@ -236,9 +237,14 @@ class DsAuthPage extends StatelessWidget {
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
+                            // 3 : 2 keeps the whole aircraft in the photo.
                             if (showContext)
-                              const Expanded(child: _DsAuthContextPanel()),
+                              const Expanded(
+                                flex: 3,
+                                child: _DsAuthContextPanel(),
+                              ),
                             Expanded(
+                              flex: 2,
                               child: Padding(
                                 padding: const EdgeInsets.all(DsSpacing.x8),
                                 child: ConstrainedBox(
@@ -251,9 +257,15 @@ class DsAuthPage extends StatelessWidget {
                                         CrossAxisAlignment.start,
                                     children: [
                                       Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.spaceBetween,
                                         children: [
-                                          const DsBrandLogo(height: 30),
-                                          const Spacer(),
+                                          // Shrinks beside the selector when
+                                          // the form column is narrow.
+                                          const Flexible(
+                                            child: DsBrandLogo(height: 30),
+                                          ),
+                                          const SizedBox(width: DsSpacing.x4),
                                           DsLanguageSelector(
                                             languageCode: languageCode,
                                             onChanged: onLanguageChanged,
@@ -298,91 +310,24 @@ class DsAuthPage extends StatelessWidget {
   }
 }
 
+/// Login context panel (wide windows): a full-bleed photo of the customer's
+/// aircraft and no text (owner request 2026-11-10). The photo is positioned,
+/// so it never adds to the card's height — the form decides it.
 class _DsAuthContextPanel extends StatelessWidget {
   const _DsAuthContextPanel();
 
   @override
   Widget build(BuildContext context) {
-    final l = AppLocalizations.of(context);
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            DsColors.primarySoft.withValues(alpha: 0.88),
-            DsColors.surface.withValues(alpha: 0.36),
-          ],
-        ),
-        border: const Border(right: BorderSide(color: DsColors.glassBorder)),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(DsSpacing.x8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  l.productName,
-                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                    color: DsColors.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: DsSpacing.x3),
-                Text(
-                  l.text('authPanelSubtitle'),
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: DsColors.textSecondary,
-                  ),
-                ),
-                const SizedBox(height: DsSpacing.x8),
-                _DsFeatureLine(
-                  icon: Icons.auto_awesome_outlined,
-                  label: l.text('authFeatureSchedule'),
-                ),
-                const SizedBox(height: DsSpacing.x4),
-                _DsFeatureLine(
-                  icon: Icons.balance_outlined,
-                  label: l.text('authFeatureBalance'),
-                ),
-                const SizedBox(height: DsSpacing.x4),
-                _DsFeatureLine(
-                  icon: Icons.fact_check_outlined,
-                  label: l.text('authFeatureAttendance'),
-                ),
-              ],
-            ),
-            const Padding(
-              padding: EdgeInsets.only(top: DsSpacing.x8),
-              child: DsAircraftLineArt(),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _DsFeatureLine extends StatelessWidget {
-  const _DsFeatureLine({required this.icon, required this.label});
-
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
+    return const Stack(
       children: [
-        Icon(icon, color: DsColors.primary, size: 20),
-        const SizedBox(width: DsSpacing.x3),
-        Text(
-          label,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            color: DsColors.textPrimary,
-            fontWeight: FontWeight.w600,
+        Positioned.fill(
+          child: Image(
+            key: Key('login-photo'),
+            image: AssetImage(DsAuthPage.photoAsset),
+            fit: BoxFit.cover,
+            // The aircraft sits right of the photo's centre.
+            alignment: Alignment(0.2, 0),
+            excludeFromSemantics: true,
           ),
         ),
       ],
