@@ -22,11 +22,11 @@
 - App shell header: the customer's logo (Vietnam Airlines) replaces the plane
   tile and the product name — full wordmark on the wide rail and in the phone
   app bar, the lotus alone on the collapsed rail.
-- Login page: the logo replaces the plane tile above the form. The context
-  panel (wide windows) is a full-bleed photo of the customer's aircraft
-  (`assets/images/login_aircraft.jpg`) with no text: the product name, the
-  subtitle and the three feature lines are gone (owner). The panel takes 3/5
-  of the card so the whole aircraft stays in view.
+- Login page: the photo of the customer's aircraft
+  (`assets/images/login_aircraft.jpg`) fills the window and the form sits on
+  it in one frosted-glass card with the logo — lower right on wide windows,
+  centred on narrow ones. The product name, the subtitle and the three
+  feature lines are gone (owner).
 - App icon (macOS icon set and Windows `.ico`): the lotus on a white tile,
   re-sharpened from the 115 px lotus in the received logo; a larger source
   logo would give a crisper icon.

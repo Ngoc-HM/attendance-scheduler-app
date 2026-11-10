@@ -204,7 +204,7 @@ class DsAuthPage extends StatelessWidget {
     required this.onLanguageChanged,
   });
 
-  /// Photo in the context panel of wide windows.
+  /// Full-window background photo of the customer's aircraft.
   static const photoAsset = 'assets/images/login_aircraft.jpg';
 
   final String title;
@@ -217,118 +217,91 @@ class DsAuthPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: DsLiquidGlassBackdrop(
-        child: SafeArea(
-          child: Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(DsSpacing.x6),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 1120),
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    final showContext =
-                        constraints.maxWidth >= DsBreakpoints.desktop;
-                    return DsLiquidGlassSurface(
-                      padding: EdgeInsets.zero,
-                      borderRadius: DsRadius.xxLarge,
-                      tint: DsColors.surface.withValues(alpha: 0.62),
-                      child: IntrinsicHeight(
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            // 3 : 2 keeps the whole aircraft in the photo.
-                            if (showContext)
-                              const Expanded(
-                                flex: 3,
-                                child: _DsAuthContextPanel(),
-                              ),
-                            Expanded(
-                              flex: 2,
-                              child: Padding(
-                                padding: const EdgeInsets.all(DsSpacing.x8),
-                                child: ConstrainedBox(
-                                  constraints: const BoxConstraints(
-                                    maxWidth: 420,
-                                  ),
-                                  child: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.spaceBetween,
-                                        children: [
-                                          // Shrinks beside the selector when
-                                          // the form column is narrow.
-                                          const Flexible(
-                                            child: DsBrandLogo(height: 30),
-                                          ),
-                                          const SizedBox(width: DsSpacing.x4),
-                                          DsLanguageSelector(
-                                            languageCode: languageCode,
-                                            onChanged: onLanguageChanged,
-                                          ),
-                                        ],
-                                      ),
-                                      const SizedBox(height: DsSpacing.x6),
-                                      Text(
-                                        title,
-                                        style: Theme.of(
-                                          context,
-                                        ).textTheme.headlineMedium,
-                                      ),
-                                      const SizedBox(height: DsSpacing.x2),
-                                      Text(
-                                        subtitle,
-                                        style: Theme.of(
-                                          context,
-                                        ).textTheme.bodyMedium,
-                                      ),
-                                      const SizedBox(height: DsSpacing.x8),
-                                      form,
-                                      const SizedBox(height: DsSpacing.x4),
-                                      Center(child: footer),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Login context panel (wide windows): a full-bleed photo of the customer's
-/// aircraft and no text (owner request 2026-11-10). The photo is positioned,
-/// so it never adds to the card's height — the form decides it.
-class _DsAuthContextPanel extends StatelessWidget {
-  const _DsAuthContextPanel();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Stack(
-      children: [
-        Positioned.fill(
-          child: Image(
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          // The photo fills the window (owner 2026-11-10); the form sits on
+          // it in a frosted-glass card.
+          const Image(
             key: Key('login-photo'),
-            image: AssetImage(DsAuthPage.photoAsset),
+            image: AssetImage(photoAsset),
             fit: BoxFit.cover,
             excludeFromSemantics: true,
           ),
-        ),
-      ],
+          SafeArea(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                // Wide windows: lower right, the part of the photo the
+                // aircraft leaves free. Narrow windows: centred.
+                final wide = constraints.maxWidth >= DsBreakpoints.desktop;
+                return Align(
+                  alignment: wide
+                      ? const Alignment(0.94, 0.86)
+                      : Alignment.center,
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(DsSpacing.x6),
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 440),
+                      child: DsLiquidGlassSurface(
+                        padding: EdgeInsets.zero,
+                        borderRadius: DsRadius.xxLarge,
+                        blur: 24,
+                        tint: DsColors.surface.withValues(alpha: 0.62),
+                        // The photo is dark: a light veil keeps the form's
+                        // text readable through the glass.
+                        child: ColoredBox(
+                          color: DsColors.surface.withValues(alpha: 0.4),
+                          child: Padding(
+                            padding: const EdgeInsets.all(DsSpacing.x8),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    // Shrinks beside the selector when the card
+                                    // is narrow.
+                                    const Flexible(
+                                      child: DsBrandLogo(height: 30),
+                                    ),
+                                    const SizedBox(width: DsSpacing.x4),
+                                    DsLanguageSelector(
+                                      languageCode: languageCode,
+                                      onChanged: onLanguageChanged,
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: DsSpacing.x6),
+                                Text(
+                                  title,
+                                  style: Theme.of(
+                                    context,
+                                  ).textTheme.headlineMedium,
+                                ),
+                                const SizedBox(height: DsSpacing.x2),
+                                Text(
+                                  subtitle,
+                                  style: Theme.of(context).textTheme.bodyMedium,
+                                ),
+                                const SizedBox(height: DsSpacing.x8),
+                                form,
+                                const SizedBox(height: DsSpacing.x4),
+                                Center(child: footer),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

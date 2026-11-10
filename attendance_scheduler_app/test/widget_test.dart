@@ -34,10 +34,12 @@ void main() {
     expect(find.text('Username'), findsOneWidget);
   });
 
-  // Login shows the customer's logo; the aircraft photo fills the context
-  // panel, which only wide windows have, and carries no text.
-  for (final (width, hasPanel) in [(1280.0, true), (800.0, false)]) {
-    testWidgets('login shows the logo at width $width', (tester) async {
+  // Login: the aircraft photo fills the window at every width and the form
+  // sits on it in one glass card with the customer's logo and no other text.
+  for (final width in [1280.0, 800.0]) {
+    testWidgets('login shows the photo and the logo at width $width', (
+      tester,
+    ) async {
       await tester.binding.setSurfaceSize(Size(width, 800));
       addTearDown(() => tester.binding.setSurfaceSize(null));
 
@@ -45,12 +47,9 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byType(DsBrandLogo), findsOneWidget);
-      expect(
-        find.byKey(const Key('login-photo')),
-        hasPanel ? findsOneWidget : findsNothing,
-      );
+      final photo = tester.getSize(find.byKey(const Key('login-photo')));
+      expect(photo, Size(width, 800));
       expect(find.text('Roster FRA'), findsNothing);
-      expect(find.text('Automatic monthly roster'), findsNothing);
       expect(tester.takeException(), isNull);
     });
   }
