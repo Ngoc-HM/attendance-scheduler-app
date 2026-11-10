@@ -33,6 +33,25 @@ void main() {
     expect(find.text('Username'), findsOneWidget);
   });
 
+  // Login shows the customer's logo; the aircraft drawing sits in the context
+  // panel, which only wide windows have.
+  for (final (width, hasPanel) in [(1280.0, true), (800.0, false)]) {
+    testWidgets('login shows the logo at width $width', (tester) async {
+      await tester.binding.setSurfaceSize(Size(width, 800));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(_signedOutApp());
+      await tester.pumpAndSettle();
+
+      expect(find.byType(DsBrandLogo), findsOneWidget);
+      expect(
+        find.byType(DsAircraftLineArt),
+        hasPanel ? findsOneWidget : findsNothing,
+      );
+      expect(tester.takeException(), isNull);
+    });
+  }
+
   testWidgets('English is default and Vietnamese can be selected', (
     WidgetTester tester,
   ) async {

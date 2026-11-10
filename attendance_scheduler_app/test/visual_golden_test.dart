@@ -83,6 +83,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    await _decodeImages(tester);
 
     await expectLater(
       find.byKey(const Key('login-golden')),

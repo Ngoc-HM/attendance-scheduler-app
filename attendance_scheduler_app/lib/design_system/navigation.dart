@@ -149,29 +149,6 @@ class _DsTabPageBackground extends StatelessWidget {
   }
 }
 
-class DsBrandMark extends StatelessWidget {
-  const DsBrandMark({super.key, required this.size});
-
-  final double size;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        color: DsColors.primary,
-        borderRadius: BorderRadius.circular(DsRadius.medium),
-      ),
-      child: Icon(
-        Icons.flight_takeoff_outlined,
-        color: Colors.white,
-        size: size * 0.55,
-      ),
-    );
-  }
-}
-
 /// The customer's logo in the app shell header (owner request 2026-11-10):
 /// the Vietnam Airlines wordmark, or only its lotus where the header is
 /// narrow. Scales down to the width it is given.
