@@ -97,7 +97,11 @@ class DsLoginView extends StatelessWidget {
           ],
         ),
       ),
-      footer: DsTextAction(label: registerLabel, onPressed: onRegister),
+      footer: DsTextAction(
+        onDark: true,
+        label: registerLabel,
+        onPressed: onRegister,
+      ),
     );
   }
 }
@@ -206,7 +210,7 @@ class DsRegisterView extends StatelessWidget {
           ],
         ),
       ),
-      footer: DsTextAction(label: backLabel, onPressed: onBack),
+      footer: DsTextAction(onDark: true, label: backLabel, onPressed: onBack),
     );
   }
 }
@@ -228,7 +232,8 @@ class DsScheduleView extends StatelessWidget {
 
   final DateTime month;
   final List<DsRosterRowData> rows;
-  final Map<int, String> flightLabels; // day-of-month → FLT codes for the roster
+  final Map<int, String>
+  flightLabels; // day-of-month → FLT codes for the roster
   final VoidCallback onPreviousMonth;
   final VoidCallback onNextMonth;
 
@@ -385,7 +390,8 @@ class _DsRosterTable extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final n = rows.length;
-        const hPad = DsSpacing.x3 * 2; // each row's horizontal padding (x3 both sides)
+        const hPad =
+            DsSpacing.x3 * 2; // each row's horizontal padding (x3 both sides)
         final avail =
             constraints.maxWidth - _dayColW - _wdColW - _fltColW - hPad;
         final fits = n == 0 || n * _personMinW <= avail;
@@ -419,77 +425,93 @@ class _DsRosterTable extends StatelessWidget {
   }
 
   Widget _headerRow(AppLocalizations l, double personW) => Container(
-        color: DsColors.surfaceSubtle,
-        padding: const EdgeInsets.symmetric(
-          horizontal: DsSpacing.x3,
-          vertical: DsSpacing.x2,
+    color: DsColors.surfaceSubtle,
+    padding: const EdgeInsets.symmetric(
+      horizontal: DsSpacing.x3,
+      vertical: DsSpacing.x2,
+    ),
+    child: Row(
+      children: [
+        SizedBox(
+          width: _dayColW,
+          child: Text(
+            l.text('columnDay'),
+            textAlign: TextAlign.center,
+            style: DsType.tableHeader,
+          ),
         ),
-        child: Row(
-          children: [
-            SizedBox(
-              width: _dayColW,
-              child: Text(l.text('columnDay'),
-                  textAlign: TextAlign.center, style: DsType.tableHeader),
-            ),
-            SizedBox(
-              width: _wdColW,
-              child: Text(l.text('columnWeekday'),
-                  textAlign: TextAlign.center, style: DsType.tableHeader),
-            ),
-            const SizedBox(
-              width: _fltColW,
-              child: Text('FLT',
-                  textAlign: TextAlign.center, style: DsType.tableHeader),
-            ),
-            for (final row in rows)
-              SizedBox(
-                width: personW,
-                child: Text(
-                  row.name,
-                  textAlign: TextAlign.center,
-                  overflow: TextOverflow.ellipsis,
-                  maxLines: 1,
-                  style: const TextStyle(
-                    fontSize: DsFontSize.footnote,
-                    fontWeight: FontWeight.w700,
-                    color: DsColors.textPrimary,
-                  ),
-                ),
+        SizedBox(
+          width: _wdColW,
+          child: Text(
+            l.text('columnWeekday'),
+            textAlign: TextAlign.center,
+            style: DsType.tableHeader,
+          ),
+        ),
+        const SizedBox(
+          width: _fltColW,
+          child: Text(
+            'FLT',
+            textAlign: TextAlign.center,
+            style: DsType.tableHeader,
+          ),
+        ),
+        for (final row in rows)
+          SizedBox(
+            width: personW,
+            child: Text(
+              row.name,
+              textAlign: TextAlign.center,
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
+              style: const TextStyle(
+                fontSize: DsFontSize.footnote,
+                fontWeight: FontWeight.w700,
+                color: DsColors.textPrimary,
               ),
-          ],
-        ),
-      );
+            ),
+          ),
+      ],
+    ),
+  );
 
   Widget _dayRow(AppLocalizations l, int i, double personW) {
     final date = DateTime(month.year, month.month, i + 1);
-    final weekend = date.weekday == DateTime.saturday ||
-        date.weekday == DateTime.sunday;
+    final weekend =
+        date.weekday == DateTime.saturday || date.weekday == DateTime.sunday;
     final dayColor = weekend ? DsColors.primary : DsColors.textPrimary;
     // Weekend rows get a soft background tint so Sat/Sun stand out at a
     // glance (owner 2026-07-09) — the roster is transposed: days are rows.
     return Container(
       color: weekend ? DsColors.primarySoft : null,
-      padding: const EdgeInsets.symmetric(horizontal: DsSpacing.x3, vertical: 4),
+      padding: const EdgeInsets.symmetric(
+        horizontal: DsSpacing.x3,
+        vertical: 4,
+      ),
       child: Row(
         children: [
           SizedBox(
             width: _dayColW,
-            child: Text('${i + 1}',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: DsFontSize.footnote,
-                  fontWeight: FontWeight.w600,
-                  color: dayColor,
-                )),
+            child: Text(
+              '${i + 1}',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: DsFontSize.footnote,
+                fontWeight: FontWeight.w600,
+                color: dayColor,
+              ),
+            ),
           ),
           SizedBox(
             width: _wdColW,
-            child: Text(l.shortWeekday(date),
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: DsFontSize.caption,
-                  color: weekend ? DsColors.primary : DsColors.textMuted,
-                )),
+            child: Text(
+              l.shortWeekday(date),
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: DsFontSize.caption,
+                color: weekend ? DsColors.primary : DsColors.textMuted,
+              ),
+            ),
           ),
           SizedBox(
             width: _fltColW,
@@ -518,8 +540,10 @@ class _DsRosterTable extends StatelessWidget {
                 child: Center(
                   child: i < row.shifts.length
                       ? DsShiftBadge(code: row.shifts[i], compact: true)
-                      : const Text('—',
-                          style: TextStyle(color: DsColors.textMuted)),
+                      : const Text(
+                          '—',
+                          style: TextStyle(color: DsColors.textMuted),
+                        ),
                 ),
               ),
             ),
@@ -532,35 +556,34 @@ class _DsRosterTable extends StatelessWidget {
     String label,
     double personW,
     String Function(DsRosterRowData) value,
-  ) =>
-      Container(
-        color: DsColors.surfaceSubtle,
-        padding: const EdgeInsets.symmetric(
-          horizontal: DsSpacing.x3,
-          vertical: DsSpacing.x2,
+  ) => Container(
+    color: DsColors.surfaceSubtle,
+    padding: const EdgeInsets.symmetric(
+      horizontal: DsSpacing.x3,
+      vertical: DsSpacing.x2,
+    ),
+    child: Row(
+      children: [
+        SizedBox(
+          width: _dayColW + _wdColW + _fltColW,
+          child: Text(label, style: DsType.tableHeader),
         ),
-        child: Row(
-          children: [
-            SizedBox(
-              width: _dayColW + _wdColW + _fltColW,
-              child: Text(label, style: DsType.tableHeader),
-            ),
-            for (final row in rows)
-              SizedBox(
-                width: personW,
-                child: Center(
-                  child: Text(
-                    value(row),
-                    style: const TextStyle(
-                      fontSize: DsFontSize.caption,
-                      color: DsColors.textPrimary,
-                    ),
-                  ),
+        for (final row in rows)
+          SizedBox(
+            width: personW,
+            child: Center(
+              child: Text(
+                value(row),
+                style: const TextStyle(
+                  fontSize: DsFontSize.caption,
+                  color: DsColors.textPrimary,
                 ),
               ),
-          ],
-        ),
-      );
+            ),
+          ),
+      ],
+    ),
+  );
 }
 
 /// Horizontally-scrollable day-by-day grid with frozen employee/role columns.
@@ -590,12 +613,14 @@ class _DsDayGrid extends StatelessWidget {
     final l = AppLocalizations.of(context);
     final daysInMonth = DateTime(month.year, month.month + 1, 0).day;
     final leftWidth = _nameW + _roleW;
-    final rightNatural = daysInMonth * _dayW +
-        trailingHeaders.length * _trailW;
+    final rightNatural = daysInMonth * _dayW + trailingHeaders.length * _trailW;
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final rightWidth = math.max(rightNatural, constraints.maxWidth - leftWidth);
+        final rightWidth = math.max(
+          rightNatural,
+          constraints.maxWidth - leftWidth,
+        );
 
         return Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -632,103 +657,107 @@ class _DsDayGrid extends StatelessWidget {
   }
 
   Widget _frozenHeader(AppLocalizations l) => Container(
-        height: _headerH,
-        color: DsColors.surfaceSubtle,
-        child: Row(
-          children: [
-            _frozenCell(_nameW, _headerText(l.text('employee'), align: TextAlign.left)),
-            _frozenCell(_roleW, _headerText(l.role)),
-          ],
+    height: _headerH,
+    color: DsColors.surfaceSubtle,
+    child: Row(
+      children: [
+        _frozenCell(
+          _nameW,
+          _headerText(l.text('employee'), align: TextAlign.left),
         ),
-      );
+        _frozenCell(_roleW, _headerText(l.role)),
+      ],
+    ),
+  );
 
   Widget _frozenRow(_DsDayGridRow row) => Container(
-        height: _rowH,
-        decoration: const BoxDecoration(
-          border: Border(bottom: BorderSide(color: DsColors.border)),
+    height: _rowH,
+    decoration: const BoxDecoration(
+      border: Border(bottom: BorderSide(color: DsColors.border)),
+    ),
+    child: Row(
+      children: [
+        _frozenCell(
+          _nameW,
+          Text(
+            row.name,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
         ),
-        child: Row(
-          children: [
-            _frozenCell(
-              _nameW,
-              Text(
-                row.name,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontWeight: FontWeight.w600),
-              ),
-            ),
-            _frozenCell(_roleW, Center(child: DsBadge(label: row.role))),
-          ],
-        ),
-      );
+        _frozenCell(_roleW, Center(child: DsBadge(label: row.role))),
+      ],
+    ),
+  );
 
   Widget _frozenCell(double width, Widget child) => SizedBox(
-        width: width,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: DsSpacing.x3),
-          child: child,
-        ),
-      );
+    width: width,
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: DsSpacing.x3),
+      child: child,
+    ),
+  );
 
   Widget _scrollHeader(AppLocalizations l, int daysInMonth) => Container(
-        height: _headerH,
-        color: DsColors.surfaceSubtle,
-        child: Row(
-          children: [
-            for (var day = 1; day <= daysInMonth; day++)
-              _scrollCell(
-                _dayW,
-                Center(child: _DsDayHeader(date: DateTime(month.year, month.month, day))),
-              ),
-            for (final h in trailingHeaders)
-              _scrollCell(_trailW, _headerText(h)),
-          ],
-        ),
-      );
+    height: _headerH,
+    color: DsColors.surfaceSubtle,
+    child: Row(
+      children: [
+        for (var day = 1; day <= daysInMonth; day++)
+          _scrollCell(
+            _dayW,
+            Center(
+              child: _DsDayHeader(date: DateTime(month.year, month.month, day)),
+            ),
+          ),
+        for (final h in trailingHeaders) _scrollCell(_trailW, _headerText(h)),
+      ],
+    ),
+  );
 
   Widget _scrollRow(_DsDayGridRow row, int daysInMonth) => Container(
-        height: _rowH,
-        decoration: const BoxDecoration(
-          border: Border(bottom: BorderSide(color: DsColors.border)),
-        ),
-        child: Row(
-          children: [
-            for (var i = 0; i < daysInMonth; i++)
-              _scrollCell(
-                _dayW,
-                Center(
-                  child: i < row.shifts.length
-                      ? DsShiftBadge(code: row.shifts[i], compact: true)
-                      : const Text('—', style: TextStyle(color: DsColors.textMuted)),
-                ),
+    height: _rowH,
+    decoration: const BoxDecoration(
+      border: Border(bottom: BorderSide(color: DsColors.border)),
+    ),
+    child: Row(
+      children: [
+        for (var i = 0; i < daysInMonth; i++)
+          _scrollCell(
+            _dayW,
+            Center(
+              child: i < row.shifts.length
+                  ? DsShiftBadge(code: row.shifts[i], compact: true)
+                  : const Text(
+                      '—',
+                      style: TextStyle(color: DsColors.textMuted),
+                    ),
+            ),
+          ),
+        for (final value in row.trailing)
+          _scrollCell(
+            _trailW,
+            Center(
+              child: Text(
+                value,
+                style: const TextStyle(color: DsColors.textPrimary),
               ),
-            for (final value in row.trailing)
-              _scrollCell(
-                _trailW,
-                Center(
-                  child: Text(
-                    value,
-                    style: const TextStyle(color: DsColors.textPrimary),
-                  ),
-                ),
-              ),
-          ],
-        ),
-      );
+            ),
+          ),
+      ],
+    ),
+  );
 
   Widget _scrollCell(double weight, Widget child) => Expanded(
-        flex: weight.round(),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 2),
-          child: child,
-        ),
-      );
+    flex: weight.round(),
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 2),
+      child: child,
+    ),
+  );
 
-  Widget _headerText(String label, {TextAlign align = TextAlign.center}) => Text(
-        label,
-        textAlign: align,
-        style: DsType.tableHeader,
-      );
+  Widget _headerText(String label, {TextAlign align = TextAlign.center}) =>
+      Text(label, textAlign: align, style: DsType.tableHeader);
 }
 
 class _DsDayGridRow {
@@ -988,9 +1017,17 @@ class _FlightsTable extends StatelessWidget {
       rows: [
         for (final row in rows)
           [
-            Text(l.flightDate(row.date), style: DsType.tableCell, overflow: TextOverflow.ellipsis),
+            Text(
+              l.flightDate(row.date),
+              style: DsType.tableCell,
+              overflow: TextOverflow.ellipsis,
+            ),
             Text('${row.flightPairs}', style: DsType.tableCell),
-            Text(row.flights, style: DsType.tableCell, overflow: TextOverflow.ellipsis),
+            Text(
+              row.flights,
+              style: DsType.tableCell,
+              overflow: TextOverflow.ellipsis,
+            ),
             Text(row.arrival, style: DsType.tableCell),
             Text(row.departure, style: DsType.tableCell),
             DsBadge(
@@ -1239,10 +1276,22 @@ class _LeavesTable extends StatelessWidget {
       rows: [
         for (var index = 0; index < rows.length; index++)
           [
-            Text(rows[index].employee, style: DsType.tableCell, overflow: TextOverflow.ellipsis),
+            Text(
+              rows[index].employee,
+              style: DsType.tableCell,
+              overflow: TextOverflow.ellipsis,
+            ),
             DsBadge(label: rows[index].role),
-            Text(l.leaveTypeLabel(rows[index].type), style: DsType.tableCell, overflow: TextOverflow.ellipsis),
-            Text(rows[index].range, style: DsType.tableCell, overflow: TextOverflow.ellipsis),
+            Text(
+              l.leaveTypeLabel(rows[index].type),
+              style: DsType.tableCell,
+              overflow: TextOverflow.ellipsis,
+            ),
+            Text(
+              rows[index].range,
+              style: DsType.tableCell,
+              overflow: TextOverflow.ellipsis,
+            ),
             Text('${rows[index].days}', style: DsType.tableCell),
             Text('${rows[index].carryComp}', style: DsType.tableCell),
             DsBadge(
@@ -1256,28 +1305,28 @@ class _LeavesTable extends StatelessWidget {
             if (canDecide)
               switch (rows[index].status) {
                 'Pending' => Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      DsTextAction(
-                        label: l.approve,
-                        icon: Icons.check,
-                        tone: DsTone.success,
-                        onPressed: () => onApprove!(index),
-                      ),
-                      DsTextAction(
-                        label: l.text('reject'),
-                        icon: Icons.close,
-                        tone: DsTone.danger,
-                        onPressed: () => onReject!(index),
-                      ),
-                    ],
-                  ),
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    DsTextAction(
+                      label: l.approve,
+                      icon: Icons.check,
+                      tone: DsTone.success,
+                      onPressed: () => onApprove!(index),
+                    ),
+                    DsTextAction(
+                      label: l.text('reject'),
+                      icon: Icons.close,
+                      tone: DsTone.danger,
+                      onPressed: () => onReject!(index),
+                    ),
+                  ],
+                ),
                 'Approved' when onRevoke != null => DsTextAction(
-                    label: l.text('revokeApproval'),
-                    icon: Icons.undo,
-                    tone: DsTone.danger,
-                    onPressed: () => onRevoke!(index),
-                  ),
+                  label: l.text('revokeApproval'),
+                  icon: Icons.undo,
+                  tone: DsTone.danger,
+                  onPressed: () => onRevoke!(index),
+                ),
                 _ => const SizedBox.shrink(),
               },
           ],
@@ -1298,10 +1347,7 @@ class _LeavesTable extends StatelessWidget {
         }
         return SingleChildScrollView(
           scrollDirection: Axis.horizontal,
-          child: SizedBox(
-            width: minWidth,
-            child: table,
-          ),
+          child: SizedBox(width: minWidth, child: table),
         );
       },
     );
@@ -1592,9 +1638,21 @@ class _ReportsTable extends StatelessWidget {
       rows: [
         for (var index = 0; index < rows.length; index++)
           [
-            Text(rows[index].name, style: DsType.tableCell, overflow: TextOverflow.ellipsis),
-            Text(rows[index].period, style: DsType.tableCell, overflow: TextOverflow.ellipsis),
-            Text(rows[index].updated, style: DsType.tableCell, overflow: TextOverflow.ellipsis),
+            Text(
+              rows[index].name,
+              style: DsType.tableCell,
+              overflow: TextOverflow.ellipsis,
+            ),
+            Text(
+              rows[index].period,
+              style: DsType.tableCell,
+              overflow: TextOverflow.ellipsis,
+            ),
+            Text(
+              rows[index].updated,
+              style: DsType.tableCell,
+              overflow: TextOverflow.ellipsis,
+            ),
             DsBadge(
               label: l.statusLabel(rows[index].status),
               tone: DsTone.success,
@@ -1769,8 +1827,16 @@ class _UsersTable extends StatelessWidget {
       rows: [
         for (final user in users)
           [
-            Text(user.username, style: DsType.tableCell, overflow: TextOverflow.ellipsis),
-            Text(user.fullName, style: DsType.tableCell, overflow: TextOverflow.ellipsis),
+            Text(
+              user.username,
+              style: DsType.tableCell,
+              overflow: TextOverflow.ellipsis,
+            ),
+            Text(
+              user.fullName,
+              style: DsType.tableCell,
+              overflow: TextOverflow.ellipsis,
+            ),
             DsBadge(label: l.roleLabel(user.role)),
             user.code.isEmpty
                 ? const SizedBox.shrink()
@@ -1870,7 +1936,10 @@ class _ActionButton extends StatelessWidget {
         ),
         minimumSize: Size.zero,
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        textStyle: const TextStyle(fontSize: DsFontSize.footnote, fontWeight: FontWeight.w600),
+        textStyle: const TextStyle(
+          fontSize: DsFontSize.footnote,
+          fontWeight: FontWeight.w600,
+        ),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(DsRadius.medium),
           side: BorderSide(color: colors.foreground.withValues(alpha: 0.30)),

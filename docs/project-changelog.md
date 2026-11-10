@@ -24,9 +24,11 @@
   app bar, the lotus alone on the collapsed rail.
 - Login page: the photo of the customer's aircraft
   (`assets/images/login_aircraft.jpg`) fills the window and the form sits on
-  it in one frosted-glass card with the logo — lower right on wide windows,
-  centred on narrow ones. The product name, the subtitle and the three
-  feature lines are gone (owner).
+  it in one clear, dark glass card — lower right on wide windows, centred on
+  narrow ones. Text on the glass is white (title, subtitle, footer link, the
+  logo's wordmark with the lotus kept gold); the fields stay white with
+  their labels inside. The product name, the subtitle and the three feature
+  lines are gone (owner).
 - App icon (macOS icon set and Windows `.ico`): the lotus on a white tile,
   re-sharpened from the 115 px lotus in the received logo; a larger source
   logo would give a crisper icon.
