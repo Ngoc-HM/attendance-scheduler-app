@@ -37,15 +37,20 @@ def test_min_a_days_warns_only_for_role_a_in_full_month() -> None:
 def test_comp_days_shortfall_excess_and_non_a_roles() -> None:
     grid, weeks, days = _full_month(1, [A, D, A, D, D, X, X])
     # Owed 2, none scheduled → shortfall.
-    assert any("owed" in w for w in check_comp_days(grid, {1: Role.A}, weeks, {1: 2}))
+    [short] = check_comp_days(grid, {1: Role.A}, weeks, {1: 2})
+    assert (short.rule, short.user_id, short.params) == (
+        "comp_day_shortfall", 1, {"owed": 2, "amount": 2}
+    )
     # Owed 0, one CD scheduled → excess.
     grid[(1, days[0])] = CD
-    assert any("only 0 owed" in w for w in check_comp_days(grid, {1: Role.A}, weeks, {}))
+    assert [w.rule for w in check_comp_days(grid, {1: Role.A}, weeks, {})] == [
+        "comp_day_excess"
+    ]
     # Exactly owed → clean.
     assert check_comp_days(grid, {1: Role.A}, weeks, {1: 1}) == []
     # Owner D1 (2026-11-06): every role earns CD by working a holiday, so the
     # same owed-versus-scheduled comparison applies to role T.
-    assert any("only 0 owed" in w for w in check_comp_days(grid, {1: Role.T}, weeks, {}))
+    assert any("only 0 owed" in w.message for w in check_comp_days(grid, {1: Role.T}, weeks, {}))
     assert check_comp_days(grid, {1: Role.T}, weeks, {1: 1}) == []
 
 
@@ -54,7 +59,8 @@ def test_off_chain_flags_six_off_once_and_exempts_annual_leave() -> None:
     for d in days[7:15]:  # days 8–15 off; with days 6–7 (X, X) the run starts day 6
         grid[(1, d)] = X
     warnings = check_off_chain(grid, {1: Role.A}, weeks, {})
-    assert len(warnings) == 1 and str(days[5]) in warnings[0]
+    assert len(warnings) == 1 and str(days[5]) in warnings[0].message
+    assert (warnings[0].rule, warnings[0].day) == ("max_consecutive_off", days[5])
     # Same run as approved ANNUAL leave → sanctioned, no warning.
     for d in days[7:15]:
         grid[(1, d)] = AL
@@ -67,8 +73,8 @@ def test_recheck_includes_new_rules() -> None:
         grid=grid, roles={1: Role.A}, carry_streaks={}, weeks=weeks,
         flight_pairs={d: 0 for d in days}, carry_comps={1: 1},
     )
-    assert any("A-duty" in w for w in warnings)
-    assert any("comp day" in w for w in warnings)
+    assert any("A-duty" in w.message for w in warnings)
+    assert any("comp day" in w.message for w in warnings)
 
 
 def test_checker_flags_carry_streak_six_then_work() -> None:
@@ -87,7 +93,9 @@ def test_checker_flags_carry_streak_six_then_work() -> None:
     }
     breach = [f"User 1: more than 5 consecutive working days at {days[0]}"]
     for carry in (5, 6, 9):
-        assert check_consecutive(grid, {1: Role.T}, {1: carry}, weeks) == breach
+        assert [
+            w.message for w in check_consecutive(grid, {1: Role.T}, {1: carry}, weeks)
+        ] == breach
     # Day 1 off breaks the carried run: nothing to report.
     grid[(1, days[0])] = X
     assert check_consecutive(grid, {1: Role.T}, {1: 6}, weeks) == []
@@ -106,7 +114,7 @@ def test_checker_flags_off_chain_after_annual_leave_start() -> None:
     }
     warnings = check_off_chain(grid, {1: Role.T}, weeks, {1: annual})
     assert len(warnings) == 1
-    assert str(days[3]) in warnings[0]
+    assert str(days[3]) in warnings[0].message
     # Five X after the leave (4–8) are allowed (ruling R1).
     grid[(1, days[8])] = AttendanceCode.AD
     assert check_off_chain(grid, {1: Role.T}, weeks, {1: annual}) == []
@@ -123,9 +131,12 @@ def test_off_quota_cd_does_not_shrink_target() -> None:
     for d in days[14:20]:
         grid[(1, d)] = AL
     grid[(1, days[20])] = CD
-    assert check_off_quota(grid, {1: Role.T}, weeks) == [
+    [short] = check_off_quota(grid, {1: Role.T}, weeks)
+    assert short.message == (
         f"User 1: 0 off day(s) instead of 1 in block starting {days[14]}"
-    ]
+    )
+    assert short.key == "two_days_off_per_week_under"
+    assert short.params == {"start": days[14], "required": 1, "amount": 1}
     grid[(1, days[20])] = X
     assert check_off_quota(grid, {1: Role.T}, weeks) == []
 

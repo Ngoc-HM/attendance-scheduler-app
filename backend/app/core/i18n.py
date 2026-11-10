@@ -40,10 +40,62 @@ MESSAGES: dict[str, dict[str, str]] = {
         "schedule.cell_not_found": (
             "Schedule cell not found; a missing cell can only be added for an active user."
         ),
-        "schedule.disabled_user_duty": (
-            "Disabled account still has a working shift in the schedule; "
+        # Rule violations (solver + re-check), rendered by
+        # services/schedule_violation_text. {person} = "<code> (<name>)",
+        # dates are YYYY-MM-DD like the other catalog messages.
+        "schedule.violation.person": "{code} ({name})",
+        "schedule.violation.person_unknown": "User #{id}",
+        "schedule.violation.shift_A": "ARR",
+        "schedule.violation.shift_D": "DEP",
+        "schedule.violation.flight_staffing": (
+            "{day}: {amount} short on the {shift} shift (need at least {need}); "
+            "automatic scheduling does not assign an A/D double shift."
+        ),
+        "schedule.violation.flight_staffing_no_role_a": (
+            "{day}: no group-A staff to cover the flights (need at least "
+            "{need_a} on ARR and {need_d} on DEP)."
+        ),
+        "schedule.violation.two_days_off_per_week_under": (
+            "{person}: {amount} day(s) off short in the 7-day block from {start} "
+            "(needs {required})."
+        ),
+        "schedule.violation.two_days_off_per_week_over": (
+            "{person}: {amount} day(s) off too many in the 7-day block from {start} "
+            "(needs {required})."
+        ),
+        "schedule.violation.rolling_seven_min_two_rest": (
+            "{person}: fewer than 2 rest days in the 7 days from {start}."
+        ),
+        "schedule.violation.max_consecutive_working": (
+            "{person}: more than 5 working days in a row from {start}."
+        ),
+        "schedule.violation.max_consecutive_working_carry": (
+            "{person}: the run of {carry} working days from last month gets no "
+            "day off within the first {within} day(s)."
+        ),
+        "schedule.violation.max_consecutive_off": (
+            "{person}: more than 5 days off in a row from {start}; a break this "
+            "long must be registered as annual leave."
+        ),
+        "schedule.violation.role_a_minimum_a_days": (
+            "{person}: fewer than {minimum} ARR shifts this month."
+        ),
+        "schedule.violation.comp_day_shortfall": (
+            "{person}: {amount} of the {owed} owed comp day(s) not scheduled "
+            "this month."
+        ),
+        "schedule.violation.comp_day_excess": (
+            "{person}: {amount} comp day(s) more than the {owed} owed."
+        ),
+        "schedule.violation.infeasible": (
+            "No schedule found: approved leave contradicts the rules or the "
+            "solver ran out of time."
+        ),
+        "schedule.violation.disabled_user_duty": (
+            "{day}: {person} is disabled but still has a working shift ({code}); "
             "it does not count as cover."
         ),
+        "schedule.violation.unknown": "A scheduling rule is not met.",
         # --- Flights (F-04) ---
         "flight.day_not_found": "Flight day not found.",
         "flight.invalid_pairs": "flight_pairs must be 0, 1 or 2.",
@@ -170,10 +222,59 @@ MESSAGES: dict[str, dict[str, str]] = {
         "schedule.cell_not_found": (
             "Không tìm thấy ô lịch; chỉ có thể thêm ô còn thiếu cho người dùng đang hoạt động."
         ),
-        "schedule.disabled_user_duty": (
-            "Tài khoản đã bị vô hiệu hoá vẫn còn ca làm việc trong lịch; "
+        # Vi phạm quy tắc xếp lịch (bộ giải + kiểm tra lại).
+        "schedule.violation.person": "{code} ({name})",
+        "schedule.violation.person_unknown": "Người dùng #{id}",
+        "schedule.violation.shift_A": "ARR",
+        "schedule.violation.shift_D": "DEP",
+        "schedule.violation.flight_staffing": (
+            "{day}: thiếu {amount} người ca {shift} (cần ít nhất {need}); "
+            "lịch tự động không xếp ca kép A/D."
+        ),
+        "schedule.violation.flight_staffing_no_role_a": (
+            "{day}: không có nhân sự nhóm A để phủ chuyến bay (cần ít nhất "
+            "{need_a} người ca ARR và {need_d} người ca DEP)."
+        ),
+        "schedule.violation.two_days_off_per_week_under": (
+            "{person}: thiếu {amount} ngày nghỉ trong block 7 ngày từ {start} "
+            "(cần {required})."
+        ),
+        "schedule.violation.two_days_off_per_week_over": (
+            "{person}: thừa {amount} ngày nghỉ trong block 7 ngày từ {start} "
+            "(cần {required})."
+        ),
+        "schedule.violation.rolling_seven_min_two_rest": (
+            "{person}: chưa đủ 2 ngày nghỉ trong 7 ngày liền từ {start}."
+        ),
+        "schedule.violation.max_consecutive_working": (
+            "{person}: làm quá 5 ngày liên tiếp từ {start}."
+        ),
+        "schedule.violation.max_consecutive_working_carry": (
+            "{person}: chuỗi {carry} ngày làm liên tiếp từ tháng trước chưa có "
+            "ngày nghỉ trong {within} ngày đầu tháng."
+        ),
+        "schedule.violation.max_consecutive_off": (
+            "{person}: nghỉ quá 5 ngày liên tiếp từ {start}; nghỉ dài như vậy "
+            "phải đăng ký nghỉ phép năm."
+        ),
+        "schedule.violation.role_a_minimum_a_days": (
+            "{person}: ít hơn {minimum} ca ARR trong tháng."
+        ),
+        "schedule.violation.comp_day_shortfall": (
+            "{person}: chưa xếp được {amount} trong số {owed} ngày nghỉ bù còn nợ."
+        ),
+        "schedule.violation.comp_day_excess": (
+            "{person}: xếp thừa {amount} ngày nghỉ bù (chỉ nợ {owed})."
+        ),
+        "schedule.violation.infeasible": (
+            "Không tạo được lịch: ngày nghỉ đã duyệt mâu thuẫn với quy tắc "
+            "hoặc hết thời gian tính toán."
+        ),
+        "schedule.violation.disabled_user_duty": (
+            "{day}: {person} đã bị vô hiệu hoá nhưng vẫn còn ca làm ({code}); "
             "ca này không được tính là người trực."
         ),
+        "schedule.violation.unknown": "Có quy tắc xếp lịch chưa đạt.",
         # --- Flights (F-04) ---
         "flight.day_not_found": "Không tìm thấy ngày bay.",
         "flight.invalid_pairs": "Số cặp chuyến bay phải là 0, 1 hoặc 2.",

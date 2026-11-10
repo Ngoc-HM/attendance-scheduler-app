@@ -11,7 +11,7 @@ Only "exactly one status per cell" and the approved-off pins stay truly hard.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
 
 from ortools.sat.python import cp_model
@@ -33,6 +33,9 @@ class SlackEntry:
     day: date | None = None
     user_id: int | None = None
     weight: int = SLACK_WEIGHT
+    # Message variant + parameters for the service-layer renderer.
+    key: str = ""
+    params: dict[str, object] = field(default_factory=dict)
 
 
 class SlackRegistry:
@@ -49,10 +52,18 @@ class SlackRegistry:
         day: date | None = None,
         user_id: int | None = None,
         weight: int = SLACK_WEIGHT,
+        *,
+        key: str = "",
+        params: dict[str, object] | None = None,
     ) -> None:
+        """``message`` is English for logs; ``key`` + ``params`` feed the
+        translated text (``schedule_violation_text``), which also receives the
+        slack value as ``params["amount"]``."""
         # Lower-weight slack lets a rule yield to higher-weight ones (e.g. the
         # auto comp-day rule yields to flight staffing — customer 2026-06-12).
-        self._entries.append(SlackEntry(var, rule, message, day, user_id, weight))
+        self._entries.append(
+            SlackEntry(var, rule, message, day, user_id, weight, key, dict(params or {}))
+        )
 
     def penalty_terms(self) -> list[cp_model.LinearExpr]:
         """Weighted slack terms for the objective (minimized)."""
@@ -70,6 +81,8 @@ class SlackRegistry:
                         message=f"{e.message} (shortfall: {value})",
                         day=e.day,
                         user_id=e.user_id,
+                        key=e.key,
+                        params={**e.params, "amount": value},
                     )
                 )
         return found

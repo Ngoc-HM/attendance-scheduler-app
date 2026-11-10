@@ -13,7 +13,6 @@ verdicts are compared per (rule, user):
 from __future__ import annotations
 
 import random
-import re
 from datetime import date, timedelta
 
 import pytest
@@ -41,28 +40,13 @@ ENGINE_RULES = {
     "comp_day_excess": "comp",
 }
 
-CHECKER_PHRASES = (
-    ("consecutive working days", "consecutive"),
-    ("rest days in the 7-day window", "rolling"),
-    ("off day(s) instead of", "off_quota"),
-    ("short flight coverage", "staffing"),
-    ("A-duty day(s)", "min_a"),
-    ("comp day(s)", "comp"),
-    ("consecutive OFF days", "off_chain"),
-)
-
-
 def _engine_keys(violations: list[Violation]) -> set[tuple[str, int | None]]:
     return {(ENGINE_RULES[v.rule], v.user_id) for v in violations}
 
 
-def _checker_keys(warnings: list[str]) -> set[tuple[str, int | None]]:
-    keys: set[tuple[str, int | None]] = set()
-    for warning in warnings:
-        category = next(cat for phrase, cat in CHECKER_PHRASES if phrase in warning)
-        match = re.match(r"User (\d+):", warning)
-        keys.add((category, int(match.group(1)) if match else None))
-    return keys
+def _checker_keys(warnings: list[Violation]) -> set[tuple[str, int | None]]:
+    # The checker reports the engine's rule names (and user_id) directly.
+    return _engine_keys(warnings)
 
 
 def _instance(seed: int) -> SolverInput:

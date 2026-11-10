@@ -59,6 +59,8 @@ def add(
                     f"{demand_a} on A and {demand_d} on D)"
                 ),
                 day=d,
+                key="flight_staffing_no_role_a",
+                params={"need_a": demand_a, "need_d": demand_d},
             )
             continue
 
@@ -81,4 +83,5 @@ def add(
                     "automatic scheduling will not assign an A/D double shift"
                 ),
                 day=d,
+                params={"shift": shift, "need": demand},
             )

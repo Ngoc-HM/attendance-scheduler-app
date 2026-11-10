@@ -65,6 +65,7 @@ def add(
             ),
             user_id=p.user_id,
             weight=COMP_WEIGHT,
+            params={"owed": owed},
         )
         registry.register(
             over,
@@ -75,4 +76,5 @@ def add(
             ),
             user_id=p.user_id,
             weight=COMP_WEIGHT,
+            params={"owed": owed},
         )

@@ -34,6 +34,14 @@
   so the login screen opens in it after a restart or a logout instead of
   falling back to English; each user's own preference is still applied at
   login, and a user without one keeps the language shown (decision #61).
+- Schedule rule violations are translated: the solver and the re-check hand
+  over a rule plus parameters and one renderer
+  (`services/schedule_violation_text.py`, catalog keys
+  `schedule.violation.*`, en + vi) writes the sentence in the request's
+  language, naming people by roster code and name instead of `User <id>`.
+  Re-check violations now carry their real rule name (was `manual_recheck`)
+  with `day` and `user_id` filled; shift-change, leave and self-arrange
+  warnings use the same text.
 
 ## 2026-11-10 — End-to-end run follow-ups
 

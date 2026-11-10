@@ -79,6 +79,7 @@ def add(
                 ),
                 day=window[0],
                 user_id=p.user_id,
+                params={"start": window[0]},
             )
 
         # --- 2. Carry-over from last month (§5.5) -------------------------
@@ -101,4 +102,5 @@ def add(
                 ),
                 day=head[0],
                 user_id=p.user_id,
+                params={"carry": p.carry_streak, "within": k},
             )

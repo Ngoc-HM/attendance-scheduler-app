@@ -71,4 +71,5 @@ def add(
                 ),
                 day=window[0][0],
                 user_id=person.user_id,
+                params={"start": window[0][0]},
             )
