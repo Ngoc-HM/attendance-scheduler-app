@@ -245,11 +245,12 @@ class DsAuthPage extends StatelessWidget {
                       child: DsLiquidGlassSurface(
                         padding: EdgeInsets.zero,
                         borderRadius: DsRadius.xxLarge,
-                        blur: 18,
-                        // Clear glass: an even, half-white pane lets the
-                        // photo show through while the dark text stays
-                        // readable on it.
-                        tint: DsColors.surface.withValues(alpha: 0.5),
+                        blur: 10,
+                        // Clear glass, like a pane on the photo (owner's
+                        // reference 2026-11-10): a light, even tint and a
+                        // soft blur. A third white is about as clear as it
+                        // gets while the dark text stays readable.
+                        tint: DsColors.surface.withValues(alpha: 0.32),
                         uniformTint: true,
                         child: Padding(
                           padding: const EdgeInsets.all(DsSpacing.x8),
