@@ -55,6 +55,29 @@ MESSAGES: dict[str, dict[str, str]] = {
         "flight.import_row_invalid_time": "Row {row}: invalid time \"{value}\" (expected HH:MM).",
         "flight.import_row_route_too_long": "Row {row}: route is longer than {max} characters.",
         "flight.import_row_duplicate": "Row {row} repeats row {first_row} (same date and FLT {flt}); the later row is used.",
+        # Monthly plan template (presets × days, F-04 owner 2026-11).
+        "flight.template_no_presets": "Create a flight preset first.",
+        "flight.template_month_label": "Month",
+        "flight.template_instruction": (
+            "Mark x on the days the flight operates. "
+            "Do not edit columns A–C or the first 3 rows."
+        ),
+        "flight.template_col_preset": "Flight preset",
+        "flight.template_col_arrival": "Arrival FLT",
+        "flight.template_col_departure": "Departure FLT",
+        "flight.template_weekdays": "Mon,Tue,Wed,Thu,Fri,Sat,Sun",
+        "flight.plan_bad_month": (
+            "Cell B1: invalid month \"{value}\" (expected YYYY-MM, year {min}–{max})."
+        ),
+        "flight.plan_layout_changed": (
+            "The day columns of the template were changed; download the template again."
+        ),
+        "flight.plan_row_invalid_flt": "Row {row}: invalid FLT number \"{value}\" in column {col}.",
+        "flight.plan_bad_mark": "Cell {cell}: \"{value}\" is not a valid mark (use x or leave it empty).",
+        "flight.plan_duplicate_pair": "Row {row} repeats row {first_row} (FLT {arr}/{dep}).",
+        "flight.plan_unknown_preset": "Row {row}: no flight preset {arr}/{dep} — create the preset first.",
+        "flight.plan_too_many_presets": "{day}: more than {max} flight presets are marked.",
+        "flight.plan_shared_flt": "{day}: two marked flight presets share FLT {flt}.",
         # --- Leaves (F-05/F-06) ---
         "leave.not_found": "Leave request not found.",
         "leave.window_closed_monthly": "Monthly leave registration is open from day 1 to day {day} of the previous month.",
@@ -162,6 +185,28 @@ MESSAGES: dict[str, dict[str, str]] = {
         "flight.import_row_invalid_time": "Dòng {row}: giờ \"{value}\" không hợp lệ (định dạng HH:MM).",
         "flight.import_row_route_too_long": "Dòng {row}: tuyến bay dài quá {max} ký tự.",
         "flight.import_row_duplicate": "Dòng {row} trùng với dòng {first_row} (cùng ngày và chuyến {flt}); dùng dòng sau.",
+        # Mẫu kế hoạch bay theo tháng (mẫu chuyến × ngày, F-04 owner 2026-11).
+        "flight.template_no_presets": "Hãy tạo mẫu chuyến bay trước.",
+        "flight.template_month_label": "Tháng",
+        "flight.template_instruction": (
+            "Đánh dấu x vào ngày có chuyến. Không sửa cột A–C và 3 hàng đầu."
+        ),
+        "flight.template_col_preset": "Mẫu chuyến bay",
+        "flight.template_col_arrival": "Chuyến đến",
+        "flight.template_col_departure": "Chuyến đi",
+        "flight.template_weekdays": "T2,T3,T4,T5,T6,T7,CN",
+        "flight.plan_bad_month": (
+            "Ô B1: tháng \"{value}\" không hợp lệ (định dạng YYYY-MM, năm {min}–{max})."
+        ),
+        "flight.plan_layout_changed": (
+            "Các cột ngày của file mẫu đã bị thay đổi; hãy tải lại file mẫu."
+        ),
+        "flight.plan_row_invalid_flt": "Dòng {row}: số hiệu chuyến bay \"{value}\" ở cột {col} không hợp lệ.",
+        "flight.plan_bad_mark": "Ô {cell}: \"{value}\" không phải dấu hợp lệ (ghi x hoặc để trống).",
+        "flight.plan_duplicate_pair": "Dòng {row} trùng với dòng {first_row} (chuyến {arr}/{dep}).",
+        "flight.plan_unknown_preset": "Dòng {row}: chưa có mẫu chuyến bay {arr}/{dep} — hãy tạo mẫu trước.",
+        "flight.plan_too_many_presets": "{day}: đánh dấu quá {max} mẫu chuyến bay.",
+        "flight.plan_shared_flt": "{day}: hai mẫu chuyến bay được đánh dấu cùng có chuyến {flt}.",
         # --- Leaves (F-05/F-06) ---
         "leave.not_found": "Không tìm thấy đơn nghỉ.",
         "leave.window_closed_monthly": "Đăng ký nghỉ tháng mở từ ngày 1 đến ngày {day} của tháng trước.",

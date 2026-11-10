@@ -160,7 +160,8 @@ def flight_pairs_map(db: Session, days: list[date]) -> dict[date, int]:
 def import_excel(db: Session, file: UploadFile) -> list[Flight]:
     """F-04 — parse the monthly flight Excel (openpyxl) and upsert rows.
 
-    See ``flight_excel_parser.py`` for full column spec.
+    See ``flight_excel_parser.py`` for full column spec. A filled monthly plan
+    template (B1 = ``YYYY-MM`` text) is applied by ``flight_plan_service``.
     - File must be .xlsx and <= 2 MB.
     - Any hard parse error rejects the entire import (no partial commit).
     - Rows repeating a (day, flt_number) are merged by the parser (last row
@@ -183,7 +184,22 @@ def import_excel(db: Session, file: UploadFile) -> list[Flight]:
             detail=t("flight.import_bad_file"),
         )
 
-    # --- Parse workbook (pure, no DB) ---
+    # --- Monthly plan template (presets × days, F-04 owner 2026-11)? ---
+    # Imported here: flight_plan_service itself reuses this module's helpers.
+    from app.services import flight_plan_service
+    from app.services.flight_plan_parser import read_plan
+
+    try:
+        plan = read_plan(raw)
+    except Exception as exc:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=t("flight.import_bad_file"),
+        ) from exc
+    if plan is not None:
+        return flight_plan_service.import_plan(db, plan)
+
+    # --- List format: parse workbook (pure, no DB) ---
     try:
         parsed_rows, parse_errors, parse_warnings = parse_flight_workbook(raw)
     except Exception as exc:

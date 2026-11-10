@@ -10,6 +10,7 @@ Route order matters — FastAPI matches in declaration order:
 from __future__ import annotations
 
 from fastapi import APIRouter, UploadFile, status
+from fastapi.responses import StreamingResponse
 
 from app.api.deps import ActiveUser, AdminUser, DbSession
 from app.api.params import MonthQuery, YearQuery
@@ -23,7 +24,8 @@ from app.schemas.flight import (
     FlightRead,
     FlightUpsert,
 )
-from app.services import audit_service, flight_service
+from app.services import audit_service, flight_plan_service, flight_service
+from app.services.flight_plan_template import XLSX_MEDIA_TYPE, template_filename
 
 router = APIRouter()
 
@@ -70,6 +72,29 @@ def delete_flight_preset(preset_id: int, db: DbSession, admin: AdminUser):
     audit_service.record(
         db, admin.id, "flight.preset.delete", "FlightPreset",
         entity_id=preset_id,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Monthly plan template (static path; filled copy goes back via /import)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/template")
+def download_flight_template(
+    db: DbSession, _admin: AdminUser, year: YearQuery, month: MonthQuery
+) -> StreamingResponse:
+    """F-04 — Excel plan for a month: active presets × days, ``x`` = flies.
+
+    Read-only, so no audit record.
+    """
+    data = flight_plan_service.template_bytes(db, year, month)
+    return StreamingResponse(
+        iter([data]),
+        media_type=XLSX_MEDIA_TYPE,
+        headers={
+            "Content-Disposition": f'attachment; filename="{template_filename(year, month)}"'
+        },
     )
 
 
@@ -195,6 +220,7 @@ def import_flights_excel(db: DbSession, file: UploadFile, admin: AdminUser):
 
     Expected columns (row 1 = header):
       A: date, B: flt_number, C: route, D: sta, E: std
+    or the filled monthly plan from ``GET /template`` (B1 = ``YYYY-MM``).
     On any parse error the entire import is rejected (no partial commit).
     """
     flights = flight_service.import_excel(db, file)
