@@ -195,8 +195,10 @@ class DsLanguageSelector extends StatelessWidget {
                 onTap: controller.open,
                 borderRadius: BorderRadius.circular(DsRadius.medium),
                 child: Padding(
+                  // Compact: 9 so icon + chevron (38) fit the collapsed
+                  // rail's 56 px (10 overflowed it by 2 px).
                   padding: EdgeInsets.symmetric(
-                    horizontal: compact ? 10 : 12,
+                    horizontal: compact ? 9 : 12,
                     vertical: 9,
                   ),
                   child: Row(

@@ -71,6 +71,33 @@ void main() {
     await tester.pumpAndSettle();
     expect(_contentLabel(tester), 'Second');
   });
+
+  // The shell header shows the customer's logo instead of the product name:
+  // the wordmark on a wide rail and in the phone app bar, the lotus alone on
+  // the collapsed rail.
+  for (final (width, asset) in [
+    (1280.0, DsBrandLogo.logoAsset),
+    (900.0, DsBrandLogo.markAsset),
+    (600.0, DsBrandLogo.logoAsset),
+  ]) {
+    testWidgets('shell header shows the logo at width $width', (tester) async {
+      await tester.binding.setSurfaceSize(Size(width, 800));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(const _NavigationHarness(index: 0, label: 'First'));
+      await tester.pumpAndSettle();
+
+      final logo = tester.widget<Image>(
+        find.descendant(
+          of: find.byType(DsBrandLogo),
+          matching: find.byType(Image),
+        ),
+      );
+      expect((logo.image as AssetImage).assetName, asset);
+      expect(find.text('Test'), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+  }
 }
 
 String _contentLabel(WidgetTester tester) {
