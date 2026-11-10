@@ -21,11 +21,16 @@ from sqlalchemy.orm import Session
 from app.core.business_time import business_today
 from app.core.config import settings
 from app.core.i18n import t
-from app.models.enums import AttendanceCode, LeaveStatus, LeaveType, UserStatus
+from app.models.enums import AttendanceCode, LeaveStatus, LeaveType
 from app.models.leave import LeaveRequest
 from app.models.user import User
 from app.schemas.leave import LeaveCreate, LeaveWindowRead
-from app.services import leave_balance, leave_conflict_resolver, schedule_history
+from app.services import (
+    leave_balance,
+    leave_conflict_resolver,
+    leave_staffing,
+    schedule_history,
+)
 from app.services.leave_windows import (
     annual_target_year,
     classify,
@@ -241,8 +246,10 @@ def decide(
         )
         # Approving must never silently break flight coverage — check every
         # day of the span against the 1A+1D / 1A+2D demand and warn (admin
-        # still decides; never a hard block).
-        warnings.extend(_staffing_warnings(db, req))
+        # still decides; never a hard block). Same lines the admin's list
+        # then keeps on this request's row (leave_staffing).
+        db.flush()
+        warnings.extend(leave_staffing.staffing_warnings(db, req))
 
     # D4: approving past the annual leave quota is allowed but flagged.
     if over_quota:
@@ -275,68 +282,6 @@ def revoke(
     db.commit()
     db.refresh(req)
     return req, warnings
-
-
-def _staffing_warnings(db: Session, req: LeaveRequest) -> list[str]:
-    """Flight-coverage impact of approving this leave (role-A people only).
-
-    For each day of the span, compare the remaining role-A staff (active,
-    not already on approved leave that day, minus this requester) against the
-    day's demand from the flight schedule: 1 pair → 1A+1D, 2 pairs → 1A+2D.
-    Two severities:
-    - remaining < max(A,D) people → the day CANNOT be covered at all;
-    - remaining < A+D people → too few people for ordinary A + D coverage.
-    """
-    from app.models.enums import Role
-    from app.services import flight_service
-    from app.services.schedule_violation_checker import DEMAND
-
-    requester = db.get(User, req.user_id)
-    if requester is None or requester.role is not Role.A:
-        return []  # T/M/F never count toward flight coverage
-
-    days = [
-        req.start_date + timedelta(days=i)
-        for i in range((req.end_date - req.start_date).days + 1)
-    ]
-    pairs_by_day = flight_service.flight_pairs_map(db, days)
-
-    role_a_ids = {
-        uid
-        for (uid,) in db.query(User.id).filter(
-            User.role == Role.A, User.status == UserStatus.active
-        )
-    }
-    role_a_ids.discard(req.user_id)
-
-    # Approved leaves of OTHER role-A people overlapping the span.
-    others_on_leave = (
-        db.query(LeaveRequest)
-        .filter(
-            LeaveRequest.status == LeaveStatus.approved,
-            LeaveRequest.user_id.in_(role_a_ids),
-            LeaveRequest.start_date <= req.end_date,
-            LeaveRequest.end_date >= req.start_date,
-        )
-        .all()
-    )
-
-    warnings: list[str] = []
-    for day in days:
-        need_a, need_d = DEMAND.get(pairs_by_day.get(day, 0), (0, 0))
-        if need_a + need_d == 0:
-            continue
-        away = {
-            o.user_id
-            for o in others_on_leave
-            if o.start_date <= day <= o.end_date
-        }
-        remaining = len(role_a_ids - away)
-        if remaining < max(need_a, need_d):
-            warnings.append(f"{day.isoformat()}: {t('leave.staffing_impossible')}")
-        elif remaining < need_a + need_d:
-            warnings.append(f"{day.isoformat()}: {t('leave.staffing_short_ordinary')}")
-    return warnings
 
 
 def _write_into_schedule(

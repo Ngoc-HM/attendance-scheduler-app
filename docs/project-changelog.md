@@ -62,6 +62,14 @@
   admin's pending panel, the `/self-arrange` API and its service. The
   `self_arrange_requests` table and its rows are kept, with the user
   deletion, data export and retention purge that cover them.
+- Leaves list (admin): a request that leaves the flights short of group-A
+  staff keeps its warning on its own row, in an amber strip under the row's
+  cells — pending requests too, as the risk if approved. `LeaveRead` gets
+  `staffing_warnings` (computed per list call, never stored): per short
+  shift when the month has a schedule ("2026-12-19: thiếu 1 người ca DEP",
+  only on days the person's cell is AL or a working code), by head count
+  when it has none ("còn 2 người nhóm A, cần 1 ca ARR + 2 ca DEP").
+  Approving shows the same lines (`services/leave_staffing.py`).
 
 ## 2026-11-10 — End-to-end run follow-ups
 

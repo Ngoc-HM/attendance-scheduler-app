@@ -81,6 +81,7 @@ class DsDataTable extends StatelessWidget {
     super.key,
     required this.columns,
     required this.rows,
+    this.rowFooters,
     this.zebra = false,
     this.cellPaddingH = DsSpacing.x5,
     this.cellPaddingV = DsSpacing.x4,
@@ -91,6 +92,11 @@ class DsDataTable extends StatelessWidget {
 
   /// Each row is a list of cell widgets, one per column.
   final List<List<Widget>> rows;
+
+  /// Optional full-width content under a row's cells (same index as [rows]),
+  /// inside that row — e.g. notes that must not squeeze the columns. A null
+  /// entry, or no list, leaves the row exactly as without it.
+  final List<Widget?>? rowFooters;
 
   /// Whether to apply subtle alternating row tint on odd rows.
   final bool zebra;
@@ -109,7 +115,13 @@ class DsDataTable extends StatelessWidget {
         _buildHeaderRow(),
         for (var i = 0; i < rows.length; i++) ...[
           const Divider(height: 1, color: DsColors.border),
-          _buildDataRow(rows[i], striped: zebra && i.isOdd),
+          _buildDataRow(
+            rows[i],
+            striped: zebra && i.isOdd,
+            footer: rowFooters != null && i < rowFooters!.length
+                ? rowFooters![i]
+                : null,
+          ),
         ],
       ],
     );
@@ -137,11 +149,27 @@ class DsDataTable extends StatelessWidget {
     );
   }
 
-  Widget _buildDataRow(List<Widget> cells, {bool striped = false}) {
+  Widget _buildDataRow(
+    List<Widget> cells, {
+    bool striped = false,
+    Widget? footer,
+  }) {
     assert(
       cells.length == columns.length,
       'DsDataTable: row has ${cells.length} cells but table has '
       '${columns.length} columns.',
+    );
+    final cellRow = Row(
+      children: [
+        for (var i = 0; i < columns.length; i++)
+          Expanded(
+            flex: columns[i].flex,
+            child: Align(
+              alignment: columns[i].alignment,
+              child: cells[i],
+            ),
+          ),
+      ],
     );
     return Container(
       color: striped ? DsColors.surfaceSubtle.withValues(alpha: 0.5) : null,
@@ -149,18 +177,16 @@ class DsDataTable extends StatelessWidget {
         horizontal: cellPaddingH,
         vertical: cellPaddingV,
       ),
-      child: Row(
-        children: [
-          for (var i = 0; i < columns.length; i++)
-            Expanded(
-              flex: columns[i].flex,
-              child: Align(
-                alignment: columns[i].alignment,
-                child: cells[i],
-              ),
+      child: footer == null
+          ? cellRow
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                cellRow,
+                const SizedBox(height: DsSpacing.x3),
+                footer,
+              ],
             ),
-        ],
-      ),
     );
   }
 }

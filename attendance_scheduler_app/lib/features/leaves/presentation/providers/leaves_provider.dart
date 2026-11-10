@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../design_system/view_models.dart';
@@ -99,7 +100,7 @@ class LeavesController extends StateNotifier<LeavesState> {
           .where((u) => u.status == 'active')
           .fold<int>(0, (sum, u) => sum + u.carryComp);
       return leaves
-          .map((l) => LeaveEntry(id: l.id, row: _toRow(l, userById)))
+          .map((l) => LeaveEntry(id: l.id, row: toRow(l, userById)))
           .toList();
     });
     final loadedWindow = await window;
@@ -207,7 +208,8 @@ class LeavesController extends StateNotifier<LeavesState> {
     return me == null ? {} : {me.id: me};
   }
 
-  static DsLeaveRowData _toRow(LeaveModel m, Map<int, User> userById) {
+  @visibleForTesting
+  static DsLeaveRowData toRow(LeaveModel m, Map<int, User> userById) {
     final u = userById[m.userId];
     return DsLeaveRowData(
       // Confidential per-person code (e.g. "T3", "A1", "F1") — the app's
@@ -220,6 +222,8 @@ class LeavesController extends StateNotifier<LeavesState> {
       status: m.statusDisplay,
       // Comp days the requester carries into this month (last month close).
       carryComp: u?.carryComp ?? 0,
+      // Kept on the row after the decision toast is gone (owner 2026-11-10).
+      staffingWarnings: m.staffingWarnings,
     );
   }
 }

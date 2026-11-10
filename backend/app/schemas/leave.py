@@ -36,6 +36,10 @@ class LeaveRead(ORMModel):
     note: str | None
     # Decision-time notices (e.g. an already-generated month is now stale).
     warnings: list[str] = []
+    # Current flight-staffing risk of this leave (role-A requester, pending
+    # or approved), in the request's language — filled only for the admin's
+    # lists, computed on demand (services/leave_staffing).
+    staffing_warnings: list[str] = []
 
 
 class ConflictEntry(ORMModel):

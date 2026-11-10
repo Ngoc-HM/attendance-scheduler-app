@@ -54,6 +54,7 @@ class DsLeaveRowData {
     required this.days,
     required this.status,
     required this.carryComp,
+    this.staffingWarnings = const [],
   });
 
   final String employee;
@@ -64,6 +65,10 @@ class DsLeaveRowData {
   final String status;
   final int carryComp;
 
+  /// Flight-staffing risk lines shown on the row (one per day or shift);
+  /// empty → the row looks like any other.
+  final List<String> staffingWarnings;
+
   DsLeaveRowData copyWith({String? status}) {
     return DsLeaveRowData(
       employee: employee,
@@ -73,6 +78,7 @@ class DsLeaveRowData {
       days: days,
       status: status ?? this.status,
       carryComp: carryComp,
+      staffingWarnings: staffingWarnings,
     );
   }
 }

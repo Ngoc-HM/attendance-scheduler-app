@@ -3,7 +3,8 @@
 /// Backend shape:
 ///   { "id": int, "user_id": int, "start_date": "YYYY-MM-DD",
 ///     "end_date": "YYYY-MM-DD", "leave_type": "monthly"|"annual",
-///     "status": "pending"|"approved"|"rejected", "note": str|null }
+///     "status": "pending"|"approved"|"rejected", "note": str|null,
+///     "staffing_warnings": [str] }
 class LeaveModel {
   const LeaveModel({
     required this.id,
@@ -13,6 +14,7 @@ class LeaveModel {
     required this.leaveType,
     required this.status,
     this.note,
+    this.staffingWarnings = const [],
   });
 
   final int id;
@@ -23,6 +25,11 @@ class LeaveModel {
   final String status;    // "pending" | "approved" | "rejected"
   final String? note;
 
+  /// Days this leave leaves a flight shift short (role-A requester, pending
+  /// or approved), already translated by the backend; one line per day or
+  /// shift. Filled only in the admin's list — empty otherwise.
+  final List<String> staffingWarnings;
+
   factory LeaveModel.fromJson(Map<String, dynamic> json) => LeaveModel(
     id: json['id'] as int,
     userId: json['user_id'] as int,
@@ -31,6 +38,10 @@ class LeaveModel {
     leaveType: json['leave_type'] as String? ?? 'monthly',
     status: json['status'] as String? ?? 'pending',
     note: json['note'] as String?,
+    staffingWarnings: [
+      for (final line in (json['staffing_warnings'] as List<dynamic>? ?? const []))
+        line as String,
+    ],
   );
 
   /// Number of calendar days (inclusive both ends).
