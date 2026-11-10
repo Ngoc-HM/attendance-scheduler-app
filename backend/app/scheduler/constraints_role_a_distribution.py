@@ -41,4 +41,5 @@ def add(
                 "in the month"
             ),
             user_id=person.user_id,
+            params={"minimum": MIN_A_DAYS},
         )

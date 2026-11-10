@@ -20,6 +20,7 @@ from app.models.shift_change_request import ShiftChangeRequest
 from app.models.user import User
 from app.scheduler import SchedulerEngine
 from app.scheduler.calendar_utils import build_weeks, month_days
+from app.scheduler.domain import Violation
 from app.schemas.schedule import (
     ConstraintViolation,
     ManualOverrideRequest,
@@ -35,6 +36,7 @@ from app.services import (
     schedule_input_builder,
 )
 from app.services.schedule_violation_checker import recheck
+from app.services.schedule_violation_text import render_all
 
 
 def mask_sick_for_viewer(
@@ -111,7 +113,7 @@ def generate(db: Session, year: int, month: int, force: bool = False) -> Schedul
     inp = schedule_input_builder.build(db, year, month)
     out = SchedulerEngine().solve(inp)
     if not out.feasible:  # only contradictory pins / timeout (§5.6 #12)
-        return ScheduleResult(feasible=False, violations=_violations(out.violations))
+        return ScheduleResult(feasible=False, violations=_violations(db, out.violations))
 
     # Any earlier schedule may have left seeded actuals: a published one, or a
     # draft that was published before a forced regenerate.
@@ -149,7 +151,7 @@ def generate(db: Session, year: int, month: int, force: bool = False) -> Schedul
     return ScheduleResult(
         feasible=True,
         schedule=MonthlyScheduleRead.model_validate(existing),
-        violations=_violations(out.violations),
+        violations=_violations(db, out.violations),
     )
 
 
@@ -311,7 +313,8 @@ def apply_shift_change(db: Session, req: ShiftChangeRequest) -> list[str]:
     # No commit: the caller commits the cells together with the request's
     # status (one transaction under the request's row lock).
     db.flush()
-    return [f"{v.rule}: {v.message}" for v in _recheck_violations(db, schedule)]
+    # Rendered text only (the rule id is not for people to read).
+    return [v.message for v in _recheck_violations(db, schedule)]
 
 
 def apply_leave_span(
@@ -387,11 +390,11 @@ def _get_by_id(db: Session, schedule_id: int) -> MonthlySchedule:
     return schedule
 
 
-def _violations(items) -> list[ConstraintViolation]:
-    return [
-        ConstraintViolation(rule=v.rule, message=v.message, day=v.day, user_id=v.user_id)
-        for v in items
-    ]
+def _violations(db: Session, items: list[Violation]) -> list[ConstraintViolation]:
+    """Solver violations in the request's language, people by code and name."""
+    ids = {v.user_id for v in items if v.user_id is not None}
+    users = db.query(User).filter(User.id.in_(ids)).all() if ids else []
+    return render_all(items, {u.id: u for u in users})
 
 
 def _resync_seeded_actuals(
@@ -437,13 +440,15 @@ def _recheck_violations(db: Session, schedule: MonthlySchedule) -> list[Constrai
         if a.user_id not in inactive_ids or a.work_date < today
     }
     inactive_duty = [
-        ConstraintViolation(
+        Violation(
             day=a.work_date,
             user_id=a.user_id,
             rule="disabled_user_duty",
-            # Day first, like the checker's own "{day}: ..." lines, so the
-            # text-only callers (shift change, leave, self-arrange) show it.
-            message=f"{a.work_date}: {t('schedule.disabled_user_duty')} ({a.code.value})",
+            # The rendered text starts with the day, like the staffing lines,
+            # so the text-only callers (shift change, leave, self-arrange)
+            # show it.
+            message=f"{a.work_date}: disabled user still on duty ({a.code.value})",
+            params={"code": a.code.value},
         )
         for a in sorted(schedule.assignments, key=lambda a: (a.work_date, a.user_id))
         if a.user_id in inactive_ids and a.work_date >= today and a.code.is_working
@@ -466,6 +471,6 @@ def _recheck_violations(db: Session, schedule: MonthlySchedule) -> list[Constrai
         # Disabled users' past cells (kept in ``grid``) count as cover only.
         cover_roles={u.id: u.role for u in users if u.id in inactive_ids},
     )
-    return inactive_duty + [
-        ConstraintViolation(rule="manual_recheck", message=w) for w in warnings
-    ]
+    # Real rule names, day and user_id (the client only shows ``message``),
+    # text in the request's language.
+    return render_all(inactive_duty + warnings, {u.id: u for u in users})

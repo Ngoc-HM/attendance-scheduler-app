@@ -60,6 +60,9 @@ def add(
                 ),
                 day=block[0],
                 user_id=p.user_id,
+                key="two_days_off_per_week_under",
+                # Genuine X required on top of the pinned leave.
+                params={"start": block[0], "required": target - pinned_in_block},
             )
             registry.register(
                 over,
@@ -70,4 +73,6 @@ def add(
                 ),
                 day=block[0],
                 user_id=p.user_id,
+                key="two_days_off_per_week_over",
+                params={"start": block[0], "required": target - pinned_in_block},
             )

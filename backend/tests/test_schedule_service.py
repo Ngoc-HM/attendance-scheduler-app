@@ -628,7 +628,7 @@ def test_override_date_outside_month_is_catalog_key(client: TestClient) -> None:
         for key in (
             "schedule.override_date_out_of_month",
             "schedule.cell_not_found",
-            "schedule.disabled_user_duty",
+            "schedule.violation.disabled_user_duty",
         ):
             assert t(key, lang) != key
 
@@ -656,7 +656,7 @@ def test_recheck_flags_disabled_user_ad_cells(client: TestClient) -> None:
 
     def _short_on_duty_day(items: list[dict]) -> bool:
         return any(
-            "short flight coverage" in v["message"] and str(duty_day) in v["message"]
+            v["rule"] == "flight_staffing" and v["day"] == duty_day.isoformat()
             for v in items
         )
 
@@ -675,18 +675,20 @@ def test_recheck_flags_disabled_user_ad_cells(client: TestClient) -> None:
         (duty_day.isoformat(), a1["id"])
     ]
     # The message itself names the day once (text-only callers show it too).
-    assert flagged[0]["message"] == (
-        f"{duty_day}: {t('schedule.disabled_user_duty')} (A/D)"
+    assert flagged[0]["message"] == t("schedule.violation.disabled_user_duty").format(
+        day=duty_day.isoformat(), person=f"{a1['code']} ({a1['full_name']})", code="A/D"
     )
     # The disabled user's A/D is no longer cover: the day is now short.
     assert _short_on_duty_day(after)
     staffing = [
         v["message"] for v in after
-        if "short flight coverage" in v["message"] and str(duty_day) in v["message"]
+        if v["rule"] == "flight_staffing" and v["day"] == duty_day.isoformat()
     ]
-    assert len(staffing) == 1 and staffing[0].count(str(duty_day)) == 1
+    assert staffing and all(m.count(str(duty_day)) == 1 for m in staffing)
     # Per-person rules no longer report the disabled user.
-    assert not any(f"User {a1['id']}:" in v["message"] for v in after)
+    assert not any(
+        v["user_id"] == a1["id"] for v in after if v["rule"] != "disabled_user_duty"
+    )
 
     # Text-only caller (leave decision): each line is "YYYY-MM: <message>" with
     # the message unchanged — no second day prefix on either kind of line.
@@ -895,14 +897,16 @@ def test_disabled_user_past_cells_still_count_as_cover(
 
     def _short(day: date) -> bool:
         return any(
-            "short flight coverage" in v["message"] and str(day) in v["message"]
+            v["rule"] == "flight_staffing" and v["day"] == day.isoformat()
             for v in items
         )
 
     assert not _short(past_day)
     assert _short(today) and _short(future_day)
     # Per-person rules still never report the disabled user.
-    assert not any(f"User {a1['id']}:" in v["message"] for v in items)
+    assert not any(
+        v["user_id"] == a1["id"] for v in items if v["rule"] != "disabled_user_duty"
+    )
 
 
 def test_resync_seeded_actuals_query_count_is_flat(client: TestClient) -> None:

@@ -62,12 +62,21 @@ class AssignmentResult:
 
 @dataclass
 class Violation:
-    """A hard-constraint breach reported back to the admin (§5.6)."""
+    """A hard-constraint breach reported back to the admin (§5.6).
+
+    ``message`` is an English line for logs and tests only. What the client
+    reads is rendered by the service layer (``schedule_violation_text``) from
+    ``key`` (message variant of the rule; empty → ``rule``) and ``params``
+    (counts, dates, shift letter, ...), in the request's language. ``user_id``
+    stays the only person reference here (no PII in the engine).
+    """
 
     rule: str
     message: str
     day: date | None = None
     user_id: int | None = None
+    key: str = ""
+    params: dict[str, object] = field(default_factory=dict)
 
 
 @dataclass

@@ -210,8 +210,7 @@ def decide(
             attendance_service.sync_planned_cell(db, cell.user_id, cell.work_date, c.code)
         # Informational hard-rule recheck for the admin (same as F-09 edits).
         warnings = [
-            f"{v.rule}: {v.message}"
-            for v in schedule_service._recheck_violations(db, schedule)
+            v.message for v in schedule_service._recheck_violations(db, schedule)
         ]
 
     req.status = new_status

@@ -81,7 +81,7 @@ def test_manual_recheck_flags_cross_month_rolling_rest() -> None:
         {1: previous},
     )
 
-    assert any("starting 2026-06-29" in warning for warning in warnings)
+    assert any("starting 2026-06-29" in warning.message for warning in warnings)
 
 
 def test_each_role_a_person_gets_two_a_days_and_near_equal_a_d() -> None:
@@ -257,7 +257,9 @@ def test_off_chain_crosses_month_boundary() -> None:
         ("max_consecutive_off", date(2026, 7, 27))
     ]
     checker = check_off_chain(grid, {1: Role.T}, weeks, {}, prev_codes={1: prev})
-    assert len(checker) == 1 and "2026-07-27" in checker[0]
+    assert [(v.rule, v.day) for v in checker] == [
+        ("max_consecutive_off", date(2026, 7, 27))
+    ]
 
     # Left alone, the engine now keeps 1 August a working day.
     out = SchedulerEngine().solve(inp_for(prev))

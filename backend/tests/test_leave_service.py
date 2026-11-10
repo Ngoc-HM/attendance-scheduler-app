@@ -732,10 +732,9 @@ def test_approve_keeps_the_weekly_off_days(client):
     warnings = _approve(client, admin, leave_id)
 
     assert any("updated" in w for w in warnings)
+    # Lines are rendered text: "<code> (<name>): ... 7-day block from <start>".
     assert not any(
-        f"User {me}: " in w
-        and "off day(s) instead of" in w
-        and f"block starting {block_start}" in w
+        "(F1_Keepx_A1): " in w and f"7-day block from {block_start}" in w
         for w in warnings
     ), warnings
     assert _planned(client, admin, me, span) == _after_approve(before)

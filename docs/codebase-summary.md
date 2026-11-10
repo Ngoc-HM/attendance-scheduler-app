@@ -19,7 +19,8 @@ services/    auth, user, flight (+flight_pair_derivation, flight_excel_parser,
              flight_plan_template / _parser / _service: the monthly Excel grid),
              leave (+leave_windows, leave_balance, leave_conflict_resolver),
              shift_change, self_arrange, schedule (+schedule_input_builder,
-             schedule_history, schedule_violation_checker, schedule_autorun),
+             schedule_history, schedule_violation_checker,
+             schedule_violation_text, schedule_autorun),
              role_code_validation, attendance (+sick_backfill), time_clock,
              holiday, calculation (+carry_over_math), report (+report_table,
              report_serializers), compliance, audit, demo_user_seed
@@ -33,7 +34,7 @@ alembic/     0001 baseline … 0009 flight_unique_day_number (head; see
 scripts/     seed_demo_users.py, reset_all_passwords.py (both refuse unless
              ENVIRONMENT=dev and the database is local, app/core/script_guard.py;
              --allow-non-dev overrides; hidden password prompt)
-tests/       536 tests (pytest on SQLite, foreign keys on) — engine rules
+tests/       547 tests (pytest on SQLite, foreign keys on) — engine rules
              (bind + slack violation), solve phases, engine/checker agreement,
              roles, cross-month rules, services, endpoints, input bounds,
              RBAC/audit, user delete, sick privacy, production guard, bootstrap,

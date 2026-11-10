@@ -89,4 +89,5 @@ def add(
                 ),
                 day=start,
                 user_id=p.user_id,
+                params={"start": start},
             )
