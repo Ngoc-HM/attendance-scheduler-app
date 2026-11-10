@@ -1,11 +1,13 @@
 # Hướng dẫn test sau đợt sửa 2026-11
 
-Đợt sửa 2026-11-07 đã được gộp vào `main` ngày 2026-11-08 (merge commit `4ded62e`, nhánh `fix/2026-11-remediation` đã xoá). Đợt sửa thứ hai theo bản rà soát 2026-11-08 nằm trên nhánh `fix/2026-11-review-2`; các thay đổi mới để bấm thử nằm ở **mục 6**.
+Đợt sửa 2026-11-07 đã được gộp vào `main` ngày 2026-11-08 (merge commit `4ded62e`, nhánh `fix/2026-11-remediation` đã xoá). Đợt sửa thứ hai theo bản rà soát 2026-11-08 cũng đã được gộp vào `main`; các thay đổi mới để bấm thử nằm ở **mục 6**.
 
 ## 1. Chạy
 
-**Cảnh báo quan trọng về cơ sở dữ liệu**
-- `backend/.env` đang trỏ tới PostgreSQL thật (qua Tailscale) và backend chạy `ENVIRONMENT=dev`. Có hai migration mới: **0008** (thêm cột `users.annual_leave_quota`, bỏ cột `annual_leave_balance` chưa dùng) và **0009** (xoá chuyến bay trùng cùng ngày + số FLT, giữ dòng có id nhỏ nhất, rồi thêm ràng buộc duy nhất). **Phải chạy migration trước khi bật backend:**
+**Cơ sở dữ liệu**
+- `make dev` tự bật PostgreSQL 16 trong Docker (`localhost:5432`, file `backend/docker-compose.yml`), tự chạy `alembic upgrade head`, rồi bật backend và app. Cần Docker đang chạy, và `DATABASE_URL` trong `backend/.env` phải trỏ tới PostgreSQL ở `localhost` (giá trị mẫu trong `backend/.env.example`).
+- Tắt app hoặc bấm Ctrl-C thì backend dừng; PostgreSQL vẫn chạy và giữ dữ liệu cho đến khi chạy `make db-stop`. `make db` chỉ bật riêng database.
+- Nếu `DATABASE_URL` trỏ tới PostgreSQL ở máy khác, `make dev` **không** bật Docker và **không** chạy migration vào đó. Có hai migration mới: **0008** (thêm cột `users.annual_leave_quota`, bỏ cột `annual_leave_balance` chưa dùng) và **0009** (xoá chuyến bay trùng cùng ngày + số FLT, giữ dòng có id nhỏ nhất, rồi thêm ràng buộc duy nhất). Với database ở máy khác, **phải tự chạy migration trước khi bật backend:**
 
 ```bash
 make install
@@ -17,7 +19,7 @@ cd backend && .venv/bin/alembic upgrade head
 
 - `AUTO_CREATE_TABLES` **không** cứu được: nó chỉ tạo bảng cho một DB hoàn toàn mới, và bị bỏ qua (có dòng cảnh báo trong log) khi DB đã có bảng `alembic_version`. Nó cũng không bao giờ thêm cột hay ràng buộc vào bảng đã có.
 - Nếu quên migrate, lúc khởi động backend in một dòng **WARNING** dạng "Database schema revision 0008 differs from the code's migration head 0009; run 'alembic upgrade head'". Backend vẫn chạy tiếp nhưng API có thể lỗi vì thiếu cột — thấy dòng này thì tắt backend, chạy `alembic upgrade head` rồi bật lại.
-- Nếu muốn test sạch trên máy, đổi `DATABASE_URL` trong `backend/.env` sang SQLite (`sqlite:///./dev.db`) rồi chạy bình thường; với file DB mới, bảng được tạo tự động. Lưu ý: với `AUTORUN_ENABLED=true` (mặc định), lần khởi động đầu tiên sẽ tự tạo **nháp lịch tháng hiện tại** (tháng chưa có lịch nào); muốn tự bấm Generate từ đầu thì đặt `AUTORUN_ENABLED=false`.
+- Với `AUTORUN_ENABLED=true` (mặc định), lần khởi động đầu tiên trên một database trống sẽ tự tạo **nháp lịch tháng hiện tại**; muốn tự bấm Generate từ đầu thì đặt `AUTORUN_ENABLED=false`.
 
 **Khởi động cả backend và app**
 

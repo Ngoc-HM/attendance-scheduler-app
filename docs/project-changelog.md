@@ -2,6 +2,12 @@
 
 ## 2026-11-10 — End-to-end run follow-ups
 
+- `make dev` now runs the whole dev stack: PostgreSQL 16 in Docker
+  (`backend/docker-compose.yml`, service `db`, published on loopback only),
+  `alembic upgrade head`, then the backend and the Flutter client. New
+  targets `make db` and `make db-stop`. The database step acts only for a
+  localhost PostgreSQL `DATABASE_URL`; a remote database is left alone. The
+  compose project is named `attendance-scheduler`.
 - Schedule page: the people list survives a month with no schedule, so the
   grid shows codes and each role's own codes right after Generate; the page
   (not the pending-panel row) shows the decision toast or warnings and
