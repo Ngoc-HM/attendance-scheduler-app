@@ -7,9 +7,9 @@ from datetime import date
 from app.models.enums import AttendanceCode, Role
 from app.scheduler import PersonInput, SchedulerEngine, SolverInput
 from app.scheduler.calendar_utils import (
+    block_off_target,
     build_weeks,
     month_days,
-    partial_block_off_target,
 )
 
 
@@ -29,8 +29,9 @@ def _solve(people, days, flight_pairs=None, approved_off=None):
 
 
 def test_each_block_gets_exactly_target_x() -> None:
-    """Feasible scenario → every block holds its pro-rated X target, 0 slack."""
-    days = month_days(2026, 6)  # blocks 7/7/7/7/2 → targets 2/2/2/2/1
+    """Feasible scenario → every full block holds exactly 2 X, 0 slack; the
+    leftover days 29–30 have no quota (owner 2026-11-10) and no slack."""
+    days = month_days(2026, 6)  # blocks 7/7/7/7 → 2 X each; 29–30 no quota
     people = [PersonInput(1, Role.T), PersonInput(2, Role.A)]
     out = _solve(people, days)
 
@@ -38,8 +39,11 @@ def test_each_block_gets_exactly_target_x() -> None:
     grid = {(a.user_id, a.day): a.code for a in out.assignments}
     for p in people:
         for block in build_weeks(days):
+            target = block_off_target(len(block))
+            if target is None:
+                continue  # leftover days: see test_engine_month_tail
             got = sum(1 for d in block if grid[(p.user_id, d)] is AttendanceCode.X)
-            assert got == partial_block_off_target(len(block))
+            assert got == target
 
 
 def test_approved_leave_raises_block_target() -> None:
@@ -69,7 +73,7 @@ def test_two_weekly_offs_are_adjacent_when_free() -> None:
     for p in people:
         for block in build_weeks(days):
             if len(block) < 7:
-                continue  # partial tail block (1 off) — nothing to pair
+                continue  # leftover days: no quota → nothing to pair
             offs = [
                 i for i, d in enumerate(block)
                 if grid[(p.user_id, d)] is AttendanceCode.X

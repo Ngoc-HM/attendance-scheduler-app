@@ -12,7 +12,10 @@ premium-off fairness (30). So it never breaks 1A+2D / 1A+1D staffing, the
 max-5-consecutive-working rule, or the 2-X-per-week quota; it only shapes the
 placement of the offs once those are satisfied.
 
-Model (per person, per 7-day block with an off target ``k`` >= 2):
+The partial block after the 28th has no off quota (owner 2026-11-10), so there
+is nothing to pair there and it is skipped.
+
+Model (per person, per full 7-day block with an off target ``k`` >= 2):
     both[i] = X[day_i] AND X[day_{i+1}]           (consecutive OFF pair)
     a fully-clustered block yields ``k - 1`` such pairs; penalise the shortfall
         penalty = weight * ((k - 1) - sum(both))
@@ -27,7 +30,7 @@ from datetime import date
 from ortools.sat.python import cp_model
 
 from app.models.enums import AttendanceCode
-from app.scheduler.calendar_utils import partial_block_off_target
+from app.scheduler.calendar_utils import block_off_target
 from app.scheduler.domain import SolverInput
 
 
@@ -37,17 +40,16 @@ def terms(
     inp: SolverInput,
     weight: int,
 ) -> list[cp_model.LinearExpr]:
-    """Return adjacency-shortfall penalties (all roles have X + a weekly quota)."""
+    """Return adjacency-shortfall penalties (every role has X + a block quota)."""
     penalties: list[cp_model.LinearExpr] = []
 
     for p in inp.people:
         pinned = inp.approved_off.get(p.user_id, {})
         for block in inp.weeks:
-            target = partial_block_off_target(len(block)) + sum(
-                1 for d in block if d in pinned
-            )
-            if target < 2:
-                continue  # 0 or 1 off in this block → nothing to pair
+            base = block_off_target(len(block))
+            if base is None:
+                continue  # leftover days: no quota → nothing to pair
+            target = base + sum(1 for d in block if d in pinned)
 
             both: list[cp_model.IntVar] = []
             for i in range(len(block) - 1):

@@ -23,6 +23,9 @@ Off-day placement (two separate concerns):
       weekly offs to be ADJACENT (rest two days in a row), but WITHOUT any weekend
       bias — it only rewards adjacency, never a specific day. Low weight so it
       yields to staffing, comp days and balance.
+    - ``tail_off`` (500): the leftover days after the 28th have no off quota
+      (owner 2026-11-10); each X the engine chooses there is penalised so they
+      stay ordinary working days unless a rest rule needs a day off.
 
 """
 
@@ -37,6 +40,7 @@ from app.scheduler import (
     objective_balance,
     objective_off_pairing,
     objective_premium_off,
+    objective_tail_off,
 )
 from app.scheduler.domain import SolverInput
 
@@ -46,6 +50,16 @@ WEIGHTS = {
     "individual_shift_gap": 300, # owner 2026-07-22 — each A person: A ~= D
     "premium_off": 30,           # decision #6 — also rotates weekend/holiday offs
     "off_pairing": 15,           # §5.4 #8 — pair the 2 weekly offs adjacently (no weekend bias)
+    # Owner 2026-11-10 — per X chosen on a leftover day (29–end). One such X
+    # removes one working cell, which can improve the other terms by at most
+    # 300 (own A~D gap) + 100 (A or D spread) + 30 (premium-off spread) = 430,
+    # so 500 means a leftover-day X is never bought for balance or fairness.
+    # It stays far below the comp-day slack (2 000) and SLACK_WEIGHT (10 000),
+    # so a rest rule always wins; a whole tail stays below one SLACK_WEIGHT
+    # while people x leftover days < 20 (6 people in a 31-day month, 9 in a
+    # 30-day one). Larger rosters only matter in the single combined fallback
+    # solve: the normal two-phase solve fixes the slack first (decision #45).
+    "tail_off": 500,
 }
 
 
@@ -62,4 +76,5 @@ def add_all(
     )
     penalties += objective_premium_off.terms(model, x, inp, WEIGHTS["premium_off"])
     penalties += objective_off_pairing.terms(model, x, inp, WEIGHTS["off_pairing"])
+    penalties += objective_tail_off.terms(model, x, inp, WEIGHTS["tail_off"])
     return penalties

@@ -49,10 +49,13 @@ def _checker_keys(warnings: list[Violation]) -> set[tuple[str, int | None]]:
     return _engine_keys(warnings)
 
 
-def _instance(seed: int) -> SolverInput:
+def _instance(seed: int, *, full_month: bool = False) -> SolverInput:
     rng = random.Random(seed)
     year, month = rng.choice([(2027, 2), (2027, 3), (2027, 8), (2028, 1)])
-    days = month_days(year, month)[: rng.choice([14, 21, 28])]
+    length = rng.choice([14, 21, 28])
+    # A full 30/31-day month ends with leftover days that carry no off quota
+    # (owner 2026-11-10); engine and checker must agree there too.
+    days = month_days(year, month) if full_month else month_days(year, month)[:length]
     first = days[0]
 
     roles = [Role.M, Role.T, Role.F] + [Role.A] * rng.randint(3, 5)
@@ -215,9 +218,11 @@ def _edited(
     return out
 
 
-@pytest.mark.parametrize("seed", [11, 22, 33])
-def test_engine_clean_grid_passes_checker(seed: int) -> None:
-    inp = _instance(seed)
+@pytest.mark.parametrize(
+    ("seed", "full_month"), [(11, False), (22, False), (33, False), (44, True)]
+)
+def test_engine_clean_grid_passes_checker(seed: int, full_month: bool) -> None:
+    inp = _instance(seed, full_month=full_month)
     out = SchedulerEngine(num_workers=1).solve(inp)
     assert out.feasible
     grid = {(a.user_id, a.day): a.code for a in out.assignments}

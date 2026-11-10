@@ -6,10 +6,13 @@ PUBLISHED month → validated (ownership, role code domain, weekly-2-off quota)
 schedule and applied. Validation runs at BOTH ends because the schedule may
 change between submit and approve.
 
-Quota semantics (owner decision c): every 7-day block (anchored at day 1)
-must keep EXACTLY ``partial_block_off_target`` genuine X days. AL/S/CD are
-stored as their own codes in the grid, so counting X only matches decision #4
-("leave does not consume the weekly off quota").
+Quota semantics (owner decision c): every full 7-day block (anchored at day
+1) must keep EXACTLY 2 genuine X days. AL/S/CD are stored as their own codes
+in the grid, so counting X only matches decision #4 ("leave does not consume
+the weekly off quota"). The leftover days after the 28th have no quota (owner
+2026-11-10); there the batch must keep the NUMBER of X the person holds now —
+a day off may move within those days, but none may be added or removed, so
+self-arrange can neither grant a free day off nor drop one the schedule gave.
 """
 
 from __future__ import annotations
@@ -24,11 +27,7 @@ from app.models.enums import AttendanceCode, LeaveStatus
 from app.models.schedule import MonthlySchedule, ShiftAssignment
 from app.models.self_arrange_request import SelfArrangeRequest
 from app.models.user import User
-from app.scheduler.calendar_utils import (
-    build_weeks,
-    month_days,
-    partial_block_off_target,
-)
+from app.scheduler.calendar_utils import block_off_target, build_weeks, month_days
 from app.scheduler.role_codes import codes_for
 from app.schemas.self_arrange import SelfArrangeChange, SelfArrangeCreate
 from app.services import attendance_service, schedule_service
@@ -108,21 +107,25 @@ def _validate_weekly_off(
     year: int,
     month: int,
 ) -> None:
-    """Every AFFECTED 7-day block must keep exactly its X target after the batch."""
+    """Every AFFECTED block must keep its X count after the batch: exactly 2 in
+    a full 7-day block; in the leftover days (no quota, owner 2026-11-10) the
+    count the person holds there now."""
     new_codes = {c.work_date: c.code for c in changes}
     changed_dates = set(new_codes)
+
+    def current(d: date) -> AttendanceCode | None:
+        cell = own.get(d)
+        return cell.code if cell is not None else None
+
     for block in build_weeks(month_days(year, month)):
         if not changed_dates.intersection(block):
             continue
-        target = partial_block_off_target(len(block))
-        got = 0
-        for d in block:
-            code = new_codes.get(d)
-            if code is None:
-                cell = own.get(d)
-                code = cell.code if cell is not None else None
-            if code is AttendanceCode.X:
-                got += 1
+        got = sum(
+            1 for d in block if new_codes.get(d, current(d)) is AttendanceCode.X
+        )
+        target = block_off_target(len(block))
+        if target is None:
+            target = sum(1 for d in block if current(d) is AttendanceCode.X)
         if got != target:
             raise HTTPException(
                 status.HTTP_422_UNPROCESSABLE_CONTENT,

@@ -152,3 +152,21 @@ def test_off_chain_exempts_runs_with_monthly_leave() -> None:
         for d in days
     }
     assert check_off_chain(grid, {1: Role.T}, weeks, {}) == []
+
+
+def test_off_quota_ignores_leftover_days() -> None:
+    """Owner 2026-11-10: the days after the 28th carry no off quota, so 0, 1
+    or 2 X there are never flagged; full blocks still need exactly 2 X."""
+    from app.services.schedule_violation_checker import check_off_quota
+
+    grid, weeks, days = _full_month(1, [A, D, A, D, D, X, X], year=2032, month=6)
+    tail = [d for d in days if d.day > 28]  # June: 29–30
+    assert len(tail) == 2
+    for offs in (0, 1, 2):
+        for i, d in enumerate(tail):
+            grid[(1, d)] = X if i < offs else A
+        assert check_off_quota(grid, {1: Role.A}, weeks) == []
+    # A full block with 3 X is still flagged.
+    grid[(1, days[0])] = X
+    [over] = check_off_quota(grid, {1: Role.A}, weeks)
+    assert (over.key, over.day) == ("two_days_off_per_week_over", days[0])

@@ -10,7 +10,7 @@ Rules mirrored (engine module in brackets):
 
 * max 5 consecutive working days, carry included   [constraints_consecutive]
 * >= 2 rest days in every rolling 7 days           [constraints_rolling_rest]
-* genuine-X quota per 7-day block                  [constraints_off_days]
+* genuine-X quota per full 7-day block             [constraints_off_days]
 * flight staffing floor for role A                 [constraints_staffing]
 * >= 2 pure A days per role-A person / full month  [constraints_role_a_distribution]
 * owed comp days (CD) granted, none unearned       [constraints_comp_days]
@@ -27,7 +27,7 @@ from __future__ import annotations
 from datetime import date, timedelta
 
 from app.models.enums import AttendanceCode, Role
-from app.scheduler.calendar_utils import partial_block_off_target
+from app.scheduler.calendar_utils import block_off_target
 from app.scheduler.constraints_role_a_distribution import (
     MIN_A_DAYS,
     MIN_FULL_MONTH_DAYS,
@@ -163,7 +163,11 @@ TARGET_CAP_CODES = {AttendanceCode.AL, AttendanceCode.S}
 
 
 def check_off_quota(grid, roles, weeks) -> list[Violation]:
-    """§5.3 #2 — genuine X per 7-day block must meet the pro-rated target.
+    """§5.3 #2 — genuine X per full 7-day block must equal its target (2).
+
+    The leftover days after the 28th (a partial block) carry no quota and are
+    not checked (owner 2026-11-10) — the rest rules cover them, as in the
+    engine (``calendar_utils.block_off_target``).
 
     AL/CD/S days do not consume the quota (decision #4) — only X counts.
     The target shrinks when leave fills the block (mirrors the engine's cap,
@@ -174,12 +178,13 @@ def check_off_quota(grid, roles, weeks) -> list[Violation]:
     warnings: list[Violation] = []
     for uid in roles:
         for block in weeks:
+            base = block_off_target(len(block))
+            if base is None:
+                continue  # leftover days: no quota (owner 2026-11-10)
             leave_days = sum(
                 1 for d in block if grid.get((uid, d)) in TARGET_CAP_CODES
             )
-            target = min(
-                partial_block_off_target(len(block)), len(block) - leave_days
-            )
+            target = min(base, len(block) - leave_days)
             got = sum(1 for d in block if grid.get((uid, d)) is AttendanceCode.X)
             if got != target:
                 warnings.append(

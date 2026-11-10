@@ -1,9 +1,15 @@
 """§5.3 #2 — two OFF (X) days per 7-day block (soft, decision #2/#4/#7).
 
-Per person and per block (7-day groups anchored at day 1, decision #7) the
-number of X days must equal a target:
+Per person and per FULL block (7-day groups anchored at day 1, decision #7)
+the number of X days must equal a target:
 
-    target = partial_block_off_target(len(block)) + approved-off days in block
+    target = 2 + approved-off days in block   (capped at the block length)
+
+The partial block after the 28th has no quota and gets no constraint and no
+slack here (owner 2026-11-10, ``calendar_utils.block_off_target``): those days
+are ordinary working days, kept so by ``objective_tail_off``, and the rest
+rules (``constraints_consecutive`` / ``constraints_rolling_rest``) still give
+a day off there whenever a person needs one.
 
 Approved leave (AL/CD) is pinned as X in the decision layer (§5.3 #5) but does
 NOT count toward the weekly off quota (decision #4) — raising the target by the
@@ -21,7 +27,7 @@ from datetime import date
 from ortools.sat.python import cp_model
 
 from app.models.enums import AttendanceCode
-from app.scheduler.calendar_utils import partial_block_off_target
+from app.scheduler.calendar_utils import block_off_target
 from app.scheduler.domain import SolverInput
 from app.scheduler.slack_registry import SlackRegistry
 
@@ -35,11 +41,13 @@ def add(
     for p in inp.people:
         pinned = inp.approved_off.get(p.user_id, {})
         for block in inp.weeks:
+            base = block_off_target(len(block))
+            if base is None:
+                continue  # leftover days: no quota (owner 2026-11-10)
             pinned_in_block = sum(1 for d in block if d in pinned)
             # Genuine X on top of the pins, capped so the target can never
             # exceed the block length (a near-full-block leave would otherwise
             # demand more off days than the block has → guaranteed violation).
-            base = partial_block_off_target(len(block))
             target = pinned_in_block + min(base, len(block) - pinned_in_block)
 
             label = f"off_{p.user_id}_{block[0].isoformat()}"

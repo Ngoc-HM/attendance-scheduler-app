@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from app.scheduler.calendar_utils import (
+    block_off_target,
     build_weeks,
     month_days,
-    partial_block_off_target,
+    partial_block_days,
     trailing_work_streak,
 )
 
@@ -30,13 +31,22 @@ def test_build_weeks_is_7_day_blocks_from_day_1() -> None:
     assert [len(w) for w in build_weeks(month_days(2026, 2))] == [7, 7, 7, 7]
 
 
-def test_partial_block_off_target_pro_rates() -> None:
-    """Full block → 2 X; tail pro-rated round(len/7*2) (decision #7)."""
-    assert partial_block_off_target(7) == 2
-    assert partial_block_off_target(4) == 1
-    assert partial_block_off_target(3) == 1
-    assert partial_block_off_target(2) == 1
-    assert partial_block_off_target(1) == 0
+def test_block_off_target_full_block_only() -> None:
+    """Full block → exactly 2 X; the leftover days have no quota (owner
+    2026-11-10 — replaces the pro-rated round(len/7*2) tail)."""
+    assert block_off_target(7) == 2
+    for tail_len in (1, 2, 3):
+        assert block_off_target(tail_len) is None
+
+
+def test_partial_block_days_are_the_days_after_the_28th() -> None:
+    assert [d.day for d in partial_block_days(build_weeks(month_days(2026, 11)))] == [
+        29, 30,
+    ]
+    assert [d.day for d in partial_block_days(build_weeks(month_days(2026, 7)))] == [
+        29, 30, 31,
+    ]
+    assert partial_block_days(build_weeks(month_days(2026, 2))) == []
 
 
 def test_trailing_work_streak() -> None:

@@ -309,7 +309,8 @@ class AppLocalizations {
       'selfArrangeNote': 'Note (optional)',
       'selfArrangeSubmitted': 'Request submitted — waiting for admin approval.',
       'selfArrangeQuotaBroken':
-          'A 7-day block would not keep its required off days.',
+          'Each 7-day block needs exactly 2 days off; the leftover days of '
+          'the month keep their number of days off.',
       'selfArrangeNoDraft': 'No changes yet.',
       'selfArrangeDiscard': 'Discard draft',
       'selfArrangeHistory': 'My requests',
@@ -729,7 +730,8 @@ class AppLocalizations {
       'selfArrangeNote': 'Ghi chú (không bắt buộc)',
       'selfArrangeSubmitted': 'Đã gửi yêu cầu — chờ admin duyệt.',
       'selfArrangeQuotaBroken':
-          'Có block 7 ngày không giữ đúng số ngày nghỉ quy định.',
+          'Mỗi block 7 ngày cần đúng 2 ngày nghỉ; các ngày lẻ cuối tháng giữ '
+          'nguyên số ngày nghỉ.',
       'selfArrangeNoDraft': 'Chưa có thay đổi.',
       'selfArrangeDiscard': 'Huỷ nháp',
       'selfArrangeHistory': 'Yêu cầu của tôi',

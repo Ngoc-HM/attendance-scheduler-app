@@ -45,6 +45,10 @@ class SelfArrangeState {
   /// 7-day blocks anchored at day 1 (mirrors `calendar_utils.build_weeks`):
   /// block index → (X count after draft, required target). Only genuine X
   /// counts — AL/S/CD are their own codes and never consume the quota.
+  ///
+  /// A full block needs exactly 2 X. The month's leftover days (29–31) have
+  /// no quota (owner 2026-11-10): there the draft must only keep the number
+  /// of X the plan already has, so the target is that number.
   Map<int, (int, int)> blockOffCounts() {
     if (myAssignments.isEmpty) return const {};
     final byBlock = <int, List<ShiftAssignment>>{};
@@ -52,8 +56,9 @@ class SelfArrangeState {
       byBlock.putIfAbsent((a.workDate.day - 1) ~/ 7, () => []).add(a);
     }
     return byBlock.map((block, cells) {
-      final len = cells.length;
-      final target = len >= 7 ? 2 : (len / 7 * 2).round();
+      final target = cells.length >= 7
+          ? 2
+          : cells.where((a) => a.code == 'X').length;
       final got = cells.where((a) => codeFor(a.workDate) == 'X').length;
       return MapEntry(block, (got, target));
     });
@@ -71,21 +76,20 @@ class SelfArrangeState {
     Object? error,
     bool? notPublished,
     bool clearError = false,
-  }) =>
-      SelfArrangeState(
-        myAssignments: myAssignments ?? this.myAssignments,
-        draft: draft ?? this.draft,
-        myRequests: myRequests ?? this.myRequests,
-        isLoading: isLoading ?? this.isLoading,
-        isSubmitting: isSubmitting ?? this.isSubmitting,
-        error: clearError ? null : (error ?? this.error),
-        notPublished: notPublished ?? this.notPublished,
-      );
+  }) => SelfArrangeState(
+    myAssignments: myAssignments ?? this.myAssignments,
+    draft: draft ?? this.draft,
+    myRequests: myRequests ?? this.myRequests,
+    isLoading: isLoading ?? this.isLoading,
+    isSubmitting: isSubmitting ?? this.isSubmitting,
+    error: clearError ? null : (error ?? this.error),
+    notPublished: notPublished ?? this.notPublished,
+  );
 }
 
 class SelfArrangeController extends StateNotifier<SelfArrangeState> {
   SelfArrangeController(this._scheduleDs, this._ds)
-      : super(const SelfArrangeState());
+    : super(const SelfArrangeState());
 
   final ScheduleRemoteDataSource _scheduleDs;
   final SelfArrangeRemoteDataSource _ds;
@@ -105,10 +109,9 @@ class SelfArrangeController extends StateNotifier<SelfArrangeState> {
     );
     try {
       final schedule = await _scheduleDs.fetchSchedule(year, month);
-      final mine = schedule.assignments
-          .where((a) => a.userId == userId)
-          .toList()
-        ..sort((a, b) => a.workDate.compareTo(b.workDate));
+      final mine =
+          schedule.assignments.where((a) => a.userId == userId).toList()
+            ..sort((a, b) => a.workDate.compareTo(b.workDate));
       final requests = await _ds.list();
       if (!mounted || seq != _loadSeq) return; // disposed or superseded
       state = state.copyWith(
@@ -188,11 +191,11 @@ class SelfArrangeController extends StateNotifier<SelfArrangeState> {
 
 final selfArrangeControllerProvider =
     StateNotifierProvider<SelfArrangeController, SelfArrangeState>(
-  (ref) => SelfArrangeController(
-    ref.watch(scheduleRemoteDataSourceProvider),
-    ref.watch(selfArrangeRemoteDataSourceProvider),
-  ),
-);
+      (ref) => SelfArrangeController(
+        ref.watch(scheduleRemoteDataSourceProvider),
+        ref.watch(selfArrangeRemoteDataSourceProvider),
+      ),
+    );
 
 // ── Admin side (pending panel on the schedule page) ────────────────────────────
 
@@ -217,13 +220,12 @@ class SelfArrangeAdminState {
     bool? isMutating,
     Object? error,
     bool clearError = false,
-  }) =>
-      SelfArrangeAdminState(
-        requests: requests ?? this.requests,
-        isLoading: isLoading ?? this.isLoading,
-        isMutating: isMutating ?? this.isMutating,
-        error: clearError ? null : (error ?? this.error),
-      );
+  }) => SelfArrangeAdminState(
+    requests: requests ?? this.requests,
+    isLoading: isLoading ?? this.isLoading,
+    isMutating: isMutating ?? this.isMutating,
+    error: clearError ? null : (error ?? this.error),
+  );
 }
 
 class SelfArrangeAdminController extends StateNotifier<SelfArrangeAdminState> {
@@ -267,7 +269,7 @@ class SelfArrangeAdminController extends StateNotifier<SelfArrangeAdminState> {
 
 final selfArrangeAdminControllerProvider =
     StateNotifierProvider<SelfArrangeAdminController, SelfArrangeAdminState>(
-  (ref) => SelfArrangeAdminController(
-    ref.watch(selfArrangeRemoteDataSourceProvider),
-  ),
-);
+      (ref) => SelfArrangeAdminController(
+        ref.watch(selfArrangeRemoteDataSourceProvider),
+      ),
+    );

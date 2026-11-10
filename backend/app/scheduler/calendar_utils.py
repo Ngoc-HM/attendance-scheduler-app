@@ -19,9 +19,9 @@ def build_weeks(days: list[date]) -> list[list[date]]:
     """Partition ``days`` into 7-day blocks anchored at day 1 (decision #7).
 
     A "week" for the 2-days-off rule (§5.3 #2) is days 1–7, 8–14, 15–21,
-    22–28, 29–end of the month — NOT calendar Mon–Sun weeks. Only the final
-    block can be partial; its off-day target is pro-rated via
-    ``partial_block_off_target``. Owner re-confirmed 2026-11-06 (D2).
+    22–28, 29–end of the month — NOT calendar Mon–Sun weeks (owner
+    re-confirmed 2026-11-06, D2). Only the final block can be partial; it
+    carries no off-day quota (``block_off_target``, owner 2026-11-10).
     """
     ordered = sorted(days)
     blocks: dict[int, list[date]] = {}
@@ -30,15 +30,28 @@ def build_weeks(days: list[date]) -> list[list[date]]:
     return [blocks[k] for k in sorted(blocks)]
 
 
-def partial_block_off_target(block_len: int) -> int:
-    """Required OFF (X) days for a block of ``block_len`` days (decision #7).
+FULL_BLOCK_LEN = 7
+FULL_BLOCK_OFF = 2  # §5.3 #2 — exactly 2 genuine X per full 7-day block
 
-    Full 7-day block → 2; partial final block pro-rates: round(len/7*2).
-    E.g. 2-day tail → 1, 3-day tail → 1, 1-day tail → 0.
+
+def block_off_target(block_len: int) -> int | None:
+    """Required genuine OFF (X) days for a block of ``block_len`` days.
+
+    A full 7-day block needs exactly 2 (§5.3 #2). A partial block — the
+    leftover days 29–end of the month — has NO quota (``None``): the customer
+    has no such rule (owner 2026-11-10). The old pro-rated target
+    (``round(len/7*2)`` → 1 X on a 2–3-day tail) forced every group-A person
+    off there and left two-pair flight days short. People stay protected on
+    those days by max-5-consecutive-working and the rolling-7-day rest rule.
     """
-    if block_len >= 7:
-        return 2
-    return round(block_len / 7 * 2)
+    if block_len >= FULL_BLOCK_LEN:
+        return FULL_BLOCK_OFF
+    return None
+
+
+def partial_block_days(weeks: list[list[date]]) -> list[date]:
+    """Days of the blocks shorter than 7 days (no off-day quota there)."""
+    return [d for block in weeks if block_off_target(len(block)) is None for d in block]
 
 
 def trailing_work_streak(working_flags: list[bool]) -> int:
