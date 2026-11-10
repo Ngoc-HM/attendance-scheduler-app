@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 
 import '../../features/attendance/presentation/pages/attendance_page.dart';
 import '../../features/attendance/presentation/pages/time_clock_page.dart';
-import '../../features/auth/domain/entities/user.dart';
 import '../../features/auth/presentation/pages/login_page.dart';
 import '../../features/auth/presentation/pages/register_page.dart';
 import '../../features/auth/presentation/providers/auth_provider.dart';
@@ -14,7 +13,6 @@ import '../../features/home/presentation/pages/home_shell.dart';
 import '../../features/leaves/presentation/pages/leaves_page.dart';
 import '../../features/reports/presentation/pages/reports_page.dart';
 import '../../features/schedule/presentation/pages/schedule_page.dart';
-import '../../features/schedule/presentation/pages/self_arrange_page.dart';
 import '../../features/users/presentation/pages/users_page.dart';
 
 /// Routes only role M may open (client-side UX guard; the API re-checks).
@@ -59,9 +57,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       if (_publicPaths.contains(path)) return AppRoute.schedule;
       if (user.isAdmin) return null;
       if (_adminOnlyPaths.contains(path)) return AppRoute.schedule;
-      if (path == AppRoute.selfArrange && !user.role.canSelfArrange) {
-        return AppRoute.schedule;
-      }
       return null;
     },
     routes: [
@@ -116,11 +111,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 const NoTransitionPage(child: UsersPage()),
           ),
           GoRoute(
-            path: AppRoute.selfArrange,
-            pageBuilder: (context, state) =>
-                const NoTransitionPage(child: SelfArrangePage()),
-          ),
-          GoRoute(
             path: AppRoute.clock,
             pageBuilder: (context, state) =>
                 const NoTransitionPage(child: TimeClockPage()),
@@ -144,6 +134,5 @@ class AppRoute {
   static const String attendance = '/attendance';
   static const String reports = '/reports';
   static const String users = '/users';
-  static const String selfArrange = '/self-arrange';
   static const String clock = '/clock';
 }

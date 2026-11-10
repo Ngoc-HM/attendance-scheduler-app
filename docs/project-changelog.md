@@ -22,11 +22,11 @@
 - App shell header: the customer's logo (Vietnam Airlines) replaces the plane
   tile and the product name — full wordmark on the wide rail and in the phone
   app bar, the lotus alone on the collapsed rail.
-- Login page: the logo replaces the plane tile above the form. The context
-  panel (wide windows) is a full-bleed photo of the customer's aircraft
-  (`assets/images/login_aircraft.jpg`) with no text: the product name, the
-  subtitle and the three feature lines are gone (owner). The panel takes 3/5
-  of the card so the whole aircraft stays in view.
+- Login page: the photo of the customer's aircraft
+  (`assets/images/login_aircraft.jpg`) fills the window and the form sits on
+  it in one frosted-glass card with the logo — lower right on wide windows,
+  centred on narrow ones. The product name, the subtitle and the three
+  feature lines are gone (owner).
 - App icon (macOS icon set and Windows `.ico`): the lotus on a white tile,
   re-sharpened from the 115 px lotus in the received logo; a larger source
   logo would give a crisper icon.
@@ -40,8 +40,8 @@
   `schedule.violation.*`, en + vi) writes the sentence in the request's
   language, naming people by roster code and name instead of `User <id>`.
   Re-check violations now carry their real rule name (was `manual_recheck`)
-  with `day` and `user_id` filled; shift-change, leave and self-arrange
-  warnings use the same text.
+  with `day` and `user_id` filled; shift-change and leave warnings use the
+  same text.
 - Rest rules (decision #62): the month is no longer cut into 7-day blocks.
   The rest rule is "at most 5 working days in any 7 consecutive days" across
   months; the "exactly 2 days off per block" quota and the forced day off in
@@ -49,9 +49,17 @@
   days, preferred Fri+Sat, then Sat+Sun, then Sun+Mon, shared out fairly
   within each role group; every person gets as many days off as the month
   has Saturdays and Sundays (the paper roster's "TTL working days"), and a
-  role group keeps someone working every day when it can. Self-arrange
-  keeps the month's number of days off and may not create more than 5
-  working days in 7.
+  role group keeps someone working every day when it can.
+- Navigation: for an admin, the Schedule, Leaves and Users tabs show how
+  many items wait for a decision (pending shift changes, leave requests,
+  accounts) — a pill after the label on the wide rail, a badge on the icon
+  on the collapsed rail and the phone bar; nothing at 0, `99+` above 99.
+  One call, `GET /pending-counts` (admin only), refreshed on tab switch,
+  after each decision and every 60 s.
+- Self-arrange is removed (owner, decision #63): the employee tab, the
+  admin's pending panel, the `/self-arrange` API and its service. The
+  `self_arrange_requests` table and its rows are kept, with the user
+  deletion, data export and retention purge that cover them.
 
 ## 2026-11-10 — End-to-end run follow-ups
 

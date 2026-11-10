@@ -14,9 +14,7 @@ import 'package:attendance_scheduler_app/features/auth/presentation/providers/au
 import 'package:attendance_scheduler_app/features/flights/data/datasources/flights_remote_datasource.dart';
 import 'package:attendance_scheduler_app/features/flights/data/models/flight_day_model.dart';
 import 'package:attendance_scheduler_app/features/schedule/data/datasources/schedule_remote_datasource.dart';
-import 'package:attendance_scheduler_app/features/schedule/data/datasources/self_arrange_remote_datasource.dart';
 import 'package:attendance_scheduler_app/features/schedule/domain/entities/schedule_entities.dart';
-import 'package:attendance_scheduler_app/features/schedule/domain/entities/self_arrange_entities.dart';
 import 'package:attendance_scheduler_app/features/schedule/presentation/pages/schedule_page.dart';
 import 'package:attendance_scheduler_app/features/users/data/user_management_datasource.dart';
 import 'package:attendance_scheduler_app/i18n/app_localizations.dart';
@@ -197,16 +195,6 @@ class _FakeFlightsDataSource extends FlightsRemoteDataSource {
   Future<List<FlightDayModel>> listDays(int year, int month) async => [];
 }
 
-class _FakeSelfArrangeDataSource extends SelfArrangeRemoteDataSource {
-  _FakeSelfArrangeDataSource() : super(Dio());
-
-  @override
-  Future<List<SelfArrangeBatch>> list({
-    bool all = false,
-    bool pendingOnly = false,
-  }) async => [];
-}
-
 Future<void> _pumpSchedule(
   WidgetTester tester, {
   required User user,
@@ -225,9 +213,6 @@ Future<void> _pumpSchedule(
         scheduleRemoteDataSourceProvider.overrideWithValue(scheduleDs),
         userManagementDataSourceProvider.overrideWithValue(userDs),
         flightsDataSourceProvider.overrideWithValue(_FakeFlightsDataSource()),
-        selfArrangeRemoteDataSourceProvider.overrideWithValue(
-          _FakeSelfArrangeDataSource(),
-        ),
       ],
       child: MaterialApp(
         localizationsDelegates: const [

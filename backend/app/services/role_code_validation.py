@@ -2,8 +2,8 @@
 
 Two grids, two rule sets (§9.1):
 
-* **Planned schedule** (``ShiftAssignment`` — admin manual override,
-  self-arrange): the role's solver domain plus the operational codes
+* **Planned schedule** (``ShiftAssignment`` — admin manual override):
+  the role's solver domain plus the operational codes
   X / T / B / AL, and A/D for role A only. Sickness ``S`` is NEVER allowed
   here — the planned roster is visible to every active user, and sickness is
   special-category health data.

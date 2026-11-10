@@ -8,17 +8,18 @@ core/        config, database, security (JWT/bcrypt), i18n (en/vi), bootstrap,
              business_time (business_today() in TIMEZONE), script_guard
              (maintenance scripts: dev + local database only)
 models/      User, RoleCodeCounter, Flight/FlightDay/FlightPreset, LeaveRequest,
-             ShiftChangeRequest, SelfArrangeRequest, MonthlySchedule/ShiftAssignment,
+             ShiftChangeRequest, SelfArrangeRequest (table kept, feature
+             removed 2026-11-10), MonthlySchedule/ShiftAssignment,
              AttendanceRecord, TimeClockEntry, Holiday, AuditLog, enums
 schemas/     Pydantic DTOs per domain (the API contract)
-api/v1/      endpoints/ (auth, users, flights, leaves, shift_changes, self_arrange,
+api/v1/      endpoints/ (auth, users, flights, leaves, shift_changes, pending_counts,
              schedules, attendance, time_clock, holidays, calculations, reports,
              compliance) + router + deps; api/params.py (bounded year/month
              parameters → 422)
 services/    auth, user, flight (+flight_pair_derivation, flight_excel_parser,
              flight_plan_template / _parser / _service: the monthly Excel grid),
              leave (+leave_windows, leave_balance, leave_conflict_resolver),
-             shift_change, self_arrange, schedule (+schedule_input_builder,
+             shift_change, pending_counts, schedule (+schedule_input_builder,
              schedule_history, schedule_violation_checker,
              schedule_violation_text, schedule_autorun),
              role_code_validation, attendance (+sick_backfill), time_clock,
@@ -35,7 +36,7 @@ alembic/     0001 baseline … 0009 flight_unique_day_number (head; see
 scripts/     seed_demo_users.py, reset_all_passwords.py (both refuse unless
              ENVIRONMENT=dev and the database is local, app/core/script_guard.py;
              --allow-non-dev overrides; hidden password prompt)
-tests/       560 tests (pytest on SQLite, foreign keys on) — engine rules
+tests/       550 tests (pytest on SQLite, foreign keys on) — engine rules
              (bind + slack violation), solve phases, engine/checker agreement,
              roles, cross-month rules, services, endpoints, input bounds,
              RBAC/audit, user delete, sick privacy, production guard, bootstrap,
@@ -67,7 +68,7 @@ migration head); `schedule_violation_checker.recheck(..., cover_roles=)`
 |--------|----------|---------|
 | Accounts & auth | F-01..F-03 | `auth.py`, `users.py`, `auth_service`, `user_service` |
 | Flight input | F-04 | `flights.py`, `flight_service` |
-| Leave + swaps | F-05/06, #8 | `leaves.py`, `shift_changes.py`, `self_arrange.py`, `leave_service`, `leave_balance`, `shift_change_service`, `self_arrange_service` |
+| Leave + swaps | F-05/06, #8 | `leaves.py`, `shift_changes.py`, `leave_service`, `leave_balance`, `shift_change_service` |
 | **Auto-schedule** | F-07..F-09 | `scheduler/`, `schedules.py`, `schedule_service`, `schedule_history` |
 | Attendance | F-10..F-13 | `attendance.py`, `time_clock.py`, `holidays.py`, `attendance_service`, `holiday_service` |
 | Calculations | F-14 | `calculations.py`, `calculation_service` |
@@ -94,7 +95,7 @@ i18n/         custom AppLocalizations (en/vi, graceful text(key) fallback)
 ```
 `auth` is the canonical clean-architecture template; the business features
 mirror it, feeding live provider state into the `design_system` views.
-Tests: `test/` — 179 tests including 3 goldens (`test/goldens/`, tagged
+Tests: `test/` — 181 tests including 3 goldens (`test/goldens/`, tagged
 `golden` in `dart_test.yaml`; run them on macOS with `flutter test --tags
 golden`, everything else with `--exclude-tags golden`); among them
 `i18n_keys_used_exist_test.dart` (every key used in `lib/` exists).
@@ -102,7 +103,9 @@ golden`, everything else with `--exclude-tags golden`); among them
 
 New on 2026-11-10: rest rules without month blocks (decision #62: the
 rolling 7-day rule, days off per month = the month's Saturdays + Sundays,
-preferred pairs Fri+Sat > Sat+Sun > Sun+Mon); the monthly flight plan as an Excel grid
+preferred pairs Fri+Sat > Sat+Sun > Sun+Mon); pending counts on the
+navigation tabs (`GET /pending-counts`, `DsNavigationDestination.badgeCount`);
+self-arrange removed (decision #63); the monthly flight plan as an Excel grid
 (`GET /flights/template`, upload through `POST /flights/import`, decision
 #60), the customer logo in the app shell and on the login page
 (`DsBrandLogo`, `assets/images/`), the login page's aircraft photo

@@ -159,15 +159,6 @@ MESSAGES: dict[str, dict[str, str]] = {
         "clock.already_checked_in": "Already checked in today.",
         "clock.not_checked_in": "You have not checked in today.",
         "clock.already_checked_out": "Already checked out today.",
-        # --- Self-arrange (owner 2026-07-09) ---
-        "selfarrange.forbidden_role": "Your role cannot self-arrange shifts.",
-        "selfarrange.empty_changes": "The request contains no changes.",
-        "selfarrange.cell_not_found": "One of the selected days has no scheduled cell of yours.",
-        "selfarrange.invalid_code": "A requested code is not allowed for your role.",
-        "selfarrange.breaks_weekly_off": "The arrangement must keep the same number of days off in the month and must not make you work more than 5 days in any 7 consecutive days.",
-        "selfarrange.cell_locked": "Leave/sick days cannot be rearranged — only regular working (AD) and off (X) days.",
-        "selfarrange.not_found": "Self-arrange request not found.",
-        "selfarrange.already_decided": "This self-arrange request was already decided.",
         "schedule.month_out_of_range": "Future months beyond next-next month are not visible.",
         "schedule.sick_not_planned": (
             "Sick (S) is recorded in actual attendance only, never in the planned "
@@ -329,15 +320,6 @@ MESSAGES: dict[str, dict[str, str]] = {
         "clock.already_checked_in": "Hôm nay đã check-in rồi.",
         "clock.not_checked_in": "Bạn chưa check-in hôm nay.",
         "clock.already_checked_out": "Hôm nay đã check-out rồi.",
-        # --- Self-arrange (owner 2026-07-09) ---
-        "selfarrange.forbidden_role": "Vai trò của bạn không được tự sắp xếp ca.",
-        "selfarrange.empty_changes": "Yêu cầu không có thay đổi nào.",
-        "selfarrange.cell_not_found": "Có ngày được chọn không có ô lịch của bạn.",
-        "selfarrange.invalid_code": "Có mã ca không hợp lệ với vai trò của bạn.",
-        "selfarrange.breaks_weekly_off": "Sắp xếp phải giữ nguyên số ngày nghỉ trong tháng và không làm quá 5 ngày trong 7 ngày liên tiếp bất kỳ.",
-        "selfarrange.cell_locked": "Không được sắp xếp lại ngày nghỉ phép/ốm — chỉ ngày làm (AD) và nghỉ (X) thường.",
-        "selfarrange.not_found": "Không tìm thấy yêu cầu tự sắp ca.",
-        "selfarrange.already_decided": "Yêu cầu tự sắp ca này đã được quyết định.",
         "schedule.month_out_of_range": "Chỉ xem được tối đa 2 tháng tương lai.",
         "schedule.sick_not_planned": (
             "Nghỉ ốm (S) chỉ được ghi ở chấm công thực tế, không đưa vào lịch kế hoạch."

@@ -288,8 +288,9 @@ class AppLocalizations {
       'columnDay': 'Day',
       'columnWeekday': 'Wday',
       // --- Employee shell (owner 2026-07-09) ---
-      'navSelfArrange': 'Self-arrange',
       'navClock': 'Check-in/out',
+      // Admin nav badge, read aloud with the tab label (owner 2026-11-10).
+      'navPendingCount': '{count} pending',
       // --- Time clock ---
       'clockTitle': 'Check-in / Check-out',
       'clockCheckIn': 'Check-in',
@@ -300,26 +301,6 @@ class AppLocalizations {
       'clockHistory': 'This month',
       'clockNoEntries': 'No entries this month yet.',
       'clockActionFailed': 'Action failed.',
-      // --- Self-arrange ---
-      'selfArrangeTitle': 'Self-arrange shifts',
-      'selfArrangeHint':
-          'Tap your own cells to swap work/off. Keep the same number of days '
-          'off in the month and work at most 5 days in any 7. Changes apply '
-          'after admin approval.',
-      'selfArrangeSubmit': 'Submit for approval',
-      'selfArrangeNote': 'Note (optional)',
-      'selfArrangeSubmitted': 'Request submitted — waiting for admin approval.',
-      'selfArrangeQuotaBroken':
-          'Keep the same number of days off, and at most 5 working days in '
-          'any 7.',
-      'selfArrangeNoDraft': 'No changes yet.',
-      'selfArrangeDiscard': 'Discard draft',
-      'selfArrangeHistory': 'My requests',
-      'selfArrangePanelTitle': 'Pending self-arrange requests',
-      'selfArrangeChanges': 'changes',
-      'selfArrangeMonthCap': 'Only up to 2 months ahead can be viewed.',
-      'selfArrangeSubmitFailed': 'Submitting the request failed.',
-      'selfArrangeDecided': 'Request decided.',
       // --- Generate guard (owner 2026-07-17) ---
       'flightsMissingTitle': 'No flight data for this month',
       'flightsMissingBody':
@@ -710,8 +691,9 @@ class AppLocalizations {
       'columnDay': 'Ngày',
       'columnWeekday': 'Thứ',
       // --- Employee shell (owner 2026-07-09) ---
-      'navSelfArrange': 'Tự sắp ca',
       'navClock': 'Chấm công vào/ra',
+      // Admin nav badge, read aloud with the tab label (owner 2026-11-10).
+      'navPendingCount': '{count} chờ xử lý',
       // --- Time clock ---
       'clockTitle': 'Chấm công vào / ra',
       'clockCheckIn': 'Check-in',
@@ -722,26 +704,6 @@ class AppLocalizations {
       'clockHistory': 'Trong tháng',
       'clockNoEntries': 'Chưa có dữ liệu trong tháng.',
       'clockActionFailed': 'Thao tác thất bại.',
-      // --- Self-arrange ---
-      'selfArrangeTitle': 'Tự sắp xếp ca',
-      'selfArrangeHint':
-          'Chạm vào ô của bạn để đổi làm/nghỉ. Giữ nguyên số ngày nghỉ trong '
-          'tháng và không làm quá 5 ngày trong 7 ngày liên tiếp bất kỳ. Thay '
-          'đổi có hiệu lực sau khi admin duyệt.',
-      'selfArrangeSubmit': 'Gửi admin duyệt',
-      'selfArrangeNote': 'Ghi chú (không bắt buộc)',
-      'selfArrangeSubmitted': 'Đã gửi yêu cầu — chờ admin duyệt.',
-      'selfArrangeQuotaBroken':
-          'Phải giữ nguyên số ngày nghỉ và không làm quá 5 ngày trong 7 ngày '
-          'liên tiếp bất kỳ.',
-      'selfArrangeNoDraft': 'Chưa có thay đổi.',
-      'selfArrangeDiscard': 'Huỷ nháp',
-      'selfArrangeHistory': 'Yêu cầu của tôi',
-      'selfArrangePanelTitle': 'Yêu cầu tự sắp ca chờ duyệt',
-      'selfArrangeChanges': 'thay đổi',
-      'selfArrangeMonthCap': 'Chỉ xem được tối đa 2 tháng tương lai.',
-      'selfArrangeSubmitFailed': 'Gửi yêu cầu thất bại.',
-      'selfArrangeDecided': 'Đã quyết định yêu cầu.',
       // --- Generate guard (owner 2026-07-17) ---
       'flightsMissingTitle': 'Tháng này chưa nhập lịch bay',
       'flightsMissingBody':
@@ -1024,6 +986,10 @@ class AppLocalizations {
   /// "Imported N flights from Excel." (F-04).
   String importExcelSuccess(int count) =>
       text('importExcelSuccess').replaceAll('{count}', '$count');
+
+  /// Spoken/tooltip text of a navigation badge: "3 pending".
+  String navPendingCount(int count) =>
+      text('navPendingCount').replaceAll('{count}', '$count');
 
   /// "Close March 2026?" (F-14).
   String closeMonthConfirmTitle(DateTime month) =>

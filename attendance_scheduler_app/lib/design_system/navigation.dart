@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../i18n/app_localizations.dart';
 import 'components.dart';
 import 'liquid_navigation.dart';
+import 'navigation_badge.dart';
 import 'navigation_models.dart';
 import 'tokens.dart';
 
@@ -326,6 +327,11 @@ class _DsNavigationItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = selected ? DsColors.primaryHover : DsColors.textSecondary;
+    final badge = dsNavigationBadgeText(item.badgeCount);
+    final countText = badge == null
+        ? null
+        : AppLocalizations.of(context).navPendingCount(item.badgeCount!);
+    final icon = Icon(item.icon, color: color, size: 20);
     final content = Material(
       color: selected ? DsColors.primarySoft : Colors.transparent,
       borderRadius: BorderRadius.circular(DsRadius.medium),
@@ -347,7 +353,10 @@ class _DsNavigationItem extends StatelessWidget {
                 ? MainAxisAlignment.start
                 : MainAxisAlignment.center,
             children: [
-              Icon(item.icon, color: color, size: 20),
+              if (badge != null && !extended)
+                DsNavigationIconBadge(icon: icon, text: badge)
+              else
+                icon,
               if (extended) ...[
                 const SizedBox(width: DsSpacing.x3),
                 Expanded(
@@ -360,13 +369,29 @@ class _DsNavigationItem extends StatelessWidget {
                     ),
                   ),
                 ),
+                if (badge != null) ...[
+                  const SizedBox(width: DsSpacing.x2),
+                  DsNavigationCountPill(text: badge),
+                ],
               ],
             ],
           ),
         ),
       ),
     );
-    return extended ? content : Tooltip(message: item.label, child: content);
+    final label = countText == null ? item.label : '${item.label}, $countText';
+    // One announcement per item, the count in words included; the tap
+    // action is kept on the node itself.
+    final tile = extended ? content : Tooltip(message: label, child: content);
+    return Semantics(
+      container: true,
+      button: true,
+      selected: selected,
+      label: label,
+      onTap: onTap,
+      excludeSemantics: true,
+      child: tile,
+    );
   }
 }
 

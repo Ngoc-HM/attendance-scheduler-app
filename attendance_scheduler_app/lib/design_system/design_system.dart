@@ -3,6 +3,7 @@ export 'components.dart';
 export 'forms.dart';
 export 'liquid_navigation.dart';
 export 'navigation.dart';
+export 'navigation_badge.dart';
 export 'navigation_models.dart';
 export 'states.dart';
 export 'tables.dart';

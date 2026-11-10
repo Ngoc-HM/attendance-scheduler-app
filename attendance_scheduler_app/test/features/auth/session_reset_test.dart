@@ -15,13 +15,13 @@ import 'package:attendance_scheduler_app/features/auth/domain/entities/user.dart
 import 'package:attendance_scheduler_app/features/auth/domain/repositories/auth_repository.dart';
 import 'package:attendance_scheduler_app/features/auth/presentation/providers/auth_provider.dart';
 import 'package:attendance_scheduler_app/features/flights/presentation/providers/flights_provider.dart';
+import 'package:attendance_scheduler_app/features/home/presentation/providers/pending_counts_provider.dart';
 import 'package:attendance_scheduler_app/features/leaves/data/datasources/leaves_remote_datasource.dart';
 import 'package:attendance_scheduler_app/features/leaves/data/models/leave_model.dart';
 import 'package:attendance_scheduler_app/features/leaves/presentation/pages/leaves_page.dart';
 import 'package:attendance_scheduler_app/features/leaves/presentation/providers/leaves_provider.dart';
 import 'package:attendance_scheduler_app/features/reports/presentation/providers/reports_provider.dart';
 import 'package:attendance_scheduler_app/features/schedule/presentation/providers/schedule_provider.dart';
-import 'package:attendance_scheduler_app/features/schedule/presentation/providers/self_arrange_provider.dart';
 import 'package:attendance_scheduler_app/features/schedule/presentation/providers/shift_change_provider.dart';
 import 'package:attendance_scheduler_app/features/users/data/user_management_datasource.dart';
 import 'package:attendance_scheduler_app/features/users/presentation/providers/users_provider.dart';
@@ -133,13 +133,12 @@ Map<String, ProviderListenable<Object>> get _userScoped => {
       'leaves': leavesControllerProvider.notifier,
       'attendance': attendanceControllerProvider.notifier,
       'timeClock': timeClockControllerProvider.notifier,
-      'selfArrange': selfArrangeControllerProvider.notifier,
-      'selfArrangeAdmin': selfArrangeAdminControllerProvider.notifier,
       'schedule': scheduleControllerProvider.notifier,
       'shiftChange': shiftChangeControllerProvider.notifier,
       'reports': reportsControllerProvider.notifier,
       'flights': flightsControllerProvider.notifier,
       'users': usersControllerProvider.notifier,
+      'pendingCounts': pendingCountsProvider.notifier,
     };
 
 /// Reads every controller, then lets their first loads finish (a controller

@@ -39,7 +39,7 @@ carry_* (F-14)  ─┘   (carry from schedule_history:                  │
               in the generate response only (they are NOT stored)
                                           │ regenerate: 409 if published / edited, unless force (#24)
                                           │ GET /schedules/{id}/violations: re-check on demand (#46)
-                                          │ admin override F-09, shift change, self-arrange, publish
+                                          │ admin override F-09, shift change, publish
                                           ▼
               actuals: AttendanceRecord (F-11/12) ◄─ seed on publish ─ published schedule
                                                   ◄─ re-sync of still-seeded rows on EVERY edit or
@@ -70,8 +70,8 @@ Months without a schedule pick approved leave up when they are generated.
 - `GET /attendance/me` (seeded rows of a month whose schedule is not
   published are hidden, #52), `GET /schedules/{year}/{month}` (published
   months only for non-admins, at most two months ahead outside dev; a
-  colleague's legacy S is masked as X), own leave, shift-change and
-  self-arrange requests.
+  colleague's legacy S is masked as X), own leave and shift-change
+  requests.
 
 Every year/month parameter is bounded (year 2000–2100, month 1–12) and
 answers 422 instead of 500; text fields are length-checked the same way

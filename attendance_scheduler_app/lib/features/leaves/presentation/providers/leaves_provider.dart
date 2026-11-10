@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../design_system/view_models.dart';
 import '../../../auth/domain/entities/user.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
+import '../../../home/presentation/providers/pending_counts_provider.dart';
 import '../../../users/data/user_management_datasource.dart';
 import '../../data/datasources/leaves_remote_datasource.dart';
 import '../../data/models/leave_model.dart';
@@ -61,11 +62,14 @@ class LeavesState {
 /// every time it is opened (and from its refresh button), so the list is
 /// never the one from the first visit of the session (D4).
 class LeavesController extends StateNotifier<LeavesState> {
-  LeavesController(this._ds, this._ref)
+  LeavesController(this._ds, this._ref, {this.onDecided})
       : super(const LeavesState(entries: AsyncValue.loading()));
 
   final LeavesRemoteDataSource _ds;
   final Ref _ref;
+
+  /// Runs after every successful approve/reject (the nav badge refresh).
+  final void Function()? onDecided;
 
   /// Bumped by every [load]; a load whose number is no longer the latest
   /// drops its result, so an older, slower response never overwrites a
@@ -154,6 +158,7 @@ class LeavesController extends StateNotifier<LeavesState> {
     final id = _idAt(index);
     if (id == null) return const [];
     final (_, warnings) = await _ds.decide(id, 'approved');
+    onDecided?.call();
     await load();
     return warnings;
   }
@@ -163,6 +168,7 @@ class LeavesController extends StateNotifier<LeavesState> {
     final id = _idAt(index);
     if (id == null) return const [];
     final (_, warnings) = await _ds.decide(id, 'rejected');
+    onDecided?.call();
     await load();
     return warnings;
   }
@@ -223,5 +229,6 @@ final leavesControllerProvider =
   (ref) => LeavesController(
     ref.watch(leavesDataSourceProvider),
     ref,
+    onDecided: () => refreshPendingCounts(ref),
   ),
 );

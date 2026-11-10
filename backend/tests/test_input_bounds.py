@@ -80,19 +80,6 @@ def test_year_out_of_range_422(
     assert res.status_code == 422, (template, year, res.status_code, res.text)
 
 
-@pytest.mark.parametrize(("year", "month"), [(1999, 6), (2101, 6), (2026, 0), (2026, 13)])
-def test_self_arrange_body_year_month_bounded(
-    client: TestClient, headers: dict, year: int, month: int
-) -> None:
-    """``SelfArrangeCreate`` body: year 2000..2100 and month 1..12 → else 422."""
-    res = client.post(
-        f"{V}/self-arrange", headers=headers["employee"],
-        json={"year": year, "month": month,
-              "changes": [{"work_date": "2026-06-01", "code": "X"}]},
-    )
-    assert res.status_code == 422, (year, month, res.status_code, res.text)
-
-
 # --- i18n: no hard-coded HTTPException detail ------------------------------
 
 APP_DIR = Path(__file__).resolve().parents[1] / "app"
