@@ -71,6 +71,17 @@
   when it has none ("còn 2 người nhóm A, cần 1 ca ARR + 2 ca DEP").
   Approving shows the same lines (`services/leave_staffing.py`).
 
+## 2026-11-13 — Login ignores the case of the username
+
+- A typed username is matched whatever its case and without surrounding
+  spaces: "joachim" or "JOACHIM" logs into the account stored as "Joachim"
+  (`auth_service.find_by_username`; the exact spelling wins, and a name
+  that would match two older accounts is not guessed). The password is
+  unchanged: it stays case-sensitive.
+- A new account (admin-created or self-registered) is refused when its
+  name differs from an existing one only by case, and is stored without
+  surrounding spaces.
+
 ## 2026-11-12 — Rest rule and fair turns
 
 - Rest rules (decision #64): at most 5 working days in every calendar week

@@ -38,7 +38,7 @@ alembic/     0001 baseline … 0009 flight_unique_day_number (head; see
 scripts/     seed_demo_users.py, reset_all_passwords.py (both refuse unless
              ENVIRONMENT=dev and the database is local, app/core/script_guard.py;
              --allow-non-dev overrides; hidden password prompt)
-tests/       578 tests (pytest on SQLite, foreign keys on) — engine rules
+tests/       580 tests (pytest on SQLite, foreign keys on) — engine rules
              (bind + slack violation), solve phases, engine/checker agreement,
              roles, cross-month rules, services, endpoints, input bounds,
              RBAC/audit, user delete, sick privacy, production guard, bootstrap,
