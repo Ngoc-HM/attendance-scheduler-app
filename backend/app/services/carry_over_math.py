@@ -12,14 +12,18 @@ the stored value.
                         before it (ruling R3, 2026-11-08)
     carry_streak      = trailing working-day run of the closed month   (§5.5)
     carry_premium_off = OFF (X) days on Sat/Sun/holiday over history    (#6)
+    carry_pair_points = weekday bonus of adjacent X+X pairs, 12 months
+                        (owner 2026-11-12; ``pair_points``)
 """
 
 from __future__ import annotations
 
-from datetime import date
+from collections.abc import Iterable
+from datetime import date, timedelta
 
 from app.models.enums import AttendanceCode
 from app.scheduler.calendar_utils import trailing_work_streak
+from app.scheduler.objective_off_pairing import WEEKDAY_BONUS
 
 SATURDAY, SUNDAY = 5, 6
 # Codes meaning "at work" for the consecutive-streak count (mirror the engine).
@@ -77,6 +81,22 @@ def premium_off_count(
         1
         for d, c in records
         if c is AttendanceCode.X and (d.weekday() in (SATURDAY, SUNDAY) or d in holidays)
+    )
+
+
+def pair_points(off_days: Iterable[date]) -> int:
+    """Weekday-bonus points of one person's adjacent X+X pairs (owner 2026-11-12).
+
+    ``off_days`` are the days with a genuine X (not AL/CD/S). Each pair is
+    counted once, by the weekday of its first day, as the engine scores it
+    (``objective_off_pairing.WEEKDAY_BONUS``: Fri+Sat 3, Sat+Sun 2, Sun+Mon
+    1); a pair across a month boundary is one pair like any other.
+    """
+    offs = set(off_days)
+    return sum(
+        WEEKDAY_BONUS.get(d.weekday(), 0)
+        for d in offs
+        if d + timedelta(days=1) in offs
     )
 
 

@@ -14,8 +14,8 @@ Role-aware model (owner decision 2026-06-26):
     Role.A (fixed group): {A, D, X, CD}  — full flight rules + comp days.
     Role.T (flexible):    {AD, X, CD}     — full-day duty, no shift split.
     Role.M (admin):       {O/D, X, CD}    — office duty.
-    Role.F (split of T):  {AD, X, CD}     — T-like: rolling 7-day rest AND the
-                                            max-5-consecutive-working rule
+    Role.F (split of T):  {AD, X, CD}     — T-like: the weekly rest and
+                                            max-5-consecutive-working rules
                                             apply (owner 2026-07-22).
 
 Variable domains are built PER PERSON from ``role_codes.codes_for(role)``.
@@ -25,7 +25,7 @@ it is no longer used as the per-person var domain inside the engine.
 Flight-staffing demand and A-versus-D balance are scoped to role-A people
 only. Emergency A/D is outside the automatic solver domain. Comp days (CD
 granted against carried debt — holiday work earns it for every role, owner D1
-2026-11-06), rolling-seven-day rest, consecutive-working,
+2026-11-06), weekly rest (Mon–Sun, owner 2026-11-12), consecutive-working
 and off-chain rules apply to ALL roles, using each role's own working-code set.
 """
 

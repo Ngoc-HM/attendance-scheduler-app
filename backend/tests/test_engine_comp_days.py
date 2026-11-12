@@ -54,10 +54,10 @@ def test_no_comp_debt_means_no_cd() -> None:
     assert _count(_grid(out), 1, days, AttendanceCode.CD) == 0
 
 
-def test_cd_is_rest_for_the_seven_day_rule() -> None:
+def test_cd_is_rest_for_the_rest_rule() -> None:
     """Owed CDs are granted on top of the month's X target (8 Saturdays +
-    Sundays in July 2026, owner 2026-11-10) and count as rest for the rolling
-    7-day rule."""
+    Sundays in July 2026, owner 2026-11-10) and count as rest for the
+    max-5-in-a-row rule."""
     days = month_days(2026, 7)
     people = [PersonInput(1, Role.A, carry_comp=2)]
     out = _solve(people, days)

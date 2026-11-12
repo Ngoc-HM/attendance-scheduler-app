@@ -1,8 +1,8 @@
-"""Regression tests for rolling rest and per-person role-A balance."""
+"""Regression tests for the rest rules across months and per-person role-A balance."""
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date
 
 from ortools.sat.python import cp_model
 
@@ -20,22 +20,20 @@ from app.scheduler.role_codes import codes_for
 from app.scheduler.slack_registry import SlackRegistry
 from app.services.carry_over_math import premium_off_count
 from app.services.schedule_violation_checker import (
+    check_consecutive,
     check_off_chain,
-    check_rolling_rest,
     recheck,
 )
+from tests.rest_invariants import assert_rest_rules
 
 
 def _grid(out):
     return {(item.user_id, item.day): item.code for item in out.assignments}
 
 
-def test_rolling_seven_days_crosses_month_boundary() -> None:
+def test_carried_run_crosses_month_boundary() -> None:
+    """Two working days carried in → at most three more before a day off."""
     days = month_days(2026, 7)
-    previous = {
-        days[0] - timedelta(days=offset): offset in {1, 2}
-        for offset in range(6, 0, -1)
-    }
     out = SchedulerEngine().solve(
         SolverInput(
             year=2026,
@@ -43,44 +41,31 @@ def test_rolling_seven_days_crosses_month_boundary() -> None:
             people=[PersonInput(1, Role.T, carry_streak=2)],
             days=days,
             flight_pairs={day: 0 for day in days},
-            previous_working={1: previous},
             max_solve_seconds=10,
         )
     )
 
     assert out.feasible and not out.violations
     grid = _grid(out)
-    combined = [previous[d] for d in sorted(previous)] + [
-        grid[(1, day)].is_working for day in days
-    ]
-    assert all(
-        sum(combined[start : start + 7]) <= 5
-        for start in range(len(combined) - 6)
-    )
-    # Two working days were carried in, so five more consecutive working days
-    # at the start of July is specifically impossible.
-    assert sum(grid[(1, day)].is_working for day in days[:5]) <= 3
+    assert_rest_rules(grid, 1, days, carry_streak=2)
+    assert not all(grid[(1, day)].is_working for day in days[:4])
 
 
-def test_manual_recheck_flags_cross_month_rolling_rest() -> None:
+def test_manual_recheck_flags_cross_month_run() -> None:
+    """Re-check: 2 carried working days + 4 worked → a 6-day run from 29 June;
+    one day off on the 4th resets the run, so it is clean."""
     days = month_days(2026, 7)
-    previous = {
-        days[0] - timedelta(days=offset): offset in {1, 2}
-        for offset in range(6, 0, -1)
-    }
-    grid = {
-        (1, day): AttendanceCode.AD if day in days[:5] else AttendanceCode.X
+    worked_four = {
+        (1, day): AttendanceCode.AD if day in days[:4] else AttendanceCode.X
         for day in days
     }
+    warnings = check_consecutive(worked_four, {1: Role.T}, {1: 2}, days)
+    assert [(w.rule, w.day) for w in warnings] == [
+        ("max_consecutive_working", date(2026, 6, 29))
+    ]
 
-    warnings = check_rolling_rest(
-        grid,
-        {1: Role.T},
-        days,
-        {1: previous},
-    )
-
-    assert any("starting 2026-06-29" in warning.message for warning in warnings)
+    worked_three = {**worked_four, (1, days[3]): AttendanceCode.X}
+    assert check_consecutive(worked_three, {1: Role.T}, {1: 2}, days) == []
 
 
 def test_each_role_a_person_gets_two_a_days_and_near_equal_a_d() -> None:
@@ -191,9 +176,10 @@ def _restore_leave(grid, approved):
 def test_five_day_monthly_leave_is_rest_no_violation() -> None:
     """C3 / ruling R1: a 5-day monthly leave Tue 9 – Sat 13 Feb 2027 is legal
     next to X days (an off-run holding approved leave). Since owner
-    2026-11-10 the leave counts as rest for the rolling 7-day rule, so the
-    week no longer gets two X on top (supersedes decision #4): the person
-    on leave needs fewer X than a colleague with the same role."""
+    2026-11-10 the leave counts as rest, so the week no longer gets two X on
+    top (supersedes decision #4): the person on leave needs fewer X than a
+    colleague with the same role (their Saturday on leave lowers the month
+    target)."""
     days = month_days(2027, 2)
     approved = {1: {date(2027, 2, d): AttendanceCode.AL for d in range(9, 14)}}
     inp = SolverInput(

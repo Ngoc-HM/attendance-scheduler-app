@@ -144,10 +144,13 @@ a production release.
 > **Spec overrides** (owner-approved — see `docs/design-decisions.md`):
 > holidays are **working days** (not auto-off, diverges from F-13/§7) and
 > working one earns **+1 comp day (CD)** next month for every role; the rest
-> rule is **at most 5 working days in any 7 consecutive days** (no month
+> rules are **at most 5 working days per calendar week (Mon–Sun)** and **no
+> more than 5 working days in a row** (single days off are fine; no month
 > blocks), each person gets as many days off as the month has Saturdays and
-> Sundays, and the engine pairs days off **adjacently, preferring Fri+Sat,
-> then Sat+Sun, then Sun+Mon** (decision #62, 2026-11-10).
+> Sundays, the engine prefers days off in **adjacent pairs — Fri+Sat, then
+> Sat+Sun, then Sun+Mon — taken in turns** within a role group, and keeps a
+> third group-A person in reserve on flight days when it can (decisions #62
+> and #64, 2026-11-10/12).
 
 ## Documentation
 Full docs live in [`docs/`](./docs): architecture, design decisions (incl. spec

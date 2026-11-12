@@ -71,6 +71,44 @@
   when it has none ("còn 2 người nhóm A, cần 1 ca ARR + 2 ca DEP").
   Approving shows the same lines (`services/leave_staffing.py`).
 
+## 2026-11-12 — Rest rule and fair turns
+
+- Rest rules (decision #64): at most 5 working days in every calendar week
+  (Monday–Sunday, across months) and no more than 5 working days in a row.
+  The weekly rule replaces the rolling "2 rest days in ANY 7 consecutive
+  days" rule in the solver, the re-check and the messages. A single day off
+  is fine; pairs of days off are a preference.
+- Reserve on flight days (soft, never reported): a third group-A person is
+  at work when the month's days off still fit, beyond the 1A+1D / 1A+2D
+  floor.
+- Month end: when the month's last week runs into the next month, the
+  solver leaves room for the rest days group A still owes that week
+  (`objective_boundary_week`, using next month's first flights when they
+  are entered). Without it everyone worked the last days of the month and
+  the next month opened with unavoidable staffing violations. A group-A
+  person may therefore get one day off more than the month's Saturdays +
+  Sundays in such a month.
+- The good pairs (Fri+Sat, then Sat+Sun, then Sun+Mon) take turns inside a
+  role group, with a memory of the previous 12 months: whoever is behind
+  gets them first — at every rank of the group, not only the last one. A
+  live run in the app showed the gap: with the member furthest behind held
+  back by a forced rest day, the member with the most history took three
+  Fri+Sat in December 2026 and the one in the middle got one.
+- Seven-month run on the development data (December 2026 – June 2027,
+  random flight plans from the Excel template, monthly and annual leave
+  filed, approved, rejected and revoked): nobody works more than 5 days in
+  a row, every approved leave day is kept, and the pair points of each
+  group end within a few points of each other. Two findings for the
+  customer: a Monday–Sunday week with two flight pairs on all seven days
+  cannot be covered by four group-A people at 5 days a week each (21
+  person-days needed, 20 available) — the app reports one violation in
+  such a week and the admin decides; and after a month that ends on a
+  Thursday or Friday the F and M groups may all be off on the first
+  weekend of the next month (no rule of theirs is broken).
+- Rosters generated before this change keep their cells; regenerate a draft
+  month to get the new behaviour (December 2026 was drafted under older
+  rules and must be regenerated).
+
 ## 2026-11-10 — End-to-end run follow-ups
 
 - `make dev` now runs the whole dev stack: PostgreSQL 16 in Docker

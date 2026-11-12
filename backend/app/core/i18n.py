@@ -55,8 +55,8 @@ MESSAGES: dict[str, dict[str, str]] = {
             "{day}: no group-A staff to cover the flights (need at least "
             "{need_a} on ARR and {need_d} on DEP)."
         ),
-        "schedule.violation.rolling_seven_min_two_rest": (
-            "{person}: fewer than 2 rest days in the 7 days from {start}."
+        "schedule.violation.weekly_max_five_working": (
+            "{person}: more than 5 working days in the week starting {start}."
         ),
         "schedule.violation.max_consecutive_working": (
             "{person}: more than 5 working days in a row from {start}."
@@ -220,8 +220,8 @@ MESSAGES: dict[str, dict[str, str]] = {
             "{day}: không có nhân sự nhóm A để phủ chuyến bay (cần ít nhất "
             "{need_a} người ca ARR và {need_d} người ca DEP)."
         ),
-        "schedule.violation.rolling_seven_min_two_rest": (
-            "{person}: chưa đủ 2 ngày nghỉ trong 7 ngày liền từ {start}."
+        "schedule.violation.weekly_max_five_working": (
+            "{person}: làm quá 5 ngày trong tuần bắt đầu {start}."
         ),
         "schedule.violation.max_consecutive_working": (
             "{person}: làm quá 5 ngày liên tiếp từ {start}."

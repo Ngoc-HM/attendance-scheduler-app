@@ -27,17 +27,18 @@ services/    auth, user, flight (+flight_pair_derivation, flight_excel_parser,
              holiday, calculation (+carry_over_math), report (+report_table,
              report_serializers), compliance, audit, demo_user_seed
 scheduler/   domain (SolverInput/Output), engine (CP-SAT), role_codes (per-role
-             domains and role groups), constraints + constraints_rolling_rest
+             domains and role groups), constraints + constraints_weekly_rest
              / _consecutive / _off_chain / _staffing / _comp_days /
              _role_a_distribution, objectives + objective_balance /
-             _monthly_off_target / _group_cover / _premium_off /
-             _off_pairing / _pair_points_fair, slack_registry, calendar_utils
+             _monthly_off_target / _group_cover / _reserve_cover /
+             _boundary_week / _premium_off / _off_pairing /
+             _pair_points_fair, slack_registry, calendar_utils
 alembic/     0001 baseline … 0009 flight_unique_day_number (head; see
              design-decisions "Migration strategy")
 scripts/     seed_demo_users.py, reset_all_passwords.py (both refuse unless
              ENVIRONMENT=dev and the database is local, app/core/script_guard.py;
              --allow-non-dev overrides; hidden password prompt)
-tests/       560 tests (pytest on SQLite, foreign keys on) — engine rules
+tests/       578 tests (pytest on SQLite, foreign keys on) — engine rules
              (bind + slack violation), solve phases, engine/checker agreement,
              roles, cross-month rules, services, endpoints, input bounds,
              RBAC/audit, user delete, sick privacy, production guard, bootstrap,
@@ -102,9 +103,11 @@ golden`, everything else with `--exclude-tags golden`); among them
 `i18n_keys_used_exist_test.dart` (every key used in `lib/` exists).
 `pubspec.lock` is tracked; CI runs `flutter pub get --enforce-lockfile`.
 
-New on 2026-11-10: rest rules without month blocks (decision #62: the
-rolling 7-day rule, days off per month = the month's Saturdays + Sundays,
-preferred pairs Fri+Sat > Sat+Sun > Sun+Mon); pending counts on the
+New on 2026-11-10/12: rest rules without month blocks (decisions #62, #64:
+at most 5 working days per Mon–Sun week and max 5 in a row, days off per
+month = the month's Saturdays + Sundays, preferred pairs Fri+Sat > Sat+Sun
+> Sun+Mon taken in turns with a 12-month memory, a reserve on flight days);
+pending counts on the
 navigation tabs (`GET /pending-counts`, `DsNavigationDestination.badgeCount`);
 self-arrange removed (decision #63); the monthly flight plan as an Excel grid
 (`GET /flights/template`, upload through `POST /flights/import`, decision

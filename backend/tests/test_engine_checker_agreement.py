@@ -29,7 +29,7 @@ from app.services.schedule_violation_checker import recheck
 AL = AttendanceCode.AL
 
 ENGINE_RULES = {
-    "rolling_seven_min_two_rest": "rolling",
+    "weekly_max_five_working": "weekly",
     "max_consecutive_working": "consecutive",
     "max_consecutive_working_carry": "consecutive",
     "max_consecutive_off": "off_chain",
@@ -87,7 +87,7 @@ def _instance(seed: int, *, full_month: bool = False) -> SolverInput:
             k = rng.randint(4, 6)
             prev_list[-k:] = [work_code] * k
         # Like build_boundary_states: a day with no cell cuts prev_codes short
-        # and counts as rest in the rolling-rest flags.
+        # and counts as not worked in the weekly-rest flags.
         if rng.random() < 0.2:
             prev_list = prev_list[-rng.randint(1, 5) :]
         prev = tuple(prev_list)

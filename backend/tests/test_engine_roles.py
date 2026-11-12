@@ -1,7 +1,7 @@
 """Role-aware scheduling engine tests (owner decision 2026-06-26).
 
 Verifies the per-role code domain, the cross-people A/D balance, the D>0
-fix for role-A people, and the rolling 7-day rest rule for every role.
+fix for role-A people, and the max-5-in-a-row rest rule for every role.
 
 Setup: 4 role-A + 3 role-T + 2 role-M people over a 14-day month slice,
 with flight_pairs > 0 on several days.
@@ -134,11 +134,12 @@ def test_role_a_d_count_positive_when_flights_present(solved) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Rolling 7-day rest for every role (owner 2026-11-10, replaces 2 X/block)
+# The rest rule for every role: no more than 5 working days in a row
+# (owner 2026-11-12)
 # ---------------------------------------------------------------------------
 
-def test_rolling_rest_all_roles(solved) -> None:
-    """Every person (all roles) has >= 2 rest days in every rolling 7 days."""
+def test_rest_rule_all_roles(solved) -> None:
+    """Nobody (all roles) works more than 5 days in a row."""
     grid = {(a.user_id, a.day): a.code for a in solved.assignments}
     for p in _PEOPLE:
         assert_rest_rules(grid, p.user_id, _DAYS)

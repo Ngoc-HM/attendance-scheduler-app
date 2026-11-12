@@ -43,15 +43,16 @@ def test_zero_slack_when_fully_staffed() -> None:
 
 
 def test_violations_carry_rule_day_and_user_metadata() -> None:
-    # Six days worked right before the month: the rolling 7-day window that
-    # starts there already breaks "two rest days", whatever day 1 holds.
+    # November 2026 starts on a Sunday: Mon 26 – Sat 31 Oct worked (history)
+    # already make 6 working days in the week of 26 Oct, whatever day 1
+    # holds (rule W, owner 2026-11-12).
     # (A full week of approved leave no longer does: ruling R1 exempts it.)
-    days = month_days(2026, 6)[:7]
+    days = month_days(2026, 11)[:7]
     worked = {days[0] - timedelta(days=n): True for n in range(1, 7)}
     out = SchedulerEngine().solve(
         SolverInput(
             year=2026,
-            month=6,
+            month=11,
             people=[PersonInput(1, Role.T, carry_streak=6)],
             days=days,
             flight_pairs={d: 0 for d in days},
