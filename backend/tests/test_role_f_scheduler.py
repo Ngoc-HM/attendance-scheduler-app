@@ -1,13 +1,12 @@
 """Role F is T-like (owner decision 2026-07-22).
 
-F shares T's working domain {AD, X}, so it MUST obey the same rolling 7-day
-rest and consecutive-working rules as T. This module
+F shares T's working domain {AD, X}, so it MUST obey the same
+consecutive-working rule as T. This module
 regresses the 2026-07-22 bug where F was exempted from the consecutive rule,
 letting the solver produce 6+ working days in a row before 2 off days.
 
 Assertions:
   * F assignments use only {AD, X}.
-  * At least 2 rest days in every rolling 7 days (owner 2026-11-10).
   * No 6-consecutive-day all-working window (the max-5 rule, same as T).
 """
 
@@ -59,8 +58,8 @@ def test_role_f_codes_only(solved) -> None:
             )
 
 
-def test_role_f_rolling_seven_day_rest(solved) -> None:
-    """Every F person has at least 2 rest days in every rolling 7 days."""
+def test_role_f_rest_rule(solved) -> None:
+    """No F person works more than 5 days in a row (owner 2026-11-12)."""
     grid = {(a.user_id, a.day): a.code for a in solved.assignments}
     for p in _PEOPLE:
         assert_rest_rules(grid, p.user_id, _DAYS)

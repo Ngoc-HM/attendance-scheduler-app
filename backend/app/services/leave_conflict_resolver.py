@@ -7,10 +7,11 @@ three agreed criteria in order:
 1. **Outstanding comp days** — higher ``carry_comp`` first (the caller passes
    the values ``schedule_history`` derives, never the stored column).
 2. **Rest entitlement** — whoever already holds FEWER approved off days in
-   the rolling 7-day windows the request touches ranks higher: the six days
-   before and after the span (owner 2026-11-10 — the fixed 7-day blocks are
-   gone; every 7 consecutive days owe 2 rest days, so the person with less
-   rest around the contested days has the stronger claim).
+   the six days before and after the span ranks higher: a ranking heuristic
+   only (owner 2026-11-10 — the fixed 7-day blocks are gone), the person
+   with less rest around the contested days has the stronger claim. It is
+   not a scheduling rule (the rest rules are at most 5 working days per
+   Mon–Sun week and no more than 5 in a row, owner 2026-11-12).
 3. **Weekend pairing** — a span that forms Fri+Sat ranks above Sat+Sun, which
    ranks above Sun+Mon (owner 2026-11-10, the engine's pair order).
 
@@ -33,15 +34,16 @@ def _span(start: date, end: date) -> list[date]:
     return [start + timedelta(days=i) for i in range((end - start).days + 1)]
 
 
-# A 7-day window holding any day of the span reaches this far either side.
+# How far either side of the span already-held offs are counted (a week
+# around the span, the span's own days excluded).
 AROUND_DAYS = 6
 
 
 def offs_already_around(
     start: date, end: date, approved_off: Iterable[date]
 ) -> int:
-    """Approved off days the user already holds in the 7-day windows the
-    span touches, i.e. within six days before ``start`` or after ``end``.
+    """Approved off days the user already holds within six days before
+    ``start`` or after ``end``.
 
     The span's own days are excluded so a re-ranked, already-approved request
     does not count against itself.

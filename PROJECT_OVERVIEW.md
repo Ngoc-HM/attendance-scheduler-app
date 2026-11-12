@@ -192,10 +192,10 @@ ngày trong tháng được gán đúng MỘT trạng thái.
   - **Tập ngày D:** các ngày của tháng đang xếp, mỗi ngày biết thứ trong
     tuần (T2…CN).
 
-  - **Tuần:** không chia tháng thành tuần cố định. Quy tắc nghỉ áp dụng
-    trên MỌI cửa sổ 7 ngày lịch liên tiếp, kể cả vắt qua hai tháng (chủ
-    dự án chốt 10/11/2026; trước đó tháng được chia thành các block 7
-    ngày tính từ ngày 1).
+  - **Tuần:** tuần lịch từ thứ Hai đến Chủ nhật, chạy liền qua hai tháng;
+    không chia tháng thành block. Mỗi tuần mỗi người làm tối đa 5 ngày
+    (mục 5.3 #2) (chủ dự án chốt 12/11/2026; trước đó là block 7 ngày
+    tính từ ngày 1, rồi cửa sổ 7 ngày bất kỳ).
 
   - **flightPairs\[d\]:** số cặp chuyến bay của ngày d (0, 1 hoặc 2) —
     từ module nhập lịch bay (F-04).
@@ -222,19 +222,23 @@ ngày trong tháng được gán đúng MỘT trạng thái.
 
 1.  Mỗi người mỗi ngày đúng 1 trạng thái.
 
-2.  Trong 7 ngày lịch liên tiếp bất kỳ, mỗi người không làm quá 5 ngày
-    (tối thiểu 2 ngày nghỉ). T7 và CN không mặc định là nghỉ. Số ngày
+2.  Mỗi tuần (thứ Hai đến Chủ nhật) mỗi người làm tối đa 5 ngày, tức có
+    ít nhất 2 ngày nghỉ; hai ngày này không bắt buộc liền nhau, được phép
+    nghỉ lẻ 1 ngày để giữ quy tắc #3 và để sắp xếp nhân sự hợp lý. T7 và CN
+    không mặc định là nghỉ. Số ngày
     nghỉ (X) của mỗi người trong tháng bằng số ngày T7 và CN của tháng đó
     (như bảng WR giấy: "TTL 23 WORKING DAYS", mỗi người 8 X trong tháng
     7/2026), giống nhau cho mọi vai trò; nghỉ phép vào ngày thường không
     làm giảm số X, còn ngày T7/CN nằm trong đợt nghỉ phép được tính là một
-    X. (Chốt 10/11/2026, thay cho "mỗi tuần ĐÚNG 2 ngày nghỉ" tính theo
-    block.)
+    X. (Chốt 10–12/11/2026, thay cho "mỗi tuần ĐÚNG 2 ngày nghỉ" tính
+    theo block.)
 
 3.  Không ai làm quá 5 ngày LÀM VIỆC liên tục (chuỗi ≥ 6 ngày là không
     hợp lệ). Tính chuỗi phải cộng dồn carryStreak\[p\] từ tháng trước
-    (mục 5.5). Đồng thời, trong MỌI cửa sổ 7 ngày lịch liên tiếp (kể cả
-    cửa sổ vắt qua hai tháng), mỗi người phải có tối thiểu 2 ngày nghỉ.
+    (mục 5.5). Nghỉ 1 ngày là chuỗi được tính lại từ đầu. (Chốt
+    12/11/2026: cách tính "MỌI cửa sổ 7 ngày liên tiếp phải có 2 ngày
+    nghỉ" được thay bằng tuần lịch ở #2, vì cách cũ ép mỗi người nghỉ cố
+    định cùng hai thứ suốt tháng nên lượt nghỉ đẹp không xoay vòng được.)
 
 4.  Định biên ca cho nhóm cố định A1–A4 theo flightPairs\[d\]:
 
@@ -243,6 +247,10 @@ ngày trong tháng được gán đúng MỘT trạng thái.
 | 2 cặp                | 1 người ca A và 2 người ca D                  |
 | 1 cặp                | 1 người ca A và 1 người ca D                  |
 | 0 cặp                | Không cần định biên ca bay trong ngày đó      |
+
+Dự phòng (quy tắc mềm, không bắt buộc, chốt 12/11/2026): ngày nào có
+chuyến bay cũng nên có 3 người nhóm A đi làm, để còn một người dự phòng
+khi có người nghỉ đột xuất. Không đạt thì không báo vi phạm.
 
 5.  Tôn trọng nghỉ đã duyệt và ngày lễ: các ô (người, ngày) đã duyệt
     AL/CD hoặc ngày lễ X phải giữ nguyên, không xếp ca.
@@ -263,9 +271,11 @@ ngày trong tháng được gán đúng MỘT trạng thái.
     trong giới hạn nhu cầu chuyến bay thực tế.
 
 8.  Ghép ngày nghỉ thành cặp 2 ngày liền kề theo thứ tự ưu tiên: (1)
-    T6+T7; (2) T7+CN; (3) CN+T2. Lượt nghỉ cặp ưu tiên được chia đều giữa
-    các nhân sự cùng nhóm; mỗi nhóm cố giữ ít nhất một người đi làm mỗi
-    ngày. (Chốt 10/11/2026; thứ tự cũ là T7+CN, T6+T7, CN+T2.)
+    T6+T7; (2) T7+CN; (3) CN+T2. Lượt nghỉ cặp ưu tiên xoay vòng giữa
+    các nhân sự cùng nhóm: ai đang được ít lượt hơn (tính cả 12 tháng
+    trước) thì được trước, ai đã được nhiều thì nhường. Mỗi nhóm cố giữ
+    ít nhất một người đi làm mỗi ngày. (Chốt 10–12/11/2026; thứ tự cũ là
+    T7+CN, T6+T7, CN+T2.)
 
 9.  Khi nhiều người cùng xin nghỉ một ngày (xung đột), ưu tiên: (a)
     người có carryComp\[p\] lớn hơn; (b) đảm bảo quyền nghỉ 2
@@ -289,9 +299,8 @@ tháng:
     trước thì sang tháng mới chỉ được làm tối đa 1 ngày nữa rồi phải
     nghỉ.
 
-Hệ thống kiểm tra mọi cửa sổ 7 ngày liên tục với 6 ngày lịch sử trước
-tháng để bảo đảm quy tắc nghỉ vẫn đúng tại biên tháng; ngày chưa có lịch
-sử thì không tính.
+Chuỗi ngày làm liên tiếp và tuần vắt qua đầu tháng được tính nối từ lịch
+sử tháng trước; ngày chưa có lịch sử thì không tính.
 
 ## 5.6. Khi không tìm được lời giải hợp lệ (infeasible)
 

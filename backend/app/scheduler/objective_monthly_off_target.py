@@ -11,9 +11,11 @@ where W counts the month's Saturdays and Sundays (July 2026: 8, November
 a comp day (decision #5). A leave day on a weekday leaves the target alone.
 
 |chosen X − target| is penalised in both directions. It is an objective,
-not a slack and not a violation: the only binding rule is "at most 5 working
-days in any 7" (``constraints_rolling_rest``), whose slack can still push a
-person above the target when their rhythm needs it. Only X the engine
+not a slack and not a violation: the rest rules (at most 5 working days per
+Mon–Sun week, ``constraints_weekly_rest``; no more than 5 in a row,
+``constraints_consecutive``, owner 2026-11-12) only set a floor, so this
+target is what sets how many days off a person gets; a rule's slack can
+still push a person above it when their rhythm needs it. Only X the engine
 CHOOSES counts (ruling R2: pinned leave is excluded); a CD is not an X.
 """
 

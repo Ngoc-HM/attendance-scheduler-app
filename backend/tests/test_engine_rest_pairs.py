@@ -1,7 +1,9 @@
-"""Rolling 7-day rest, preferred day-off pairs, fair turns (owner 2026-11-10).
+"""Rest rules, preferred day-off pairs, fair turns (owner 2026-11-10 / 11-12).
 
-The 7-day blocks (1–7, 8–14, …) are gone. The rest rules are the rolling
-7-day rule and max-5-in-a-row; the soft objectives give every person as many
+The 7-day blocks (1–7, 8–14, …) are gone (2026-11-10), and so is the rolling
+"any 7 consecutive days" reading (2026-11-12): the rest rules are at most 5
+working days per Mon–Sun week (2 rest days, not necessarily adjacent) and
+max-5-in-a-row; the soft objectives give every person as many
 X as the month has Saturdays and Sundays (minus their approved leave on those
 days), put the days off in pairs (Fri+Sat > Sat+Sun > Sun+Mon), keep a role
 group from being all off on one day and share the good pairs in the group.
@@ -28,7 +30,7 @@ from tests.rest_invariants import assert_rest_rules
 X = AttendanceCode.X
 FRI, SAT, SUN = 4, 5, 6
 REST_RULES = {
-    "rolling_seven_min_two_rest",
+    "weekly_max_five_working",
     "max_consecutive_working",
     "max_consecutive_working_carry",
 }
@@ -67,7 +69,7 @@ def _pair_starts(grid, uid, days) -> list[date]:
 def test_november_shape_staffed_without_rest_breaches() -> None:
     """4 group-A people, 21 two-pair days and 9 one-pair days, 3 F, 2 M:
     fewer flight_staffing violations than the block model's 3, no rest-rule
-    violation, nobody works 6 days in a row, 2 rest days in every 7."""
+    violation, nobody works 6 days in a row."""
     days = month_days(2026, 11)
     one_pair = {2, 5, 9, 12, 16, 19, 23, 26, 30}
     fp = {d: (1 if d.day in one_pair else 2) for d in days}
@@ -177,7 +179,7 @@ def test_leave_over_a_weekend_lowers_the_target_by_two() -> None:
 
 def test_lone_person_gets_fri_sat_every_week() -> None:
     """Acceptance 3a: November 2026 starts on a Sunday, so Fri+Sat (6/7,
-    13/14, 20/21, 27/28) fits the 7-day rule; the 9th X (9 Sat + Sun) joins
+    13/14, 20/21, 27/28) fits the rest rules; the 9th X (9 Sat + Sun) joins
     one of the pairs."""
     days = month_days(2026, 11)
     out = _solve([PersonInput(1, Role.T)], days)
@@ -190,7 +192,7 @@ def test_lone_person_gets_fri_sat_every_week() -> None:
 def test_sat_sun_when_friday_is_worked() -> None:
     """Acceptance 3b: a lone group-A person must work every Friday (a flight
     pair there), so Fri+Sat is impossible → Sat+Sun every week (Feb 2027
-    starts on a Monday, so Sat+Sun fits the 7-day rule)."""
+    starts on a Monday, so Sat+Sun fits the rest rules)."""
     days = month_days(2027, 2)
     fp = {d: (1 if d.weekday() == FRI else 0) for d in days}
     out = _solve([PersonInput(1, Role.A)], days, fp)
@@ -205,7 +207,7 @@ def test_sat_sun_when_friday_is_worked() -> None:
 
 def test_sun_mon_when_friday_and_saturday_are_worked() -> None:
     """Acceptance 3c: flights on Friday and Saturday → Sun+Mon every week
-    (June 2027 starts on a Tuesday, so Sun+Mon fits the 7-day rule)."""
+    (June 2027 starts on a Tuesday, so Sun+Mon fits the rest rules)."""
     days = month_days(2027, 6)
     fp = {d: (1 if d.weekday() in (FRI, SAT) else 0) for d in days}
     out = _solve([PersonInput(1, Role.A)], days, fp)
@@ -219,7 +221,7 @@ def test_sun_mon_when_friday_and_saturday_are_worked() -> None:
 
 
 def test_good_pairs_are_shared_in_a_group() -> None:
-    """Acceptance 4 (as far as the 7-day rule allows, see the report): three
+    """Acceptance 4: three
     T over February 2027 with group cover on — never all off, everybody gets
     a weekday-bonus pair, and nobody gets a day off beyond the target (8)
     to make it happen."""
@@ -239,21 +241,21 @@ def test_good_pairs_are_shared_in_a_group() -> None:
 # --- 7. month boundary ------------------------------------------------------
 
 
-def test_history_of_four_worked_days_allows_one_more() -> None:
-    """Acceptance 7: four worked days ending last month → a rest day on the
-    1st or 2nd; without history the month may open with 5 working days."""
+def test_history_closes_the_week_across_the_month_start() -> None:
+    """Acceptance 7: Sun 1 Nov 2026 closes the week Mon 26 – Sun 1 whose
+    27–31 Oct were worked (history) → the 1st is a rest day (rule W, and
+    rule C allows one more day at most); without history the month may
+    open with 5 working days."""
     days = month_days(2026, 11)
     first = days[0]
-    worked = {first - timedelta(days=n): n <= 4 for n in range(1, 7)}
+    worked = {first - timedelta(days=n): n <= 5 for n in range(1, 7)}
     out = _solve(
-        [PersonInput(1, Role.T, carry_streak=4)],
-        days,
-        previous_working={1: worked},
+        [PersonInput(1, Role.T, carry_streak=5)], days, previous_working={1: worked}
     )
     assert out.feasible and not out.violations
     grid = _grid(out)
-    assert not (grid[(1, days[0])].is_working and grid[(1, days[1])].is_working)
-    assert_rest_rules(grid, 1, days, worked)
+    assert not grid[(1, days[0])].is_working
+    assert_rest_rules(grid, 1, days, worked, carry_streak=5)
 
     out = _solve([PersonInput(1, Role.T)], days)
     grid = _grid(out)

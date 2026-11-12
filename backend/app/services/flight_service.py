@@ -157,6 +157,19 @@ def flight_pairs_map(db: Session, days: list[date]) -> dict[date, int]:
     return result
 
 
+def known_flight_pairs(db: Session, days: list[date]) -> dict[date, int]:
+    """``{day: flight_pairs}`` only for the days that have a FlightDay row.
+
+    Unlike ``flight_pairs_map`` a day without a row is left out, so the
+    caller can tell "no flight data yet" from "no flights" (the boundary-week
+    look-ahead, ``objective_boundary_week``).
+    """
+    if not days:
+        return {}
+    rows = db.query(FlightDay).filter(FlightDay.day.in_(days)).all()
+    return {row.day: row.flight_pairs for row in rows}
+
+
 def import_excel(db: Session, file: UploadFile) -> list[Flight]:
     """F-04 — parse the monthly flight Excel (openpyxl) and upsert rows.
 

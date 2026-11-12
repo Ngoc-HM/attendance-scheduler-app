@@ -5,8 +5,8 @@ Each person's assignable code set depends on their role:
     Role.A (fixed group)  → {A, D, X, CD}        full flight rules
     Role.T (flexible)     → {AD, X, CD}           full day, no shift split
     Role.M (admin)        → {O/D, X, CD}          office duty
-    Role.F (split from T) → {AD, X, CD}           T-like: rolling 7-day rest AND the
-                                              max-5-consecutive rule apply to F
+    Role.F (split from T) → {AD, X, CD}           T-like: the weekly rest and the
+                                              max-5-consecutive rules apply to F
                                               (owner 2026-07-22)
 
 OFF_CODES are the non-working rest codes; a day is "working" if its assigned

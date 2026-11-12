@@ -2,7 +2,8 @@
 
 These are pure functions (no solver, no DB) and are unit-testable on their own.
 The month is no longer cut into 7-day blocks (owner 2026-11-10): rest is
-governed by the rolling 7-day rule, which needs no partition.
+governed by Mon–Sun calendar weeks across months and "no more than 5
+working days in a row" (owner 2026-11-12), which need no month partition.
 """
 
 from __future__ import annotations

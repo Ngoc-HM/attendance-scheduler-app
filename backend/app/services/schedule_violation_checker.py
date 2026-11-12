@@ -9,8 +9,9 @@ just broke.
 Rules mirrored (engine module in brackets):
 
 * max 5 consecutive working days, carry included   [constraints_consecutive]
-* >= 2 rest days in every rolling 7 days           [constraints_rolling_rest]
-  (the old "2 X per 7-day block" quota is gone, owner 2026-11-10)
+* max 5 working days per Mon–Sun week, history     [constraints_weekly_rest]
+  (owner 2026-11-12; replaces the rolling 7-day reading and the old
+  "2 X per 7-day block" quota)
 * flight staffing floor for role A                 [constraints_staffing]
 * >= 2 pure A days per role-A person / full month  [constraints_role_a_distribution]
 * owed comp days (CD) granted, none unearned       [constraints_comp_days]
@@ -31,6 +32,7 @@ from app.scheduler.constraints_role_a_distribution import (
     MIN_A_DAYS,
     MIN_FULL_MONTH_DAYS,
 )
+from app.scheduler.constraints_weekly_rest import MAX_WORKING, weeks
 from app.scheduler.domain import Violation
 
 # Demand table per flight_pairs (§5.3 #4) — kept in sync with the engine.
@@ -65,7 +67,7 @@ def recheck(
     """
     warnings: list[Violation] = []
     warnings += check_consecutive(grid, roles, carry_streaks, days)
-    warnings += check_rolling_rest(grid, roles, days, previous_working or {})
+    warnings += check_weekly_rest(grid, roles, days, previous_working or {})
     warnings += check_staffing(grid, {**(cover_roles or {}), **roles}, days, flight_pairs)
     warnings += check_min_a_days(grid, roles, days)
     warnings += check_comp_days(grid, roles, days, carry_comps or {})
@@ -77,41 +79,32 @@ def _days(days: list[date]) -> list[date]:
     return sorted(set(days))
 
 
-def check_rolling_rest(grid, roles, days, previous_working) -> list[Violation]:
-    """Every rolling 7 calendar days must contain at least 2 rest days."""
-    days = _days(days)
-    if not days:
-        return []
+def check_weekly_rest(grid, roles, days, previous_working) -> list[Violation]:
+    """Rule W — at most 5 working days per Mon–Sun week (owner 2026-11-12).
 
-    previous_days = [days[0] - timedelta(days=n) for n in range(6, 0, -1)]
+    The week that started last month reads ``previous_working`` (no history =
+    not worked); the week ending next month counts this month's days only.
+    """
     warnings: list[Violation] = []
     for uid in roles:
-        historical = previous_working.get(uid, {})
-        timeline = [
-            (day, historical.get(day, False)) for day in previous_days
-        ] + [
-            (
-                day,
-                bool(
-                    (code := grid.get((uid, day))) is not None
-                    and code.is_working
-                ),
+        history = previous_working.get(uid, {})
+        for monday, before, inside in weeks(_days(days)):
+            worked = sum(1 for d in before if history.get(d, False)) + sum(
+                1
+                for d in inside
+                if (code := grid.get((uid, d))) is not None and code.is_working
             )
-            for day in days
-        ]
-        for start in range(len(timeline) - 6):
-            window = timeline[start : start + 7]
-            if sum(working for _, working in window) > 5:
+            if worked > MAX_WORKING:
                 warnings.append(
                     Violation(
-                        rule="rolling_seven_min_two_rest",
+                        rule="weekly_max_five_working",
                         message=(
-                            f"User {uid}: fewer than 2 rest days in the 7-day "
-                            f"window starting {window[0][0]}"
+                            f"User {uid}: more than 5 working days in the week "
+                            f"starting {monday}"
                         ),
-                        day=window[0][0],
+                        day=monday,
                         user_id=uid,
-                        params={"start": window[0][0]},
+                        params={"start": monday},
                     )
                 )
     return warnings

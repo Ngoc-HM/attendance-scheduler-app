@@ -162,8 +162,8 @@ class TestConflictRank:
         assert ranked[0].user_id == 2  # user_b has carry_comp=1 > 0
 
     def test_fewer_offs_already_held_around_ranks_first(self):
-        """Criterion (b): the person with less rest in the 7-day windows the
-        span touches wins (owner 2026-11-10 — rolling, not blocks)."""
+        """Criterion (b): the person with less rest within six days of the
+        span wins (owner 2026-11-10 — not blocks; a ranking heuristic)."""
         req_a = self._make_req(1, user_id=1)
         req_b = self._make_req(2, user_id=2)
         # User 1 already holds 2 approved offs within six days of May 1–3.
@@ -172,8 +172,8 @@ class TestConflictRank:
         assert ranked[0].user_id == 2
 
     def test_offs_around_reach_six_days_across_the_month(self):
-        """April 25 shares a 7-day window with May 1 (block 1–7 never saw it);
-        April 24 does not."""
+        """April 25 is within six days of May 1 (block 1–7 never saw it);
+        April 24 is not."""
         from app.services.leave_conflict_resolver import offs_already_around
 
         start, end = date(2025, 5, 1), date(2025, 5, 3)
@@ -756,7 +756,7 @@ def test_approve_keeps_the_weekly_off_days(client):
     assert any("updated" in w for w in warnings)
     # Leave is rest: it cannot create a rest-rule breach for this person.
     assert not any(
-        "(F1_Keepx_A1): " in w and ("7 days" in w or "7 ngày" in w)
+        "(F1_Keepx_A1): " in w and ("working days" in w or "làm quá 5" in w or "ngày làm" in w)
         for w in warnings
     ), warnings
     assert _planned(client, admin, me, span) == _after_approve(before)

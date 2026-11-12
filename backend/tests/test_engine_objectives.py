@@ -48,8 +48,8 @@ def test_weekend_offs_not_all_piled_up_under_flights() -> None:
     but what keeps a weekend STAFFED is the flight demand: with 2 pairs every
     day the fixed group is never all off on the same Sat/Sun."""
     days = month_days(2026, 6)
-    # Six people: 2 pairs every day need 3 workers; with 2 rest days in every
-    # 7 each person works 5 of 7 days (6 x 5 = 30 >= 7 x 3).
+    # Six people: 2 pairs every day need 3 workers; with the month's 8
+    # Sat + Sun as X each person works 22 of 30 days (6 x 22 >= 30 x 3).
     fixed_ids = (1, 2, 3, 4, 5, 6)
     people = [PersonInput(u, Role.A) for u in fixed_ids]
     out = _solve(people, days, flight_pairs={d: 2 for d in days})

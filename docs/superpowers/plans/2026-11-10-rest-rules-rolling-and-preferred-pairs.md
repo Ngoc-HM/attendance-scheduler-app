@@ -1,5 +1,11 @@
 # Rest rules: rolling 7 days, preferred pairs, fair turns (2026-11-10)
 
+> Amended on 2026-11-12 (decision #64): the rolling "2 rest days in ANY 7
+> consecutive days" rule described below became a calendar-week rule (at
+> most 5 working days per Monday–Sunday week) next to "no more than 5
+> working days in a row"; the good pairs now take turns with a 12-month
+> memory; a third group-A person is kept in reserve on flight days. The rest of this plan stands as the record of 2026-11-10.
+
 Owner rulings of 2026-11-10, taken in one working session, and the design
 that follows from them. This replaces the fixed 7-day blocks of the month.
 

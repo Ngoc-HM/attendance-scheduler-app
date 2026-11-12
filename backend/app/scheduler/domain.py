@@ -27,6 +27,10 @@ class PersonInput:
     # six, ending on its last day; cut short at a day with no cell; empty
     # without history). The off-chain rule reads it across the month boundary.
     prev_codes: tuple[AttendanceCode, ...] = ()
+    # Weekday-bonus points of adjacent X+X pairs (Fri+Sat 3, Sat+Sun 2,
+    # Sun+Mon 1) earned in the 12 months before this one — the memory of the
+    # good-pair turns (``objective_pair_points_fair``, owner 2026-11-12).
+    carry_pair_points: int = 0
 
 
 @dataclass(frozen=True)
@@ -47,8 +51,13 @@ class SolverInput:
     # customer clarification 2026-06-12).
     long_leave_off: dict[int, set[date]] = field(default_factory=dict)
     # Working/rest facts for the six calendar days immediately before this
-    # month. Used by rolling-seven-day constraints across the month boundary.
+    # month (a day with no history = not worked). The weekly rest rule reads
+    # the days of the Mon–Sun week that started last month.
     previous_working: dict[int, dict[date, bool]] = field(default_factory=dict)
+    # Flight pairs of next month's first days up to the Sunday that closes
+    # this month's last week, where known (no entry = no data yet). Read by
+    # the boundary-week look-ahead (``objective_boundary_week``).
+    next_flight_pairs: dict[date, int] = field(default_factory=dict)
     max_solve_seconds: float = 30.0
 
 

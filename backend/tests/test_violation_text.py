@@ -107,7 +107,7 @@ def _all_solver_violations() -> list[Violation]:
 SOLVER_TEXTS = {
     ("flight_staffing", "flight_staffing"),
     ("flight_staffing", "flight_staffing_no_role_a"),
-    ("rolling_seven_min_two_rest", "rolling_seven_min_two_rest"),
+    ("weekly_max_five_working", "weekly_max_five_working"),
     ("max_consecutive_working", "max_consecutive_working"),
     ("max_consecutive_working_carry", "max_consecutive_working_carry"),
     ("max_consecutive_off", "max_consecutive_off"),
@@ -125,7 +125,7 @@ def _all_checker_violations() -> list[Violation]:
     days = month_days(2026, 11)
     grid: dict[tuple[int, date], AttendanceCode] = {}
     for d in days:
-        # 1 (role A): works D every day → consecutive, rolling rest, no pure
+        # 1 (role A): works D every day → consecutive, weekly rest, no pure
         #   A, owed comp not granted, staffing short of ARR.
         grid[(1, d)] = D
         # 3 (role T): off every day → off chain, CD excess.
@@ -152,7 +152,7 @@ def _all_checker_violations() -> list[Violation]:
 CHECKER_TEXTS = {
     ("flight_staffing", "flight_staffing"),
     ("flight_staffing", "flight_staffing_no_role_a"),
-    ("rolling_seven_min_two_rest", "rolling_seven_min_two_rest"),
+    ("weekly_max_five_working", "weekly_max_five_working"),
     ("max_consecutive_working", "max_consecutive_working"),
     ("max_consecutive_off", "max_consecutive_off"),
     ("role_a_minimum_a_days", "role_a_minimum_a_days"),

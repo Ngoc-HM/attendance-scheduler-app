@@ -88,16 +88,24 @@ PostgreSQL.
   save). Holidays are not pinned (#5). Also hard: `sum(CD) == 0` for anyone,
   of any role, who owes no comp days (`constraints_comp_days.py`).
 - **Soft + slack** (always-feasible, decision #2), slack weight 10 000 unless noted:
-  - `constraints_off_days.py` — 2 X per 7-day block (target += pinned leave, #4).
-  - `constraints_rolling_rest.py` — ≥2 rest days in every rolling 7 days, across month ends (#7).
-  - `constraints_consecutive.py` — ≤5 consecutive working days incl. the carried streak (§5.5).
+  - `constraints_weekly_rest.py` — ≤5 working days in every Monday–Sunday week, across month ends (#64; replaces the 7-day blocks and the rolling "2 rest days in any 7" rule).
+  - `constraints_consecutive.py` — ≤5 consecutive working days incl. the carried streak (§5.5); one day off resets the run.
   - `constraints_off_chain.py` — ≤5 consecutive OFF days, counting X and CD; annual leave exempt (#11, #34).
   - `constraints_staffing.py` — role-A floor per flight pairs: 1 pair → ≥1A+1D, 2 pairs → ≥1A+2D (§5.3 #4).
   - `constraints_role_a_distribution.py` — ≥2 pure A days per role-A person on a full month (#14).
   - `constraints_comp_days.py` — for anyone owing CDs, grant exactly the owed number; shortfall/excess slack weight 2 000, so a CD yields to flight cover (#13). With nothing owed the rule is the hard `sum(CD) == 0` above, not slack.
-- **Objectives** (`objectives.WEIGHTS` + `objective_*`): per-person A≈D gap
-  (300) > A/D balance across role A (100) > premium-off fairness (30) >
-  adjacent off-pairing without weekend bias (15). Role A only for the balance terms.
+- **Objectives** (`objectives.WEIGHTS` + `objective_*`; the reasoning for the
+  numbers is in `objectives.py`): days off per person = the month's
+  Saturdays + Sundays (`monthly_off_target`, 1000 per day) > per-person A≈D
+  gap (300) > a role group never all off (`group_cover`, 200) > A/D balance
+  across role A (100) > turns for the good pairs with a 12-month memory
+  (`pair_points_fair`, rewarded down the whole ranking of a group) >
+  premium-off fairness (30) > adjacent pairs with the weekday bonus Fri+Sat > Sat+Sun > Sun+Mon (`off_pairing`, 15 per point);
+  plus a third group-A person in reserve on flight days (`reserve_cover`,
+  300) and a look-ahead for the week that runs into the next month
+  (`boundary_week`, 3000: group A must not owe more rest days there than
+  the next month's first days can absorb). Balance terms are role A only
+  (#62, #64).
 - `slack_registry.py` collects slack vars → `Violation`s after solve.
 - **Two-phase solve** (#45): phase 1 minimises the weighted slack alone with
   40 % of `SOLVER_MAX_TIME_SECONDS`; phase 2 bounds the slack by phase 1's

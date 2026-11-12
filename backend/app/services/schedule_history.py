@@ -4,7 +4,8 @@ Actual attendance wins over the planned schedule for the same user/day.  When
 an actual row is still missing (normal while next month's draft is generated),
 the planned assignment is the best available fact.  This lets the next month
 honour compensation (A/D, and holiday work for every role) and month-boundary
-rest rules without requiring a manual "close month" step first.
+rest rules without requiring a manual "close month" step first. The same
+history gives the good-pair carry (``carry_pair_points``, owner 2026-11-12).
 """
 
 from __future__ import annotations
@@ -22,9 +23,9 @@ from app.models.enums import AttendanceCode
 from app.models.holiday import Holiday
 from app.models.schedule import ShiftAssignment
 from app.models.user import User
-from app.services.carry_over_math import comp_balance_from_counts
+from app.services.carry_over_math import comp_balance_from_counts, pair_points
 
-# Days read back from the cutoff for the streak, the rolling-rest flags and
+# Days read back from the cutoff for the streak, the weekly-rest flags and
 # the off-chain codes. Every rule that crosses the month boundary looks at
 # most six days back, so a longer working run is reported as 6 ("6 or more").
 BOUNDARY_DAYS = 6
@@ -37,6 +38,8 @@ _SUNDAY, _SATURDAY = 0, 6  # SQL day-of-week numbering (SQLite %w, PostgreSQL do
 class BoundaryState:
     carry_comp: int
     carry_streak: int
+    # Worked or not, each of the six days before the month (no cell = not
+    # worked): the Mon–Sun week that started last month (weekly rest rule).
     previous_working: dict[date, bool]
     # Premium offs (X on Sat/Sun/holiday) received so far — derived from the
     # effective history like comp/streak, so no month-close step is needed
@@ -150,14 +153,42 @@ def _boundary_grid(
     return grid
 
 
+def carry_pair_points(
+    db: Session, user_ids: set[int], target_year: int, target_month: int
+) -> dict[int, int]:
+    """Weekday-bonus points of each user's X+X pairs in the effective history
+    of the 12 months before ``target_year/target_month`` (0 without history).
+
+    Two statements for the whole group: the actual X cells, then the planned
+    X cells of days with no actual row (actual wins over the plan, like
+    comp/premium). Only genuine X is read, so AL/CD/S never form a pair; the
+    pairs are counted in Python (``carry_over_math.pair_points``).
+    """
+    if not user_ids:
+        return {}
+    first = date(target_year - 1, target_month, 1)
+    cutoff = date(target_year, target_month, 1) - timedelta(days=1)
+    AR, SA = AttendanceRecord, ShiftAssignment
+    has_actual = exists().where(AR.user_id == SA.user_id, AR.work_date == SA.work_date)
+    actual = select(AR.user_id, AR.work_date).where(
+        AR.user_id.in_(user_ids), AR.work_date >= first, AR.work_date <= cutoff,
+        AR.code == AttendanceCode.X,
+    )
+    planned = select(SA.user_id, SA.work_date).where(
+        SA.user_id.in_(user_ids), SA.work_date >= first, SA.work_date <= cutoff,
+        SA.code == AttendanceCode.X, ~has_actual,
+    )
+    offs: dict[int, set[date]] = {}
+    for stmt in (actual, planned):
+        for uid, day in db.execute(stmt):
+            offs.setdefault(uid, set()).add(day)
+    return {uid: pair_points(offs.get(uid, ())) for uid in user_ids}
+
+
 def build_boundary_states(
     db: Session, users: list[User], target_year: int, target_month: int
 ) -> dict[int, BoundaryState]:
     """Derive carry values immediately before ``target_year/target_month``.
-
-    Six explicit previous-day working flags are returned because a scalar
-    trailing streak cannot enforce "at least two rest days in every rolling
-    seven-day window" across a month boundary.
 
     A fixed number of statements whatever the number of users (F14): comp
     and premium counts are aggregated in SQL; only the last six days are read
