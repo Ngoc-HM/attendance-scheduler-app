@@ -57,6 +57,35 @@ def test_duplicate_username_conflicts(client: TestClient) -> None:
     assert client.post(f"{V}/users", headers=admin, json=body).status_code == 409
 
 
+def test_login_ignores_the_case_of_the_username(client: TestClient) -> None:
+    """Owner 2026-11-13: staff type their name as they like — "Joachim" was
+    stored with a capital and "joachim" was refused. Case and surrounding
+    spaces do not matter at login; the password still does."""
+    admin = _bearer(_token(client, "admin", "admin123"))
+    body = {"username": "Marlene", "full_name": "M", "password": "secret1", "role": "A"}
+    assert client.post(f"{V}/users", headers=admin, json=body).status_code == 201
+    for typed in ("Marlene", "marlene", "MARLENE", " marlene "):
+        assert _login(client, typed, "secret1").status_code == 200, typed
+    assert _login(client, "marlene", "Secret1").status_code == 401
+    assert _login(client, "marlen", "secret1").status_code == 401
+    me = client.get(f"{V}/users/me", headers=_bearer(_token(client, "marlene", "secret1")))
+    assert me.json()["username"] == "Marlene"  # stored as entered
+
+
+def test_username_differing_only_by_case_conflicts(client: TestClient) -> None:
+    """Two accounts must never answer to the same typed name."""
+    admin = _bearer(_token(client, "admin", "admin123"))
+    body = {"username": "helga", "full_name": "H", "password": "secret1", "role": "A"}
+    assert client.post(f"{V}/users", headers=admin, json=body).status_code == 201
+    again = client.post(f"{V}/users", headers=admin, json={**body, "username": "Helga"})
+    assert again.status_code == 409
+    registered = client.post(
+        f"{V}/auth/register",
+        json={"username": "HELGA", "full_name": "H", "password": "secret1"},
+    )
+    assert registered.status_code == 409
+
+
 def test_self_register_then_approve_flow(client: TestClient) -> None:
     # Self-registration lands in `pending` and cannot log in yet.
     reg = client.post(

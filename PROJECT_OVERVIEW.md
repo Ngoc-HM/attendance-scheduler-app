@@ -79,6 +79,9 @@ Mô tả theo từng module. Chi tiết thuật toán xếp lịch xem mục 5.
 
   - User đăng nhập để xem lịch và đăng ký nghỉ. App nội bộ — bảo mật mức
     nhẹ.
+  - Tên đăng nhập không phân biệt chữ hoa/thường ("joachim" = "Joachim");
+    mật khẩu vẫn phân biệt. Không tạo được hai tài khoản chỉ khác nhau chữ
+    hoa/thường.
 
 **F-03 Gán role khi tạo user**
 

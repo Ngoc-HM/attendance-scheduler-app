@@ -12,6 +12,7 @@ apply to every entry point that mutates users.
 from __future__ import annotations
 
 from fastapi import HTTPException, status
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.i18n import t
@@ -53,7 +54,14 @@ def _get_or_404(db: Session, user_id: int) -> User:
 
 
 def _ensure_username_free(db: Session, username: str) -> None:
-    exists = db.query(User).filter(User.username == username).one_or_none()
+    """A name is taken whatever its case: login ignores case
+    (``auth_service.find_by_username``), so two accounts must never answer
+    to the same typed name."""
+    exists = (
+        db.query(User.id)
+        .filter(func.lower(User.username) == username.strip().lower())
+        .first()
+    )
     if exists is not None:
         raise HTTPException(status.HTTP_409_CONFLICT, detail=t("user.username_taken"))
 
@@ -83,7 +91,7 @@ def _count_active_fixed(db: Session) -> int:
 def _persist_new(db: Session, payload: UserCreate, status_: UserStatus) -> User:
     _ensure_username_free(db, payload.username)
     user = User(
-        username=payload.username,
+        username=payload.username.strip(),  # login trims what is typed
         full_name=payload.full_name,
         role=payload.role,
         hashed_password=get_password_hash(payload.password),
