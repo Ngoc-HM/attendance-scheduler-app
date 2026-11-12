@@ -865,6 +865,38 @@ void main() {
       await tester.pumpAndSettle();
       await _drainToast(tester);
     });
+
+    testWidgets('generate lists what it broke in the already-generated next '
+        'month (owner 2026-11-13)', (tester) async {
+      const line = '2026-08: A1: more than 5 working days in a row from 2026-07-28.';
+      final ds = _FakeScheduleDataSource(
+        generateResult: ScheduleResult(
+          feasible: true,
+          violations: const [],
+          nextMonthWarnings: const [line],
+          schedule: MonthlySchedule(
+            id: _FakeScheduleDataSource.idFor(_july),
+            year: 2026,
+            month: _july,
+            status: ScheduleStatus.draft,
+            assignments: const [],
+          ),
+        ),
+      );
+      await _pump(tester, user: _admin, ds: ds, initialMonth: _july);
+
+      await tester.tap(find.text('Generate schedule'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Generate anyway')); // no flights this month
+      await tester.pumpAndSettle();
+
+      expect(find.text('Next month needs a look'), findsOneWidget);
+      expect(find.text(line), findsOneWidget);
+      await tester.tap(find.text('Close'));
+      await tester.pumpAndSettle();
+      expect(find.text('Next month needs a look'), findsNothing);
+      await _drainToast(tester);
+    });
   });
 
   group('deciding the last pending request (bug: no feedback, stale grid)', () {

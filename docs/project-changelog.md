@@ -71,6 +71,22 @@
   when it has none ("còn 2 người nhóm A, cần 1 ca ARR + 2 ca DEP").
   Approving shows the same lines (`services/leave_staffing.py`).
 
+## 2026-11-13 — Live run in the app, follow-ups
+
+- Generating a month whose next month already has a schedule now lists
+  the rule breaches it creates there (weeks and runs cross the month
+  boundary): `ScheduleResult.next_month_warnings` ("YYYY-MM: message",
+  only breaches that were not there before), shown in the app as
+  **Next month needs a look**. Before, regenerating December could break
+  the first week of January silently until January was opened.
+- Texts: the regenerate confirmation no longer says "publish" in
+  Vietnamese ("Lịch đã công bố hoặc đã chỉnh tay …"); the notice after a
+  leave decision no longer says "review the warnings" when none follow.
+- Walked through in the macOS app with real accounts: employee leave
+  (monthly and annual), approve / reject, publish, the employee view of a
+  published month, a shift swap and its approval with rule warnings, and
+  a forced regenerate of a published month.
+
 ## 2026-11-13 — Login ignores the case of the username
 
 - A typed username is matched whatever its case and without surrounding

@@ -452,8 +452,41 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
           tone: DsTone.success,
         );
       }
+      final nextMonth = result?.nextMonthWarnings ?? const <String>[];
+      if (nextMonth.isNotEmpty) {
+        await _showNextMonthWarnings(context, l, nextMonth);
+      }
     }
   }
+
+  /// Regenerating a month can break the first week of the following month
+  /// when that one is already generated (owner 2026-11-13): list what broke.
+  Future<void> _showNextMonthWarnings(
+    BuildContext context,
+    AppLocalizations l,
+    List<String> lines,
+  ) =>
+      showDialog<void>(
+        context: context,
+        builder: (context) => DsFormDialog(
+          title: l.text('nextMonthBrokenTitle'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(l.text('nextMonthBrokenBody')),
+              const SizedBox(height: DsSpacing.x2),
+              RuleWarningsList(lines: lines),
+            ],
+          ),
+          actions: [
+            DsPrimaryButton(
+              label: l.text('close'),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+          ],
+        ),
+      );
 
   /// A shift-change request was decided (admin panel). Approving rewrites
   /// schedule cells, so the grid reloads at once; the backend's rule
