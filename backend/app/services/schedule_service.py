@@ -114,6 +114,8 @@ def generate(db: Session, year: int, month: int, force: bool = False) -> Schedul
     out = SchedulerEngine().solve(inp)
     if not out.feasible:  # only contradictory pins / timeout (§5.6 #12)
         return ScheduleResult(feasible=False, violations=_violations(db, out.violations))
+    following = _following_schedule(db, year, month)
+    before_following = _violation_keys(db, following)
 
     # Any earlier schedule may have left seeded actuals: a published one, or a
     # draft that was published before a forced regenerate.
@@ -152,7 +154,47 @@ def generate(db: Session, year: int, month: int, force: bool = False) -> Schedul
         feasible=True,
         schedule=MonthlyScheduleRead.model_validate(existing),
         violations=_violations(db, out.violations),
+        next_month_warnings=_new_following_warnings(db, following, before_following),
     )
+
+
+def _following_schedule(db: Session, year: int, month: int) -> MonthlySchedule | None:
+    """The month after (year, month), when it already has a schedule."""
+    ny, nm = (year + 1, 1) if month == 12 else (year, month + 1)
+    return (
+        db.query(MonthlySchedule)
+        .filter(MonthlySchedule.year == ny, MonthlySchedule.month == nm)
+        .one_or_none()
+    )
+
+
+def _violation_keys(
+    db: Session, schedule: MonthlySchedule | None
+) -> set[tuple[str, date | None, int | None, str]]:
+    if schedule is None:
+        return set()
+    return {
+        (v.rule, v.day, v.user_id, v.message) for v in _recheck_violations(db, schedule)
+    }
+
+
+def _new_following_warnings(
+    db: Session,
+    following: MonthlySchedule | None,
+    before: set[tuple[str, date | None, int | None, str]],
+) -> list[str]:
+    """Rule breaches of the already-generated next month that this
+    generation created (its weeks and runs start in the regenerated month);
+    the ones it had before are not repeated (owner 2026-11-13)."""
+    if following is None:
+        return []
+    db.expire(following)
+    prefix = f"{following.year}-{following.month:02d}"
+    return [
+        f"{prefix}: {v.message}"
+        for v in _recheck_violations(db, following)
+        if (v.rule, v.day, v.user_id, v.message) not in before
+    ]
 
 
 def manual_override(

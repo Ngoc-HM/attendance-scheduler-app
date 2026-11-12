@@ -38,7 +38,7 @@ alembic/     0001 baseline … 0009 flight_unique_day_number (head; see
 scripts/     seed_demo_users.py, reset_all_passwords.py (both refuse unless
              ENVIRONMENT=dev and the database is local, app/core/script_guard.py;
              --allow-non-dev overrides; hidden password prompt)
-tests/       580 tests (pytest on SQLite, foreign keys on) — engine rules
+tests/       581 tests (pytest on SQLite, foreign keys on) — engine rules
              (bind + slack violation), solve phases, engine/checker agreement,
              roles, cross-month rules, services, endpoints, input bounds,
              RBAC/audit, user delete, sick privacy, production guard, bootstrap,
@@ -97,7 +97,7 @@ i18n/         custom AppLocalizations (en/vi, graceful text(key) fallback)
 ```
 `auth` is the canonical clean-architecture template; the business features
 mirror it, feeding live provider state into the `design_system` views.
-Tests: `test/` — 186 tests including 3 goldens (`test/goldens/`, tagged
+Tests: `test/` — 187 tests including 3 goldens (`test/goldens/`, tagged
 `golden` in `dart_test.yaml`; run them on macOS with `flutter test --tags
 golden`, everything else with `--exclude-tags golden`); among them
 `i18n_keys_used_exist_test.dart` (every key used in `lib/` exists).

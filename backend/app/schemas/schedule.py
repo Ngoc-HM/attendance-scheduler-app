@@ -58,3 +58,7 @@ class ScheduleResult(BaseModel):
     feasible: bool
     schedule: MonthlyScheduleRead | None = None
     violations: list[ConstraintViolation] = []
+    # Generate only: rule breaches the new roster CREATES in the following
+    # month when that month already has a schedule ("YYYY-MM: message") —
+    # weeks and runs cross the month boundary (owner 2026-11-13).
+    next_month_warnings: list[str] = []

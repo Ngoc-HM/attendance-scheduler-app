@@ -73,14 +73,24 @@ class ScheduleResult extends Equatable {
     required this.feasible,
     required this.violations,
     this.schedule,
+    this.nextMonthWarnings = const [],
   });
 
   final bool feasible;
   final MonthlySchedule? schedule;
   final List<ConstraintViolation> violations;
 
+  /// Generate only: rule breaches this roster creates in the following
+  /// month, which already has a schedule ("YYYY-MM: message").
+  final List<String> nextMonthWarnings;
+
   @override
-  List<Object?> get props => [feasible, schedule, violations];
+  List<Object?> get props => [
+    feasible,
+    schedule,
+    violations,
+    nextMonthWarnings,
+  ];
 }
 
 /// A shift-change request (decision #8).

@@ -894,3 +894,47 @@ def test_resync_seeded_actuals_query_count_is_flat(client: TestClient) -> None:
     two_users = _count_resync([u1, u2])
     assert one_user == two_users
     assert two_users <= 2
+
+
+def test_generate_reports_what_it_breaks_in_the_next_month(
+    client: TestClient, monkeypatch
+) -> None:
+    """Owner 2026-11-13: regenerating December silently broke January's
+    first week (a run across New Year), visible only when January was opened.
+    Generating a month now returns the breaches it CREATES in the following
+    month when that month already has a schedule — and only those: a second
+    identical generation repeats nothing."""
+    from app.scheduler.domain import AssignmentResult, SolverOutput
+    from app.scheduler.role_codes import OFF_CODES, codes_for
+    from app.services import schedule_service
+
+    class EveryoneWorks:  # every person on a working code every day
+        def solve(self, inp):  # noqa: ANN001, ANN202
+            out = []
+            for p in inp.people:
+                code = next(c for c in codes_for(p.role) if c not in OFF_CODES)
+                out += [AssignmentResult(p.user_id, d, code) for d in inp.days]
+            return SolverOutput(feasible=True, assignments=out, status="feasible")
+
+    monkeypatch.setattr(schedule_service, "SchedulerEngine", EveryoneWorks)
+    admin = _admin_headers(client)
+    m = _make_user(client, admin, "nextmonth_m1", "M")
+    june = _month_cells(2083, 6, [m["id"]])
+    for d in (1, 2, 3):
+        june[(m["id"], date(2083, 6, d))] = "O/D"
+    _db_schedule(2083, 6, june)
+
+    first = _generate(client, admin, 2083, 5)
+    assert first.status_code == 200, first.text
+    lines = first.json()["next_month_warnings"]
+    mine = [x for x in lines if "nextmonth_m1" in x]
+    assert mine and all(x.startswith("2083-06: ") for x in mine), lines
+
+    again = _generate(client, admin, 2083, 5)
+    assert again.status_code == 200, again.text
+    assert again.json()["next_month_warnings"] == []
+
+    # A month whose next month has no schedule reports nothing.
+    june_alone = _generate(client, admin, 2083, 6, force=True)
+    assert june_alone.status_code == 200, june_alone.text
+    assert june_alone.json()["next_month_warnings"] == []

@@ -130,7 +130,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "leave.overlap": "An overlapping leave request already exists.",
         "leave.invalid_range": "End date must not be before start date.",
         "leave.type_span_mismatch": "Leave of 5 days or less is monthly leave; more than 5 consecutive days must be registered as annual leave.",
-        "leave.schedule_applied": "The already-generated schedule was updated with this decision; review the warnings.",
+        "leave.schedule_applied": "The already-generated schedule was updated with this decision.",
         "leave.schedule_not_generated": "no schedule yet — this decision applies when the month is generated.",
         "leave.revoke_only_approved": "Only an approved leave can be revoked.",
         # Flight-staffing risk of a leave (services/leave_staffing): the
@@ -293,7 +293,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "leave.overlap": "Đã tồn tại đơn nghỉ trùng thời gian.",
         "leave.invalid_range": "Ngày kết thúc không được trước ngày bắt đầu.",
         "leave.type_span_mismatch": "Nghỉ từ 5 ngày trở xuống là nghỉ tháng; trên 5 ngày liên tục phải đăng ký nghỉ phép năm.",
-        "leave.schedule_applied": "Lịch đã tạo được cập nhật theo quyết định này; hãy xem các cảnh báo.",
+        "leave.schedule_applied": "Lịch đã tạo được cập nhật theo quyết định này.",
         "leave.schedule_not_generated": "chưa có lịch — quyết định này sẽ được áp dụng khi tạo lịch tháng đó.",
         "leave.revoke_only_approved": "Chỉ hủy được đơn nghỉ đã duyệt.",
         "leave.staffing_short_shift": "{day}: thiếu {amount} người ca {shift}",

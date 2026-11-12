@@ -409,6 +409,10 @@ class AppLocalizations {
           'The rules could not be checked right now. Publish anyway?',
       'publishAnyway': 'Publish anyway',
       'approvedWithWarnings': 'Request approved, with rule warnings',
+      'nextMonthBrokenTitle': 'Next month needs a look',
+      'nextMonthBrokenBody':
+          'The following month already has a schedule. This roster '
+          'breaks these rules in its first days; regenerate or edit it:',
       'swapPartner': 'Swap partner',
       // --- Review 2 (Task 12): reports, leaves, attendance ---
       'year': 'Year',
@@ -713,7 +717,7 @@ class AppLocalizations {
       'generateAnyway': 'Vẫn tạo lịch',
       'regenerateConfirmTitle': 'Tạo lại lịch?',
       'regenerateConfirmBody':
-          'Lịch đã publish hoặc đã chỉnh tay. Tạo lại sẽ xoá chỉnh tay và '
+          'Lịch đã công bố hoặc đã chỉnh tay. Tạo lại sẽ xoá chỉnh tay và '
           'đưa lịch về nháp. Nhân viên sẽ không xem được lịch tháng này '
           'cho đến khi lịch được công bố lại.',
       // --- Admin cell edit (F-09 UI, owner 2026-07-17) ---
@@ -807,6 +811,10 @@ class AppLocalizations {
           'Hiện không kiểm tra được quy tắc. Vẫn công bố?',
       'publishAnyway': 'Vẫn công bố',
       'approvedWithWarnings': 'Đã duyệt yêu cầu, có cảnh báo quy tắc',
+      'nextMonthBrokenTitle': 'Tháng sau cần xem lại',
+      'nextMonthBrokenBody':
+          'Tháng sau đã có lịch. Lịch vừa tạo làm tháng sau vi phạm các '
+          'quy tắc dưới đây ở những ngày đầu; hãy tạo lại hoặc sửa tháng sau:',
       'swapPartner': 'Người hoán đổi',
       // --- Review 2 (Task 12): reports, leaves, attendance ---
       'year': 'Năm',
