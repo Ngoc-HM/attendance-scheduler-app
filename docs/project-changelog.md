@@ -71,6 +71,12 @@
   when it has none ("còn 2 người nhóm A, cần 1 ca ARR + 2 ca DEP").
   Approving shows the same lines (`services/leave_staffing.py`).
 
+## 2026-11-13 — Employee code in the user card
+
+- The user card at the bottom of the navigation shows the person's code
+  (A3, F1, M1 …) under the name instead of the role label; the role label
+  stays as the fallback for an account without a code.
+
 ## 2026-11-13 — Deployed to the shared server
 
 - The API runs on the owner's VPS behind nginx at `http://160.187.228.64/`
