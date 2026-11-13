@@ -200,3 +200,64 @@ def test_board_reads_the_punches_against_the_codes(client: TestClient) -> None:
     }  # B (business trip) expects no punch
     assert cells["2026-02-03"]["check_in_local"] == "05:00"
     assert cells["2026-02-03"]["corrected"] is True
+
+
+# --- roster tints (owner 2026-11-13) ------------------------------------------
+
+def _published_roster(cells: list[tuple[int, str, str, bool]]) -> None:
+    """Publish 2025-07 with the given (user, day, code, manual) cells."""
+    from datetime import date as _date
+
+    from app.core.database import SessionLocal
+    from app.models.enums import AttendanceCode, ScheduleStatus
+    from app.models.schedule import MonthlySchedule, ShiftAssignment
+
+    db = SessionLocal()
+    try:
+        schedule = db.query(MonthlySchedule).filter_by(year=2025, month=7).one_or_none()
+        if schedule is None:
+            schedule = MonthlySchedule(year=2025, month=7, status=ScheduleStatus.published)
+            db.add(schedule)
+            db.flush()
+        for uid, day, code, manual in cells:
+            db.add(ShiftAssignment(
+                schedule_id=schedule.id, user_id=uid, work_date=_date.fromisoformat(day),
+                code=AttendanceCode(code), is_manual_override=manual,
+            ))
+        db.commit()
+    finally:
+        db.close()
+
+
+def test_roster_days_are_tinted_red_when_missed_and_yellow_when_adjusted(
+    client: TestClient,
+) -> None:
+    admin, uid, _ = _admin_and_id(client, "clock_tint")
+    _published_roster([
+        (uid, "2025-07-01", "A", False),   # no punch → red
+        (uid, "2025-07-02", "D", False),   # in, no out → red
+        (uid, "2025-07-03", "A", False),   # in and out → nothing
+        (uid, "2025-07-04", "D", True),    # admin edited the roster → yellow
+        (uid, "2025-07-05", "A", False),   # admin recorded S → yellow
+        (uid, "2025-07-06", "X", False),   # off → nothing
+    ])
+    for day, cin, cout in (("2025-07-02", "05:00", None), ("2025-07-03", "05:00", "13:00")):
+        body = {"user_id": uid, "work_date": day, "check_in": cin}
+        if cout:
+            body["check_out"] = cout
+        assert client.put(f"{CLOCK}/staff", headers=admin, json=body).status_code == 200
+    assert client.put(f"{V}/attendance", headers=admin,
+                      json={"user_id": uid, "work_date": "2025-07-05", "code": "S"}).status_code == 200
+
+    tints = {
+        c["work_date"]: c["tint"]
+        for c in client.get(f"{CLOCK}/board?year=2025&month=7", headers=admin).json()
+        if c["user_id"] == uid
+    }
+    assert tints == {
+        "2025-07-01": "missing",
+        "2025-07-02": "missing",
+        "2025-07-03": None,
+        "2025-07-04": "adjusted",
+        "2025-07-05": "adjusted",
+    }

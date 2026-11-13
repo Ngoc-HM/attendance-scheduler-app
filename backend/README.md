@@ -32,7 +32,7 @@ app/
     ├── objective*.py      # soft objectives (§5.4)
     ├── slack_registry.py  # slack vars → violations (§5.6)
     └── engine.py          # build + two-phase CP-SAT solve
-alembic/               # database migrations (head 0011)
+alembic/               # database migrations (head 0012)
 scripts/               # seed_demo_users.py, reset_all_passwords.py (local dev DB only)
 tests/                 # pytest
 ```

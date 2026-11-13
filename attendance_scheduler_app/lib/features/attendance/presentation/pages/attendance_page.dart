@@ -11,6 +11,7 @@ import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../data/datasources/time_clock_remote_datasource.dart';
 import '../../domain/entities/attendance_entities.dart';
 import '../../domain/entities/calculations_entities.dart';
+import '../clock_board_marks.dart';
 import '../providers/attendance_provider.dart';
 import '../widgets/attendance_upsert_dialog.dart';
 import '../widgets/close_month_dialog.dart';
@@ -205,33 +206,11 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
         shifts: shifts,
         workdays: workdays,
         absences: absences,
-        dayNotes: [for (final c in cells) c == null ? null : _clockNote(c, l)],
-        dayMarks: [for (final c in cells) c == null ? null : _clockMark(c)],
+        dayNotes: [for (final c in cells) c == null ? null : clockNote(c, l)],
+        dayMarks: [for (final c in cells) c == null ? null : clockMark(c)],
       );
     }).toList();
   }
-
-  /// The cell's tooltip: the punches, or why the day is marked.
-  static String _clockNote(ClockBoardCell c, AppLocalizations l) {
-    final times = [
-      if (c.checkIn != null) '${l.text('clockIn')} ${c.checkIn}',
-      if (c.checkOut != null) '${l.text('clockOut')} ${c.checkOut}',
-    ];
-    final parts = switch (c.status) {
-      'absent' => [l.text('clockAbsent')],
-      'missed_out' => [...times, l.text('clockMissingOut')],
-      'working' => [...times, l.text('clockWorking')],
-      'off_day' => [l.text('clockOffDay'), ...times],
-      _ => times,
-    };
-    return [...parts, if (c.corrected) l.text('clockCorrected')].join(' · ');
-  }
-
-  static DsDayMark? _clockMark(ClockBoardCell c) => switch (c.status) {
-        'absent' || 'missed_out' => DsDayMark.danger,
-        'off_day' => DsDayMark.warning,
-        _ => null,
-      };
 
   ShiftCode _codeToShiftCode(String code) => switch (code) {
         'A' => ShiftCode.a,

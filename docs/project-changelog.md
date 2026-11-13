@@ -71,6 +71,21 @@
   when it has none ("còn 2 người nhóm A, cần 1 ca ARR + 2 ca DEP").
   Approving shows the same lines (`services/leave_staffing.py`).
 
+## 2026-11-13 — Roster day tints (owner rule)
+
+- The published roster is each person's schedule. On the admin's Schedule
+  and Attendance grids a past day due at work (A, D, A/D, AD, O/D, T) with no
+  check-in or no check-out is painted light red; a day the admin adjusted
+  after hearing from the person (manually edited roster cell, approved swap,
+  sick cover, or an actual recorded differently from the roster such as S or
+  AL) is light yellow and never red. Unpublished months paint nothing. The
+  tooltip keeps the punch times. Replaces the corner dots of the morning.
+  `GET /attendance/clock/board` now returns `tint` (`missing` / `adjusted`).
+- The A/D sick cover also goes into the colleague's roster cell (as an admin
+  edit), so they see it in their Schedule tab; taking the S back restores
+  that cell (migration `0012`, `cover_prev_plan_code`,
+  `cover_prev_plan_override`). This settles the open sick-cover point.
+
 ## 2026-11-13 — Attendance flow review fixes
 
 - Sick cover undo (F-10): the A/D cover remembers the S it was assigned for

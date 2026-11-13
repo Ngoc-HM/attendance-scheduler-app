@@ -317,6 +317,10 @@ class DsScheduleView extends StatelessWidget {
             const _DsShiftLegend(),
             const SizedBox(height: DsSpacing.x4),
           ],
+          if (rows.any((r) => r.dayMarks.any((m) => m != null))) ...[
+            const DsDayMarkLegend(),
+            const SizedBox(height: DsSpacing.x4),
+          ],
           DsSurface(
             padding: EdgeInsets.zero,
             child: Column(
@@ -537,7 +541,9 @@ class _DsRosterTable extends StatelessWidget {
                     ? () => onCellTap!(row, i)
                     : null,
                 borderRadius: BorderRadius.circular(6),
-                child: Center(
+                child: _DsDayCell(
+                  note: i < row.dayNotes.length ? row.dayNotes[i] : null,
+                  mark: i < row.dayMarks.length ? row.dayMarks[i] : null,
                   child: i < row.shifts.length
                       ? DsShiftBadge(code: row.shifts[i], compact: true)
                       : const Text(
@@ -780,7 +786,7 @@ class _DsDayGridRow {
   final List<DsDayMark?> marks;
 }
 
-/// A day cell: the code badge, the corner [mark] and the [note] as tooltip.
+/// A day cell: the code badge on the [mark]'s tint, the [note] as tooltip.
 class _DsDayCell extends StatelessWidget {
   const _DsDayCell({required this.child, this.note, this.mark});
 
@@ -790,41 +796,66 @@ class _DsDayCell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Widget cell = Stack(
-      clipBehavior: Clip.none,
-      alignment: Alignment.center,
-      children: [
-        child,
-        if (mark != null)
-          Positioned(
-            top: 4,
-            right: 4,
-            child: DsDayMarkDot(mark: mark!),
-          ),
-      ],
+    Widget cell = DecoratedBox(
+      decoration: BoxDecoration(
+        color: mark == null ? null : dsDayMarkColor(mark!),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Center(child: child),
     );
     if (note != null) {
       cell = Tooltip(message: note!, child: cell);
     }
-    return SizedBox.expand(child: cell);
+    // Fill a fixed-height cell (attendance grid); in a row that sizes to
+    // its content (roster grid) take the badge's height plus a margin.
+    return Padding(
+      padding: const EdgeInsets.all(2),
+      child: LayoutBuilder(
+        builder: (context, constraints) => constraints.hasBoundedHeight
+            ? SizedBox.expand(child: cell)
+            : SizedBox(width: double.infinity, height: 32, child: cell),
+      ),
+    );
   }
 }
 
-/// The small square used for a [DsDayMark], in the grid and its legend.
-class DsDayMarkDot extends StatelessWidget {
-  const DsDayMarkDot({super.key, required this.mark});
+/// The tint of a [DsDayMark].
+Color dsDayMarkColor(DsDayMark mark) =>
+    mark == DsDayMark.missing ? DsColors.dayMissing : DsColors.dayAdjusted;
 
-  final DsDayMark mark;
+/// Legend of the day tints, shown under a grid that has any.
+class DsDayMarkLegend extends StatelessWidget {
+  const DsDayMarkLegend({super.key});
 
   @override
-  Widget build(BuildContext context) => Container(
-    width: 7,
-    height: 7,
-    decoration: BoxDecoration(
-      color: mark == DsDayMark.danger ? DsColors.danger : DsColors.warning,
-      borderRadius: BorderRadius.circular(2),
-    ),
-  );
+  Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    return Wrap(
+      spacing: DsSpacing.x4,
+      runSpacing: DsSpacing.x2,
+      children: [
+        for (final (mark, key) in [
+          (DsDayMark.missing, 'clockMarkMissing'),
+          (DsDayMark.adjusted, 'clockMarkAdjusted'),
+        ])
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  color: dsDayMarkColor(mark),
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: DsColors.border),
+                ),
+                child: const SizedBox(width: 16, height: 16),
+              ),
+              const SizedBox(width: DsSpacing.x2),
+              Text(l.text(key), style: Theme.of(context).textTheme.bodySmall),
+            ],
+          ),
+      ],
+    );
+  }
 }
 
 /// Centered, full-surface placeholder shown when the month has no roster yet —
@@ -1624,24 +1655,7 @@ class DsAttendanceView extends StatelessWidget {
           ],
           if (rows.any((r) => r.dayMarks.any((m) => m != null))) ...[
             const SizedBox(height: DsSpacing.x2),
-            Wrap(
-              spacing: DsSpacing.x4,
-              children: [
-                for (final (mark, key) in [
-                  (DsDayMark.danger, 'clockMarkDanger'),
-                  (DsDayMark.warning, 'clockMarkWarning'),
-                ])
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      DsDayMarkDot(mark: mark),
-                      const SizedBox(width: DsSpacing.x2),
-                      Text(l.text(key),
-                          style: Theme.of(context).textTheme.bodySmall),
-                    ],
-                  ),
-              ],
-            ),
+            const DsDayMarkLegend(),
           ],
         ],
       ),

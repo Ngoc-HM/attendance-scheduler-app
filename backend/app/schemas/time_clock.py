@@ -53,4 +53,6 @@ class TimeClockBoardCell(BaseModel):
     check_in_local: str | None
     check_out_local: str | None
     corrected: bool
-    status: Literal["working", "missed_out", "absent", "off_day", "ok"]
+    # None: an adjusted day nobody punched and nobody was due on.
+    status: Literal["working", "missed_out", "absent", "off_day", "ok"] | None
+    tint: Literal["missing", "adjusted"] | None = None

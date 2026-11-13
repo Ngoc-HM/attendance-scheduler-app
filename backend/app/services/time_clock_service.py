@@ -19,7 +19,8 @@ from sqlalchemy.orm import Session
 from app.core.business_time import business_today
 from app.core.config import settings
 from app.core.i18n import t
-from app.models.enums import AttendanceCode, Role, UserStatus
+from app.models.enums import AttendanceCode, Role, ScheduleStatus, UserStatus
+from app.models.schedule import MonthlySchedule
 from app.models.time_clock import TimeClockEntry
 from app.models.user import User
 from app.services import attendance_service
@@ -188,53 +189,93 @@ DUE_AT_WORK = {
 def board(db: Session, year: int, month: int) -> list[dict]:
     """Each (person, day) of the month the admin should look at.
 
-    A day with punches, plus a past working day without any. ``status``:
-    ``working`` (today, not checked out yet), ``missed_out`` (a past day
-    without check-out), ``absent`` (a working code but no check-in),
-    ``off_day`` (punched on a day off: X, CD, AL, S or no code), ``ok``.
-    Codes are the month's actual attendance, so an unpublished month has no
-    ``absent`` days. The admin account is left out.
+    The published roster is each person's schedule (owner 2026-11-13).
+    ``status`` reads the punches: ``working`` (today, not checked out yet),
+    ``missed_out`` (a past day without check-out), ``absent`` (due at work,
+    no check-in), ``off_day`` (punched on a day off), ``ok``.
+
+    ``tint`` is what the admin's grids paint on the day:
+    ``adjusted`` (light yellow) — the admin changed that day after hearing
+    from the person: a manually edited roster cell (edit, swap, sick cover)
+    or an actual the admin recorded differently from the roster (S, AL…);
+    ``missing`` (light red) — a past day due at work by the published roster
+    with no check-in or no check-out, and not adjusted. A month that is not
+    published paints nothing. The admin account is left out.
     """
     today = _today()
-    codes = attendance_service.actual_records_map(db, year, month)
+    schedule = (
+        db.query(MonthlySchedule)
+        .filter(MonthlySchedule.year == year, MonthlySchedule.month == month)
+        .one_or_none()
+    )
+    published = (
+        schedule is not None and schedule.status is ScheduleStatus.published
+    )
+    plan = (
+        {(a.user_id, a.work_date): a for a in schedule.assignments}
+        if published and schedule is not None
+        else {}
+    )
+    actuals = {
+        (r.user_id, r.work_date): r
+        for r in attendance_service.list_month(db, year, month)
+    }
     staff = {
-        u.id: u
+        u.id
         for u in db.query(User).filter(
             User.status == UserStatus.active, User.role != Role.M
         )
     }
-    cells: dict[tuple[int, date], dict] = {}
-    for entry, user in list_month_all(db, year, month):
-        if user.role is Role.M:
-            continue
-        code = codes.get((entry.user_id, entry.work_date))
-        if entry.check_out_at is None:
-            status_ = "working" if entry.work_date >= today else "missed_out"
+    punches = {
+        (entry.user_id, entry.work_date): entry
+        for entry, user in list_month_all(db, year, month)
+        if user.role is not Role.M
+    }
+
+    def due_code(key: tuple[int, date]) -> AttendanceCode | None:
+        if key in plan:
+            return plan[key].code
+        actual = actuals.get(key)
+        return actual.code if actual is not None else None
+
+    def adjusted(key: tuple[int, date]) -> bool:
+        cell = plan.get(key)
+        if cell is None:
+            return False
+        actual = actuals.get(key)
+        return cell.is_manual_override or (
+            actual is not None
+            and actual.recorded_by is not None
+            and actual.code is not cell.code
+        )
+
+    cells: list[dict] = []
+    days = set(punches) | {k for k in (*plan, *actuals) if k[0] in staff}
+    for key in sorted(days, key=lambda k: (k[1], k[0])):
+        entry = punches.get(key)
+        code = due_code(key)
+        if entry is None:
+            status_ = "absent" if code in DUE_AT_WORK and key[1] < today else None
+        elif entry.check_out_at is None:
+            status_ = "working" if key[1] >= today else "missed_out"
         elif code not in DUE_AT_WORK:
             status_ = "off_day"
         else:
             status_ = "ok"
-        cells[(entry.user_id, entry.work_date)] = {
-            "user_id": entry.user_id,
-            "work_date": entry.work_date,
-            "check_in_local": local_hm(entry.check_in_at),
-            "check_out_local": local_hm(entry.check_out_at),
-            "corrected": entry.corrected_by is not None,
+        tint = None
+        if adjusted(key):
+            tint = "adjusted"
+        elif published and status_ in ("absent", "missed_out"):
+            tint = "missing"
+        if entry is None and status_ is None and tint is None:
+            continue
+        cells.append({
+            "user_id": key[0],
+            "work_date": key[1],
+            "check_in_local": local_hm(entry.check_in_at) if entry else None,
+            "check_out_local": local_hm(entry.check_out_at) if entry else None,
+            "corrected": entry is not None and entry.corrected_by is not None,
             "status": status_,
-        }
-    for (user_id, day), code in codes.items():
-        if (
-            user_id in staff
-            and day < today
-            and code in DUE_AT_WORK
-            and (user_id, day) not in cells
-        ):
-            cells[(user_id, day)] = {
-                "user_id": user_id,
-                "work_date": day,
-                "check_in_local": None,
-                "check_out_local": None,
-                "corrected": False,
-                "status": "absent",
-            }
-    return sorted(cells.values(), key=lambda c: (c["work_date"], c["user_id"]))
+            "tint": tint,
+        })
+    return cells

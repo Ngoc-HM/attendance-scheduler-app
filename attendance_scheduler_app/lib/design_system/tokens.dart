@@ -25,6 +25,11 @@ abstract final class DsColors {
   static const warningSoft = Color(0xFFFFFBEB);
   static const danger = Color(0xFFBE123C);
   static const dangerSoft = Color(0xFFFFF1F2);
+  // Day tints of the admin's grids: a missed day (no check-in/out) and a
+  // day the admin adjusted. One step stronger than *Soft so they read on
+  // white without shouting.
+  static const dayMissing = Color(0xFFFFE4E6);
+  static const dayAdjusted = Color(0xFFFEF3C7);
 }
 
 abstract final class DsSpacing {

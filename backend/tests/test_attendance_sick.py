@@ -310,3 +310,45 @@ def test_a_plain_s_without_cover_changes_nobody_else(client: TestClient) -> None
     _put(client, admin, sick, day, "A")
 
     assert _cell(client, admin, other, day)["code"] == "D"
+
+
+def test_the_cover_goes_into_the_roster_and_comes_back_out(client: TestClient) -> None:
+    """The roster is the person's schedule (owner 2026-11-13): the A/D cover
+    shows there as an admin edit, and taking the S back restores the cell."""
+    from datetime import date as _date
+
+    from app.core.database import SessionLocal
+    from app.models.enums import AttendanceCode, ScheduleStatus
+    from app.models.schedule import MonthlySchedule, ShiftAssignment
+
+    admin = _admin(client)
+    sick = _mk(client, admin, "roster_s1", "A")
+    helper = _mk(client, admin, "roster_s2", "A")
+    day = _date(2094, 5, 4)
+    db = SessionLocal()
+    try:
+        schedule = MonthlySchedule(year=2094, month=5, status=ScheduleStatus.published)
+        db.add(schedule)
+        db.flush()
+        for uid, code in ((sick, AttendanceCode.A), (helper, AttendanceCode.D)):
+            db.add(ShiftAssignment(schedule_id=schedule.id, user_id=uid,
+                                   work_date=day, code=code))
+        db.commit()
+    finally:
+        db.close()
+
+    def roster(uid):
+        db = SessionLocal()
+        try:
+            cell = db.query(ShiftAssignment).filter_by(user_id=uid, work_date=day).one()
+            return cell.code.value, cell.is_manual_override
+        finally:
+            db.close()
+
+    res = client.post("/api/v1/attendance/sick-cover", headers=admin,
+                      json={"user_id": sick, "work_date": day.isoformat(), "code": "S"})
+    assert res.json()["cover"]["user_id"] == helper
+    assert roster(helper) == ("A/D", True)
+
+    _put(client, admin, sick, day.isoformat(), "A")
+    assert roster(helper) == ("D", False)
