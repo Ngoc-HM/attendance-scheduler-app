@@ -1714,29 +1714,6 @@ class DsReportsView extends StatelessWidget {
             ),
             const SizedBox(height: DsSpacing.x6),
           ],
-          DsResponsiveGrid(
-            children: [
-              DsMetricCard(
-                label: l.text('reports'),
-                value: '${rows.length}',
-                icon: Icons.description_outlined,
-                tone: DsTone.primary,
-              ),
-              DsMetricCard(
-                label: l.text('formats'),
-                value: '2',
-                icon: Icons.file_present_outlined,
-                tone: DsTone.success,
-              ),
-              DsMetricCard(
-                label: l.text('retention'),
-                value: 'EU',
-                icon: Icons.shield_outlined,
-                tone: DsTone.neutral,
-              ),
-            ],
-          ),
-          const SizedBox(height: DsSpacing.x6),
           DsSurface(
             padding: EdgeInsets.zero,
             child: Column(
@@ -1746,7 +1723,19 @@ class DsReportsView extends StatelessWidget {
                   child: DsSectionHeader(l.text('recentExports')),
                 ),
                 const Divider(height: 1),
-                _ReportsTable(rows: rows, onDownload: onDownload),
+                if (rows.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.all(DsSpacing.x4),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        l.text('noExportsYet'),
+                        style: const TextStyle(color: DsColors.textMuted),
+                      ),
+                    ),
+                  )
+                else
+                  _ReportsTable(rows: rows, onDownload: onDownload),
               ],
             ),
           ),
@@ -1959,7 +1948,7 @@ class _UsersTable extends StatelessWidget {
       DsTableColumn(header: l.username, flex: 2),
       DsTableColumn(header: l.fullName, flex: 3),
       DsTableColumn(header: l.role, flex: 2),
-      const DsTableColumn(header: 'Code', flex: 2),
+      DsTableColumn(header: l.text('clockCode'), flex: 2),
       DsTableColumn(header: l.status, flex: 2),
       DsTableColumn(header: l.actions, flex: 3),
     ];
