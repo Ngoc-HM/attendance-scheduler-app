@@ -1,6 +1,7 @@
 // Employees get a read-only view of their own attendance (C2, C8): the page
 // loads GET /attendance/me and shows none of the admin actions.
 
+import 'package:attendance_scheduler_app/core/constants/shift_codes.dart';
 import 'package:attendance_scheduler_app/core/storage/locale_storage.dart';
 import 'package:attendance_scheduler_app/design_system/design_system.dart';
 import 'package:attendance_scheduler_app/features/attendance/data/datasources/attendance_remote_datasource.dart';
@@ -50,6 +51,7 @@ class _RecordingAttendance extends AttendanceController {
           code: 'A',
         ),
       ],
+      users: [_user(UserRole.a)],
     );
   }
 }
@@ -119,8 +121,8 @@ void main() {
     final attendance = await _pump(tester, _user(UserRole.m));
 
     expect(attendance.loadedAsAdmin, isTrue);
-    expect(find.text('Public holidays'), findsOneWidget);
-    expect(find.text('Update attendance'), findsOneWidget);
+    expect(find.text('Public holidays'), findsNothing); // own screen now
+    expect(find.text('Update attendance'), findsNothing); // cells are tapped instead
     expect(find.text('Close month'), findsOneWidget);
   });
 
@@ -151,5 +153,31 @@ void main() {
     expect(find.byType(DsDayMarkLegend), findsOneWidget);
     expect(find.text('No check-in / check-out'), findsOneWidget);
     expect(find.text('Adjusted by admin'), findsOneWidget);
+  });
+
+  testWidgets('admin taps a day to edit that person\'s code and punches', (
+    tester,
+  ) async {
+    final now = DateTime.now();
+    await _pump(
+      tester,
+      _user(UserRole.m),
+      board: [
+        ClockBoardCell(
+          userId: 7,
+          workDate: DateTime(now.year, now.month, 1),
+          status: 'ok',
+          checkIn: '05:10',
+          checkOut: '13:40',
+        ),
+      ],
+    );
+
+    expect(find.text('Update attendance'), findsNothing); // no extra button
+    await tester.tap(find.byTooltip('In 05:10 · Out 13:40'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('T3 · Anna'), findsOneWidget);
+    expect(find.byType(DropdownButtonFormField<ShiftCode>), findsOneWidget);
   });
 }

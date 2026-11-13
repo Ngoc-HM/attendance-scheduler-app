@@ -15,6 +15,8 @@ class TimeClockEntry extends Equatable {
     required this.workDate,
     this.checkInAt,
     this.checkOutAt,
+    this.checkInLocal,
+    this.checkOutLocal,
   });
 
   final int id;
@@ -22,6 +24,11 @@ class TimeClockEntry extends Equatable {
   final DateTime workDate;
   final DateTime? checkInAt;
   final DateTime? checkOutAt;
+
+  /// The punches as "HH:MM" on the business clock (Frankfurt), as the server
+  /// reports them: what the screens show, whatever the device's zone.
+  final String? checkInLocal;
+  final String? checkOutLocal;
 
   factory TimeClockEntry.fromJson(Map<String, dynamic> json) => TimeClockEntry(
         id: json['id'] as int,
@@ -33,50 +40,30 @@ class TimeClockEntry extends Equatable {
         checkOutAt: json['check_out_at'] != null
             ? DateTime.parse(json['check_out_at'] as String).toLocal()
             : null,
-      );
-
-  @override
-  List<Object?> get props => [id, userId, workDate, checkInAt, checkOutAt];
-}
-
-/// An entry in the admin's month list. Times are HH:MM in the business
-/// timezone (Frankfurt), as the server reports them, so an admin abroad
-/// reads and corrects the same clock the staff punched on.
-class StaffClockEntry extends Equatable {
-  const StaffClockEntry({
-    required this.userId,
-    required this.workDate,
-    required this.fullName,
-    required this.code,
-    this.checkIn,
-    this.checkOut,
-    this.corrected = false,
-  });
-
-  final int userId;
-  final DateTime workDate;
-  final String fullName;
-  final String code;
-  final String? checkIn;
-  final String? checkOut;
-
-  /// Set by the admin rather than punched.
-  final bool corrected;
-
-  factory StaffClockEntry.fromJson(Map<String, dynamic> json) =>
-      StaffClockEntry(
-        userId: json['user_id'] as int,
-        workDate: DateTime.parse(json['work_date'] as String),
-        fullName: json['full_name'] as String,
-        code: json['code'] as String,
-        checkIn: json['check_in_local'] as String?,
-        checkOut: json['check_out_local'] as String?,
-        corrected: json['corrected'] as bool? ?? false,
+        checkInLocal: json['check_in_local'] as String?,
+        checkOutLocal: json['check_out_local'] as String?,
       );
 
   @override
   List<Object?> get props =>
-      [userId, workDate, fullName, code, checkIn, checkOut, corrected];
+      [id, userId, workDate, checkInAt, checkOutAt, checkInLocal, checkOutLocal];
+}
+
+/// The business clock right now (`GET /attendance/clock/now`): the app asks
+/// the server instead of trusting the device clock.
+class ClockNow {
+  const ClockNow({required this.date, required this.time});
+
+  /// Today on the business clock (date only).
+  final DateTime date;
+
+  /// "HH:MM" on the business clock.
+  final String time;
+
+  factory ClockNow.fromJson(Map<String, dynamic> json) => ClockNow(
+        date: DateTime.parse(json['date'] as String),
+        time: json['time'] as String,
+      );
 }
 
 /// One (person, day) of the admin's attendance board: the punches read
@@ -175,18 +162,13 @@ class TimeClockRemoteDataSource {
     }
   }
 
-  /// Admin: everyone's entries of the month.
-  Future<List<StaffClockEntry>> staffMonth(int year, int month) async {
+  /// The business clock right now (any signed-in user).
+  Future<ClockNow> now() async {
     try {
-      final response = await _dio.get(
-        ApiEndpoints.clockStaff,
-        queryParameters: {'year': year, 'month': month},
-      );
-      return (response.data as List<dynamic>)
-          .map((e) => StaffClockEntry.fromJson(e as Map<String, dynamic>))
-          .toList();
+      final response = await _dio.get(ApiEndpoints.clockNow);
+      return ClockNow.fromJson(response.data as Map<String, dynamic>);
     } on DioException catch (e) {
-      throw ApiException.fromDio(e, 'clock_staff_failed');
+      throw ApiException.fromDio(e, 'clock_now_failed');
     }
   }
 

@@ -663,6 +663,57 @@ class DsResponsiveGrid extends StatelessWidget {
   }
 }
 
+/// Previous / next year, the year in between (same look as
+/// [DsMonthSwitcher]).
+class DsYearSwitcher extends StatelessWidget {
+  const DsYearSwitcher({
+    super.key,
+    required this.year,
+    required this.onPrevious,
+    required this.onNext,
+  });
+
+  final int year;
+  final VoidCallback onPrevious;
+  final VoidCallback onNext;
+
+  @override
+  Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    return Container(
+      height: DsControlHeight.medium,
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+        borderRadius: BorderRadius.circular(DsRadius.medium),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            tooltip: l.text('previousYear'),
+            onPressed: onPrevious,
+            icon: const Icon(Icons.chevron_left, size: 20),
+          ),
+          SizedBox(
+            width: 64,
+            child: Text(
+              '$year',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.labelLarge,
+            ),
+          ),
+          IconButton(
+            tooltip: l.text('nextYear'),
+            onPressed: onNext,
+            icon: const Icon(Icons.chevron_right, size: 20),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class DsMonthSwitcher extends StatelessWidget {
   const DsMonthSwitcher({
     super.key,

@@ -52,7 +52,9 @@ class TimeClockController extends StateNotifier<TimeClockState> {
   Future<void> load() async {
     state = state.copyWith(isLoading: true, clearError: true);
     try {
-      final now = DateTime.now();
+      // The month on the business clock, not the device's.
+      final now = (await _ds.now()).date;
+      if (!mounted) return;
       final today = await _ds.today();
       if (!mounted) return;
       final entries = await _ds.month(now.year, now.month);

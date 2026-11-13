@@ -2,10 +2,8 @@
 
 import 'package:attendance_scheduler_app/core/network/api_exception.dart';
 import 'package:attendance_scheduler_app/features/attendance/data/datasources/attendance_remote_datasource.dart';
-import 'package:attendance_scheduler_app/features/attendance/data/datasources/calculations_remote_datasource.dart';
 import 'package:attendance_scheduler_app/features/attendance/domain/entities/attendance_entities.dart';
-import 'package:attendance_scheduler_app/features/attendance/presentation/providers/attendance_provider.dart';
-import 'package:attendance_scheduler_app/features/attendance/presentation/widgets/holidays_dialog.dart';
+import 'package:attendance_scheduler_app/features/attendance/presentation/pages/holidays_page.dart';
 import 'package:attendance_scheduler_app/features/auth/data/models/user_model.dart';
 import 'package:attendance_scheduler_app/features/auth/domain/entities/user.dart';
 import 'package:attendance_scheduler_app/features/users/data/user_management_datasource.dart';
@@ -91,62 +89,40 @@ class _NoopAttendanceDataSource implements AttendanceRemoteDataSource {
   noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
-class _NoopCalculationsDataSource implements CalculationsRemoteDataSource {
-  @override
-  noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
-}
-
-class _SeededAttendanceController extends AttendanceController {
-  _SeededAttendanceController(super.ds, super.userDs, super.calculationsDs)
-    : super() {
-    state = state.copyWith(
-      holidays: [Holiday(id: 1, day: DateTime(2027, 1, 1), name: 'New Year')],
-    );
-  }
-}
-
 void main() {
-  group('HolidaysDialog', () {
-    testWidgets('Add button enables once both date and name are set', (
+  group('HolidaysPage', () {
+    testWidgets('lists the year and enables Add once date and name are set', (
       tester,
     ) async {
-      final attendanceDs = _NoopAttendanceDataSource();
-      final userDs = _StubUserDataSource();
-      final controller = _SeededAttendanceController(
-        attendanceDs,
-        userDs,
-        _NoopCalculationsDataSource(),
-      );
-
+      await tester.binding.setSurfaceSize(const Size(1100, 800));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
       await tester.pumpWidget(
         _wrap(
-          const HolidaysDialog(year: 2027),
+          const HolidaysPage(),
           overrides: [
-            attendanceControllerProvider.overrideWith((ref) => controller),
+            holidaysProvider.overrideWith(
+              (ref, year) async =>
+                  [Holiday(id: 1, day: DateTime(year, 1, 1), name: 'New Year')],
+            ),
+            attendanceRemoteDataSourceProvider.overrideWithValue(
+              _NoopAttendanceDataSource(),
+            ),
           ],
         ),
       );
       await tester.pumpAndSettle();
 
-      // No date, no name → button is disabled.
-      FilledButton button() => tester.widgetList<FilledButton>(
-            find.descendant(
-              of: find.byType(HolidaysDialog),
-              matching: find.byType(FilledButton),
-            ),
-          ).first;
+      expect(find.text('New Year'), findsOneWidget);
+      FilledButton button() =>
+          tester.widgetList<FilledButton>(find.byType(FilledButton)).first;
       expect(button().onPressed, isNull);
 
-      // Tap the date picker → choose the first date and confirm.
       await tester.tap(find.text('Pick a date'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('OK'));
       await tester.pumpAndSettle();
+      expect(button().onPressed, isNull); // still no name
 
-      // Date is set but name still empty → still disabled.
-      expect(button().onPressed, isNull);
-
-      // Typing the name triggers the listener → rebuild → enabled.
       await tester.enterText(find.byType(TextField).first, 'Reichstag');
       await tester.pump();
       expect(button().onPressed, isNotNull);

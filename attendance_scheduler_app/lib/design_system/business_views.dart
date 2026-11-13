@@ -317,10 +317,6 @@ class DsScheduleView extends StatelessWidget {
             const _DsShiftLegend(),
             const SizedBox(height: DsSpacing.x4),
           ],
-          if (rows.any((r) => r.dayMarks.any((m) => m != null))) ...[
-            const DsDayMarkLegend(),
-            const SizedBox(height: DsSpacing.x4),
-          ],
           DsSurface(
             padding: EdgeInsets.zero,
             child: Column(
@@ -541,9 +537,7 @@ class _DsRosterTable extends StatelessWidget {
                     ? () => onCellTap!(row, i)
                     : null,
                 borderRadius: BorderRadius.circular(6),
-                child: _DsDayCell(
-                  note: i < row.dayNotes.length ? row.dayNotes[i] : null,
-                  mark: i < row.dayMarks.length ? row.dayMarks[i] : null,
+                child: Center(
                   child: i < row.shifts.length
                       ? DsShiftBadge(code: row.shifts[i], compact: true)
                       : const Text(
@@ -731,15 +725,19 @@ class _DsDayGrid extends StatelessWidget {
         for (var i = 0; i < daysInMonth; i++)
           _scrollCell(
             _dayW,
-            _DsDayCell(
-              note: i < row.notes.length ? row.notes[i] : null,
-              mark: i < row.marks.length ? row.marks[i] : null,
-              child: i < row.shifts.length
-                  ? DsShiftBadge(code: row.shifts[i], compact: true)
-                  : const Text(
-                      '—',
-                      style: TextStyle(color: DsColors.textMuted),
-                    ),
+            InkWell(
+              onTap: row.onDayTap == null ? null : () => row.onDayTap!(i + 1),
+              borderRadius: BorderRadius.circular(6),
+              child: _DsDayCell(
+                note: i < row.notes.length ? row.notes[i] : null,
+                mark: i < row.marks.length ? row.marks[i] : null,
+                child: i < row.shifts.length
+                    ? DsShiftBadge(code: row.shifts[i], compact: true)
+                    : const Text(
+                        '—',
+                        style: TextStyle(color: DsColors.textMuted),
+                      ),
+              ),
             ),
           ),
         for (final value in row.trailing)
@@ -776,6 +774,7 @@ class _DsDayGridRow {
     required this.trailing,
     this.notes = const [],
     this.marks = const [],
+    this.onDayTap,
   });
 
   final String name;
@@ -784,6 +783,9 @@ class _DsDayGridRow {
   final List<String> trailing;
   final List<String?> notes;
   final List<DsDayMark?> marks;
+
+  /// Tapping a day cell (day of month, 1-based); null = read-only row.
+  final void Function(int day)? onDayTap;
 }
 
 /// A day cell: the code badge on the [mark]'s tint, the [note] as tooltip.
@@ -1499,6 +1501,7 @@ class DsAttendanceView extends StatelessWidget {
     required this.rows,
     required this.onPreviousMonth,
     required this.onNextMonth,
+    this.onDayTap,
     this.onUpdate,
     this.onHolidays,
     this.onCloseMonth,
@@ -1512,6 +1515,9 @@ class DsAttendanceView extends StatelessWidget {
   /// Admin toolbar actions — each button is shown only when its callback is
   /// non-null, so an employee viewing their own month sees none of them:
   /// record attendance / sick cover, public holidays, close month (F-14).
+  /// Admin: a day cell was tapped (row, day of month) — edit that
+  /// person's day in place.
+  final void Function(DsAttendanceRowData row, int day)? onDayTap;
   final VoidCallback? onUpdate;
   final VoidCallback? onHolidays;
   final VoidCallback? onCloseMonth;
@@ -1643,6 +1649,9 @@ class DsAttendanceView extends StatelessWidget {
                           trailing: ['${row.workdays}', '${row.absences}'],
                           notes: row.dayNotes,
                           marks: row.dayMarks,
+                          onDayTap: onDayTap == null
+                              ? null
+                              : (day) => onDayTap!(row, day),
                         ),
                     ],
                   ),

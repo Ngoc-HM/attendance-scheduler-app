@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../features/attendance/presentation/pages/attendance_page.dart';
+import '../../features/attendance/presentation/pages/holidays_page.dart';
 import '../../features/attendance/presentation/pages/time_clock_page.dart';
 import '../../features/auth/presentation/pages/login_page.dart';
 import '../../features/auth/presentation/pages/register_page.dart';
@@ -21,6 +22,7 @@ const _adminOnlyPaths = {
   AppRoute.flightPresets,
   AppRoute.reports,
   AppRoute.users,
+  AppRoute.holidays,
 };
 
 /// Routes reachable without a session.
@@ -111,6 +113,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 const NoTransitionPage(child: UsersPage()),
           ),
           GoRoute(
+            path: AppRoute.holidays,
+            pageBuilder: (context, state) =>
+                const NoTransitionPage(child: HolidaysPage()),
+          ),
+          GoRoute(
             path: AppRoute.clock,
             pageBuilder: (context, state) =>
                 const NoTransitionPage(child: TimeClockPage()),
@@ -135,4 +142,5 @@ class AppRoute {
   static const String reports = '/reports';
   static const String users = '/users';
   static const String clock = '/clock';
+  static const String holidays = '/holidays';
 }

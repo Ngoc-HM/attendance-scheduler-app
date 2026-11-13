@@ -43,6 +43,7 @@ class ApiEndpoints {
   static const String clockCheckOut = '/attendance/clock/check-out';
   static const String clockToday = '/attendance/clock/today';
   static const String clockMe = '/attendance/clock/me';
+  static const String clockNow = '/attendance/clock/now';
   // Admin: everyone's month (GET) and corrections (PUT).
   static const String clockStaff = '/attendance/clock/staff';
   static const String clockBoard = '/attendance/clock/board';

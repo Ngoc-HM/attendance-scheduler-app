@@ -16,7 +16,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.core.business_time import business_today
+from app.core.business_time import business_now, business_today, local_hm
 from app.core.config import settings
 from app.core.i18n import t
 from app.models.enums import AttendanceCode, Role, ScheduleStatus, UserStatus
@@ -83,6 +83,17 @@ def check_out(db: Session, user_id: int) -> TimeClockEntry:
     return entry
 
 
+def now_local() -> dict:
+    """The business clock right now, for the app: date and HH:MM in
+    ``settings.TIMEZONE`` (the app never uses its device clock for punches)."""
+    now = business_now()
+    return {
+        "date": now.date(),
+        "time": now.strftime("%H:%M"),
+        "timezone": settings.TIMEZONE,
+    }
+
+
 def get_today(db: Session, user_id: int) -> TimeClockEntry | None:
     """Today's entry (or None) — lets the client render current clock state."""
     return _get_entry(db, user_id, _today())
@@ -124,15 +135,6 @@ def list_month_all(
         .all()
     )
     return [(entry, user) for entry, user in rows]
-
-
-def local_hm(moment: datetime | None) -> str | None:
-    """``moment`` as HH:MM in the business timezone (None stays None)."""
-    if moment is None:
-        return None
-    if moment.tzinfo is None:  # SQLite hands back naive UTC
-        moment = moment.replace(tzinfo=UTC)
-    return moment.astimezone(ZoneInfo(settings.TIMEZONE)).strftime("%H:%M")
 
 
 def _at(day: date, local: time) -> datetime:

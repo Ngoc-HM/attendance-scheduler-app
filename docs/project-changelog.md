@@ -71,15 +71,41 @@
   when it has none ("còn 2 người nhóm A, cần 1 ca ARR + 2 ca DEP").
   Approving shows the same lines (`services/leave_staffing.py`).
 
+## 2026-11-13 — Edit a day from its cell; holidays get their own screen
+
+- Admin attendance grid: hovering a cell shows the punches; tapping it opens
+  one dialog for that person and day with the attendance code (S offers the
+  automatic A/D cover) and the check-in/out times. The "Update attendance"
+  button, its person/date pickers and the admin's separate check-in/out tab
+  are gone (owner 2026-11-13: fewer buttons).
+- Public holidays: a "Holidays" screen in the admin navigation (year switcher,
+  add a day with its name, list with delete) replaces the popup on the
+  attendance page.
+
+## 2026-11-13 — Every clock screen reads the server's Frankfurt clock
+
+- Punches were always stamped by the server; now every screen also shows
+  them on the business clock: each time-clock entry carries
+  `check_in_local` / `check_out_local` (HH:MM in `TIMEZONE`), and
+  `GET /attendance/clock/now` gives today's date and time there. The
+  employee's page and the admin's correction dialog no longer read the
+  device clock (a device in Vietnam showed Vietnamese times; the picker
+  opened at the device's hour). The server only needs a correct clock (NTP);
+  its own zone does not matter.
+
 ## 2026-11-13 — Roster day tints (owner rule)
 
-- The published roster is each person's schedule. On the admin's Schedule
-  and Attendance grids a past day due at work (A, D, A/D, AD, O/D, T) with no
+- The published roster is each person's schedule. On the admin's
+  Attendance grid (not the Schedule grid: the roster shows the plan only,
+  owner 2026-11-13) a past day due at work (A, D, A/D, AD, O/D, T) with no
   check-in or no check-out is painted light red; a day the admin adjusted
   after hearing from the person (manually edited roster cell, approved swap,
   sick cover, or an actual recorded differently from the roster such as S or
   AL) is light yellow and never red. Unpublished months paint nothing. The
   tooltip keeps the punch times. Replaces the corner dots of the morning.
+- Fixed in the real app: publishing a month did not refresh the tints until
+  the page was reopened; the Attendance grid now re-reads them whenever the
+  roster changes.
   `GET /attendance/clock/board` now returns `tint` (`missing` / `adjusted`).
 - The A/D sick cover also goes into the colleague's roster cell (as an admin
   edit), so they see it in their Schedule tab; taking the S back restores
