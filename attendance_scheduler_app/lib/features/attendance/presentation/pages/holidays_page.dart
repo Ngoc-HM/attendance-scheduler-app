@@ -93,7 +93,6 @@ class _HolidaysPageState extends ConsumerState<HolidaysPage> {
 
     return DsPage(
       title: l.text('publicHolidays'),
-      maxWidth: 720,
       actions: [
         DsYearSwitcher(
           year: _year,
