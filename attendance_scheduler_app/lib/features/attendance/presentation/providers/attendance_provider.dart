@@ -109,6 +109,21 @@ class AttendanceController extends StateNotifier<AttendanceState> {
         note: note,
       );
       if (!mounted) return false;
+      final wasSick = state.records.any((r) =>
+          r.userId == userId &&
+          r.code == 'S' &&
+          r.workDate.year == workDate.year &&
+          r.workDate.month == workDate.month &&
+          r.workDate.day == workDate.day);
+      if (wasSick && code != 'S') {
+        // Taking an S back restores the colleague's A/D cover on the server:
+        // reload the month so that cell shows its old code too.
+        final records =
+            await _ds.fetchAll(year: workDate.year, month: workDate.month);
+        if (!mounted) return false;
+        state = state.copyWith(isMutating: false, records: records);
+        return true;
+      }
       final newList = [
         for (final r in state.records)
           if (r.userId == userId &&

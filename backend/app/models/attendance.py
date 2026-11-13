@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from sqlalchemy import Date, ForeignKey, String, UniqueConstraint
+from sqlalchemy import Boolean, Date, ForeignKey, String, UniqueConstraint, false
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -35,3 +35,20 @@ class AttendanceRecord(Base, TimestampMixin):
         ForeignKey("users.id"), nullable=True
     )
     note: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    # F-10 sick cover: on the colleague's A/D, the sick (S) actual it covers
+    # and what this cell held before, so taking the S back restores it.
+    # Any later edit of this cell drops the link (the admin owns it then).
+    cover_of_id: Mapped[int | None] = mapped_column(
+        ForeignKey("attendance_records.id", name="fk_attendance_cover_of",
+                   ondelete="SET NULL"),
+        nullable=True, index=True,
+    )
+    cover_prev_code: Mapped[AttendanceCode | None] = mapped_column(
+        SAEnum(AttendanceCode, name="attendance_code"), nullable=True
+    )
+    # True when the previous cell was still the plan's copy (recorded_by
+    # NULL), so the restored cell follows the plan again.
+    cover_prev_seeded: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=false()
+    )

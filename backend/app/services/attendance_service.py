@@ -98,14 +98,44 @@ def upsert(db: Session, payload: AttendanceUpsert, recorded_by: int) -> Attendan
     if cell is None:
         cell = AttendanceRecord(user_id=payload.user_id, work_date=payload.work_date)
         db.add(cell)
+    was_sick = cell.code is AttendanceCode.S
     cell.code = payload.code
     # §9.1 — never persist free text alongside a sick day: no medical detail,
     # whatever the client sent. Other codes keep their optional note.
     cell.note = None if payload.code is AttendanceCode.S else payload.note
     cell.recorded_by = recorded_by
+    # An admin edit of a cover cell makes it the admin's: the S it covered no
+    # longer decides what it holds.
+    _unlink_cover(cell)
+    if was_sick and payload.code is not AttendanceCode.S:
+        _restore_covers(db, cell, recorded_by)
     db.commit()
     db.refresh(cell)
     return cell
+
+
+def _unlink_cover(cell: AttendanceRecord) -> None:
+    cell.cover_of_id = None
+    cell.cover_prev_code = None
+    cell.cover_prev_seeded = False
+
+
+def _restore_covers(db: Session, sick: AttendanceRecord, recorded_by: int) -> None:
+    """The S was taken back: give each A/D cover assigned for it its old code.
+
+    A cover the admin edited since is no longer linked, so it is left alone.
+    A cover that was the plan's copy follows the plan again.
+    """
+    covers = (
+        db.query(AttendanceRecord)
+        .filter(AttendanceRecord.cover_of_id == sick.id)
+        .all()
+    )
+    for cover in covers:
+        if cover.cover_prev_code is not None:
+            cover.code = cover.cover_prev_code
+            cover.recorded_by = None if cover.cover_prev_seeded else recorded_by
+        _unlink_cover(cover)
 
 
 def seed_from_schedule(db: Session, year: int, month: int) -> int:
@@ -215,19 +245,29 @@ def handle_sick(db: Session, payload: AttendanceUpsert, recorded_by: int) -> Sic
             sick=sick_record, cover=None, message=t("attendance.sick_no_cover")
         )
 
+    # What the colleague's cell held before, so taking the S back restores it.
+    before = _get_cell(db, proposal.user_id, day)
+    prev_code = before.code if before is not None else self_day_codes(db, day).get(
+        proposal.user_id
+    )
+    prev_seeded = before is None or before.recorded_by is None
     # §9.1 — the cover row is the colleague's ordinary actual; a note such as
     # "recently sick" would put health data on it, so it carries none. The
     # reason goes to the admin in the response only.
-    cover = AttendanceRead.model_validate(
-        upsert(
-            db,
-            AttendanceUpsert(
-                user_id=proposal.user_id, work_date=day, code=proposal.new_code,
-                note=None,
-            ),
-            recorded_by,
-        )
+    cover_row = upsert(
+        db,
+        AttendanceUpsert(
+            user_id=proposal.user_id, work_date=day, code=proposal.new_code,
+            note=None,
+        ),
+        recorded_by,
     )
+    cover_row.cover_of_id = sick_record.id
+    cover_row.cover_prev_code = prev_code
+    cover_row.cover_prev_seeded = prev_seeded
+    db.commit()
+    db.refresh(cover_row)
+    cover = AttendanceRead.model_validate(cover_row)
     return SickCoverResult(
         sick=sick_record, cover=cover, forced=proposal.forced,
         message=t(proposal.reason_key),
