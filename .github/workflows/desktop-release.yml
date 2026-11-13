@@ -1,0 +1,82 @@
+name: Desktop release builds
+
+# Run by hand (Actions tab or `gh workflow run desktop-release.yml -f
+# api_base_url=...`). Builds the Windows and Linux clients pointed at one
+# backend; the macOS client is built on a Mac (see docs/deployment-guide.md).
+on:
+  workflow_dispatch:
+    inputs:
+      api_base_url:
+        description: "Backend API base URL baked into the apps (--dart-define)"
+        required: true
+        default: "http://160.187.228.64/api/v1"
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    name: Windows (x64)
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: attendance_scheduler_app
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          channel: stable
+          flutter-version: "3.47.7"
+          cache: true
+      - run: flutter config --enable-windows-desktop
+      - run: flutter pub get --enforce-lockfile
+      - name: Build
+        env:
+          API_BASE_URL: ${{ inputs.api_base_url }}
+        run: flutter build windows --release --dart-define=API_BASE_URL=$env:API_BASE_URL
+      - name: Bundle the Visual C++ runtime
+        # A PC without the VC++ redistributable cannot start the exe otherwise.
+        shell: pwsh
+        run: |
+          $dest = "build/windows/x64/runner/Release"
+          foreach ($dll in "msvcp140.dll", "vcruntime140.dll", "vcruntime140_1.dll") {
+            Copy-Item "$env:WINDIR/System32/$dll" $dest
+          }
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: attendance-scheduler-windows-x64
+          path: attendance_scheduler_app/build/windows/x64/runner/Release
+          if-no-files-found: error
+
+  linux:
+    name: Linux (x64)
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: attendance_scheduler_app
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Desktop build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake ninja-build pkg-config \
+            libgtk-3-dev liblzma-dev libstdc++-12-dev libsecret-1-dev libjsoncpp-dev
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          channel: stable
+          flutter-version: "3.47.7"
+          cache: true
+      - run: flutter config --enable-linux-desktop
+      - run: flutter pub get --enforce-lockfile
+      - name: Build
+        env:
+          API_BASE_URL: ${{ inputs.api_base_url }}
+        run: flutter build linux --release --dart-define=API_BASE_URL="$API_BASE_URL"
+      - name: Pack
+        # A tarball keeps the executable bit, which a zipped artifact loses.
+        run: tar -C build/linux/x64/release -czf attendance-scheduler-linux-x64.tar.gz bundle
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: attendance-scheduler-linux-x64
+          path: attendance_scheduler_app/attendance-scheduler-linux-x64.tar.gz
+          if-no-files-found: error
