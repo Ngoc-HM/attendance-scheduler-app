@@ -20,6 +20,9 @@ class StaffClockPage extends ConsumerStatefulWidget {
 }
 
 class _StaffClockPageState extends ConsumerState<StaffClockPage> {
+  /// Show only past days still waiting for a check-out.
+  bool _onlyMissing = false;
+
   @override
   void initState() {
     super.initState();
@@ -42,11 +45,41 @@ class _StaffClockPageState extends ConsumerState<StaffClockPage> {
     }
   }
 
+  static Widget _filterChip(
+    String label, {
+    required bool selected,
+    required VoidCallback? onSelected,
+  }) =>
+      ChoiceChip(
+        label: Text(label),
+        selected: selected,
+        showCheckmark: false,
+        selectedColor: DsColors.primarySoft,
+        side: BorderSide(
+          color: selected ? DsColors.primary : DsColors.border,
+        ),
+        labelStyle: TextStyle(
+          color: selected ? DsColors.primary : DsColors.textSecondary,
+          fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+        ),
+        onSelected: onSelected == null ? null : (_) => onSelected(),
+      );
+
+  static bool _missing(StaffClockEntry e) {
+    final now = DateTime.now();
+    return e.checkOut == null &&
+        e.workDate.isBefore(DateTime(now.year, now.month, now.day));
+  }
+
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
     final state = ref.watch(staffClockControllerProvider);
     final ctrl = ref.read(staffClockControllerProvider.notifier);
+    final missing = state.entries.where(_missing).length;
+    final shown = _onlyMissing
+        ? state.entries.where(_missing).toList()
+        : state.entries;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(DsSpacing.x4),
@@ -87,65 +120,61 @@ class _StaffClockPageState extends ConsumerState<StaffClockPage> {
           else if (state.entries.isEmpty)
             Text(l.text('clockNoEntries'),
                 style: const TextStyle(color: DsColors.textMuted))
-          else
+          else ...[
+            Wrap(
+              spacing: DsSpacing.x2,
+              children: [
+                _filterChip(
+                  l.text('clockFilterAll'),
+                  selected: !_onlyMissing,
+                  onSelected: () => setState(() => _onlyMissing = false),
+                ),
+                _filterChip(
+                  '${l.text('clockMissingOut')} ($missing)',
+                  selected: _onlyMissing,
+                  onSelected: missing == 0 && !_onlyMissing
+                      ? null
+                      : () => setState(() => _onlyMissing = true),
+                ),
+              ],
+            ),
+            const SizedBox(height: DsSpacing.x3),
             DsSurface(
+              padding: EdgeInsets.zero,
               child: Column(
                 children: [
-                  for (var i = 0; i < state.entries.length; i++) ...[
-                    if (i > 0) const Divider(height: 1),
-                    _row(l, state.entries[i]),
-                  ],
+                  DsClockTableRow.header(l),
+                  for (var i = 0; i < shown.length; i++)
+                    DsClockTableRow(
+                      // The date only on a day's first row: the eye reads
+                      // one block per day instead of 30 repeated dates.
+                      day: i == 0 ||
+                              shown[i - 1].workDate != shown[i].workDate
+                          ? '${shown[i].workDate.day.toString().padLeft(2, '0')}/'
+                              '${shown[i].workDate.month.toString().padLeft(2, '0')}'
+                              ' ${l.shortWeekday(shown[i].workDate)}'
+                          : null,
+                      dayStart: i > 0 &&
+                          shown[i - 1].workDate != shown[i].workDate,
+                      person: '${shown[i].code} · ${shown[i].fullName}',
+                      checkIn: shown[i].checkIn,
+                      checkOut: shown[i].checkOut,
+                      note: _missing(shown[i])
+                          ? l.text('clockMissingOut')
+                          : shown[i].corrected
+                              ? l.text('clockCorrected')
+                              : null,
+                      noteIsAlert: _missing(shown[i]),
+                      action: IconButton(
+                        icon: const Icon(Icons.edit_outlined, size: 18),
+                        tooltip: l.text('edit'),
+                        onPressed: () => _edit(entry: shown[i]),
+                      ),
+                    ),
                 ],
               ),
             ),
-        ],
-      ),
-    );
-  }
-
-  Widget _row(AppLocalizations l, StaffClockEntry e) {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    // An open day before today is a forgotten check-out; today it is
-    // simply someone still at work.
-    final forgotten = e.checkOut == null && e.workDate.isBefore(today);
-    return Padding(
-      padding: const EdgeInsets.symmetric(
-          horizontal: DsSpacing.x4, vertical: DsSpacing.x2),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 72,
-            child: Text(
-              '${e.workDate.day.toString().padLeft(2, '0')} '
-              '${l.shortWeekday(e.workDate)}',
-              style: const TextStyle(fontWeight: FontWeight.w600),
-            ),
-          ),
-          Expanded(
-            child: Text('${e.code} · ${e.fullName}',
-                overflow: TextOverflow.ellipsis),
-          ),
-          SizedBox(
-            width: 120,
-            child: Text('${e.checkIn ?? '—'} → ${e.checkOut ?? '—'}',
-                style: const TextStyle(color: DsColors.textSecondary)),
-          ),
-          SizedBox(
-            width: 130,
-            child: forgotten
-                ? Text(l.text('clockMissingOut'),
-                    style: const TextStyle(color: DsColors.danger))
-                : e.corrected
-                    ? Text(l.text('clockCorrected'),
-                        style: const TextStyle(color: DsColors.textMuted))
-                    : null,
-          ),
-          IconButton(
-            icon: const Icon(Icons.edit_outlined, size: 18),
-            tooltip: l.text('edit'),
-            onPressed: () => _edit(entry: e),
-          ),
+          ],
         ],
       ),
     );
@@ -272,10 +301,14 @@ class _CorrectDialogState extends ConsumerState<_CorrectDialog> {
                       '${_day!.month.toString().padLeft(2, '0')}/${_day!.year}',
               onPressed: _pickDay,
             ),
+            const SizedBox(height: DsSpacing.x2),
+            Text(l.text('clockFrankfurtTime'),
+                style: const TextStyle(color: DsColors.textMuted)),
           ] else
             Text(
               '${_day!.day.toString().padLeft(2, '0')}/'
-              '${_day!.month.toString().padLeft(2, '0')}/${_day!.year}',
+              '${_day!.month.toString().padLeft(2, '0')}/${_day!.year}'
+              ' · ${l.text('clockFrankfurtTime')}',
               style: Theme.of(context).textTheme.titleSmall,
             ),
           const SizedBox(height: DsSpacing.x3),

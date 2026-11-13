@@ -63,7 +63,12 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('F1 · Vũ Văn Long'), findsOneWidget);
-    expect(find.text('16:28 → —'), findsOneWidget);
-    expect(find.text('No check-out'), findsOneWidget);
+    expect(find.text('16:28'), findsOneWidget);
+    expect(find.text('No check-out'), findsOneWidget); // the row's note
+    expect(find.text('No check-out (1)'), findsOneWidget); // the filter
+
+    await tester.tap(find.text('No check-out (1)'));
+    await tester.pumpAndSettle();
+    expect(find.text('F1 · Vũ Văn Long'), findsOneWidget);
   });
 }
