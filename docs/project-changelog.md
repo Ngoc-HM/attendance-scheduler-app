@@ -71,6 +71,17 @@
   when it has none ("còn 2 người nhóm A, cần 1 ca ARR + 2 ca DEP").
   Approving shows the same lines (`services/leave_staffing.py`).
 
+## 2026-11-13 — Every clock screen reads the server's Frankfurt clock
+
+- Punches were always stamped by the server; now every screen also shows
+  them on the business clock: each time-clock entry carries
+  `check_in_local` / `check_out_local` (HH:MM in `TIMEZONE`), and
+  `GET /attendance/clock/now` gives today's date and time there. The
+  employee's page and the admin's correction dialog no longer read the
+  device clock (a device in Vietnam showed Vietnamese times; the picker
+  opened at the device's hour). The server only needs a correct clock (NTP);
+  its own zone does not matter.
+
 ## 2026-11-13 — Roster day tints (owner rule)
 
 - The published roster is each person's schedule. On the admin's

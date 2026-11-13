@@ -261,3 +261,26 @@ def test_roster_days_are_tinted_red_when_missed_and_yellow_when_adjusted(
         "2025-07-04": "adjusted",
         "2025-07-05": "adjusted",
     }
+
+
+def test_the_app_reads_the_business_clock_not_its_own(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Punches and 'now' come from the server, in Frankfurt time, so a device
+    in another zone (or with a wrong clock) shows and stamps the same."""
+    from app.core import business_time
+
+    monkeypatch.setattr(
+        business_time, "_utcnow", lambda: datetime(2026, 7, 6, 3, 15, tzinfo=UTC)
+    )
+    user = _employee(client, "clock_server_time")
+    now = client.get(f"{CLOCK}/now", headers=user).json()
+    assert now == {"date": "2026-07-06", "time": "05:15", "timezone": "Europe/Berlin"}
+
+    admin, uid, _ = _admin_and_id(client, "clock_server_time2")
+    client.put(f"{CLOCK}/staff", headers=admin,
+               json={"user_id": uid, "work_date": "2026-07-06",
+                     "check_in": "05:15", "check_out": "13:40"})
+    own = client.get(f"{CLOCK}/me?year=2026&month=7",
+                     headers=_login(client, "clock_server_time2", "pass123")).json()
+    assert (own[0]["check_in_local"], own[0]["check_out_local"]) == ("05:15", "13:40")

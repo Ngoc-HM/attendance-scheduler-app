@@ -24,6 +24,10 @@ class _FakeClock extends TimeClockRemoteDataSource {
   ];
 
   @override
+  Future<ClockNow> now() async =>
+      ClockNow(date: DateTime(2026, 11, 13), time: '08:00');
+
+  @override
   Future<List<StaffClockEntry>> staffMonth(int year, int month) async =>
       entries;
 

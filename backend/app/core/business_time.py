@@ -28,3 +28,17 @@ def business_now() -> datetime:
 def business_today() -> date:
     """Today's date in ``settings.TIMEZONE`` (not the host's local zone)."""
     return business_now().date()
+
+
+def local_hm(moment: datetime | None) -> str | None:
+    """``moment`` as HH:MM in ``settings.TIMEZONE`` (None stays None).
+
+    The one place an instant becomes a wall-clock time for people: the app
+    shows these strings, so every screen reads the business clock whatever
+    the zone of the device it runs on.
+    """
+    if moment is None:
+        return None
+    if moment.tzinfo is None:  # SQLite hands back naive UTC
+        moment = moment.replace(tzinfo=UTC)
+    return moment.astimezone(ZoneInfo(settings.TIMEZONE)).strftime("%H:%M")

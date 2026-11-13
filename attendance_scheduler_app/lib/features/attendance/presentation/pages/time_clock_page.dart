@@ -40,18 +40,17 @@ class _OwnClockPageState extends ConsumerState<_OwnClockPage> {
     );
   }
 
-  static String _hm(DateTime? t) => t == null
-      ? '—'
-      : '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
-
   Future<void> _act(bool isCheckIn, AppLocalizations l) async {
     final ctrl = ref.read(timeClockControllerProvider.notifier);
     final ok = await (isCheckIn ? ctrl.checkIn() : ctrl.checkOut());
     if (!mounted) return;
+    // The time the server stamped (Frankfurt), not the device clock.
+    final today = ref.read(timeClockControllerProvider).today;
+    final stamped = isCheckIn ? today?.checkInLocal : today?.checkOutLocal;
     DsFeedback.show(
       context,
       ok
-          ? '${isCheckIn ? l.text('clockCheckedInAt') : l.text('clockCheckedOutAt')} ${_hm(DateTime.now())}'
+          ? '${isCheckIn ? l.text('clockCheckedInAt') : l.text('clockCheckedOutAt')} ${stamped ?? ''}'
           : apiErrorMessage(
               l,
               ref.read(timeClockControllerProvider).error,
@@ -94,7 +93,7 @@ class _OwnClockPageState extends ConsumerState<_OwnClockPage> {
                 DsOwnClockTable(
                   rows: [
                     for (final e in state.monthEntries)
-                      (e.workDate, _hmOrNull(e.checkInAt), _hmOrNull(e.checkOutAt)),
+                      (e.workDate, e.checkInLocal, e.checkOutLocal),
                   ],
                 ),
             ],
@@ -104,8 +103,6 @@ class _OwnClockPageState extends ConsumerState<_OwnClockPage> {
     );
   }
 
-  static String? _hmOrNull(DateTime? t) => t == null ? null : _hm(t);
-
   Widget _todayCard(AppLocalizations l, TimeClockState state) {
     return DsSurface(
       padding: const EdgeInsets.all(DsSpacing.x4),
@@ -114,8 +111,8 @@ class _OwnClockPageState extends ConsumerState<_OwnClockPage> {
         children: [
           Text(
             state.checkedIn
-                ? '${l.text('clockCheckedInAt')} ${_hm(state.today?.checkInAt)}'
-                    '${state.checkedOut ? ' · ${l.text('clockCheckedOutAt')} ${_hm(state.today?.checkOutAt)}' : ''}'
+                ? '${l.text('clockCheckedInAt')} ${state.today?.checkInLocal ?? '—'}'
+                    '${state.checkedOut ? ' · ${l.text('clockCheckedOutAt')} ${state.today?.checkOutLocal ?? '—'}' : ''}'
                 : l.text('clockNotCheckedIn'),
             style: const TextStyle(fontWeight: FontWeight.w600),
           ),

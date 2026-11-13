@@ -11,6 +11,7 @@ from fastapi import APIRouter, status
 from app.api.deps import ActiveUser, AdminUser, DbSession
 from app.api.params import MonthQuery, YearQuery
 from app.schemas.time_clock import (
+    ClockNow,
     TimeClockBoardCell,
     TimeClockCorrect,
     TimeClockRead,
@@ -37,6 +38,13 @@ def clock_check_out(db: DbSession, current_user: ActiveUser):
     return entry
 
 
+@router.get("/now", response_model=ClockNow)
+def clock_now(_user: ActiveUser):
+    """The business clock (Frankfurt) right now. The app asks this instead of
+    trusting its device clock; punches are always stamped by the server."""
+    return time_clock_service.now_local()
+
+
 @router.get("/today", response_model=TimeClockRead | None)
 def clock_today(db: DbSession, current_user: ActiveUser):
     """Today's own entry — None when not clocked in yet."""
@@ -55,11 +63,11 @@ def clock_month_staff(db: DbSession, year: YearQuery, month: MonthQuery, _admin:
     check out)."""
     return [
         TimeClockStaffRead(
-            **TimeClockRead.model_validate(entry).model_dump(),
+            **TimeClockRead.model_validate(entry).model_dump(
+                exclude={"check_in_local", "check_out_local"}
+            ),
             full_name=user.full_name,
             code=user.code,
-            check_in_local=time_clock_service.local_hm(entry.check_in_at),
-            check_out_local=time_clock_service.local_hm(entry.check_out_at),
             corrected=entry.corrected_by is not None,
         )
         for entry, user in time_clock_service.list_month_all(db, year, month)

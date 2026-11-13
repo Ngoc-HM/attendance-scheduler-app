@@ -65,10 +65,12 @@ class _StaffClockPageState extends ConsumerState<StaffClockPage> {
         onSelected: onSelected == null ? null : (_) => onSelected(),
       );
 
-  static bool _missing(StaffClockEntry e) {
-    final now = DateTime.now();
-    return e.checkOut == null &&
-        e.workDate.isBefore(DateTime(now.year, now.month, now.day));
+  /// A past day still open; "today" is the business clock's when known.
+  bool _missing(StaffClockEntry e) {
+    final device = DateTime.now();
+    final today = ref.read(staffClockControllerProvider).now?.date ??
+        DateTime(device.year, device.month, device.day);
+    return e.checkOut == null && e.workDate.isBefore(today);
   }
 
   @override
@@ -237,9 +239,13 @@ class _CorrectDialogState extends ConsumerState<_CorrectDialog> {
   }
 
   Future<void> _pickTime(bool isIn) async {
+    // Start from the value already set, else the check-in (for a forgotten
+    // check-out), else the business clock now — never the device clock,
+    // which may sit in another zone.
+    final serverNow = _parse(ref.read(staffClockControllerProvider).now?.time);
     final picked = await showTimePicker(
       context: context,
-      initialTime: (isIn ? _in : _out) ?? TimeOfDay.now(),
+      initialTime: (isIn ? _in : (_out ?? _in)) ?? serverNow ?? TimeOfDay.now(),
       builder: (context, child) => MediaQuery(
         data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: true),
         child: child!,

@@ -30,6 +30,10 @@ class _Clock implements TimeClockRemoteDataSource {
   final Object checkOutError;
 
   @override
+  Future<ClockNow> now() async =>
+      ClockNow(date: DateTime(2026, 11, 13), time: '08:00');
+
+  @override
   Future<TimeClockEntry?> today() async => _today;
 
   @override
@@ -44,8 +48,13 @@ class _Clock implements TimeClockRemoteDataSource {
 
 /// Every call waits for the test.
 class _Gated implements TimeClockRemoteDataSource {
+  // load() asks the server clock first, so the load waits on this gate.
+  final nowGate = Completer<ClockNow>();
   final todayGate = Completer<TimeClockEntry?>();
   final actionGate = Completer<TimeClockEntry>();
+
+  @override
+  Future<ClockNow> now() => nowGate.future;
 
   @override
   Future<TimeClockEntry?> today() => todayGate.future;
@@ -112,7 +121,7 @@ void main() {
     final load = ctrl.load();
     final checkIn = ctrl.checkIn();
     ctrl.dispose();
-    ds.todayGate.completeError(const ApiException('late', statusCode: 500));
+    ds.nowGate.completeError(const ApiException('late', statusCode: 500));
     ds.actionGate.completeError(const ApiException('late', statusCode: 500));
 
     await expectLater(load, completes);
@@ -125,7 +134,7 @@ void main() {
 
     final load = ctrl.load();
     ctrl.dispose();
-    ds.todayGate.complete(_today);
+    ds.nowGate.complete(ClockNow(date: DateTime(2026, 11, 13), time: '08:00'));
 
     await expectLater(load, completes);
   });

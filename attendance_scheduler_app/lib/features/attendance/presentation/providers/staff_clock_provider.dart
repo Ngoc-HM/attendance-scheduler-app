@@ -9,9 +9,13 @@ class StaffClockState {
     this.isLoading = false,
     this.isSaving = false,
     this.error,
+    this.now,
   });
 
   final DateTime month;
+
+  /// The business clock when the list was loaded (null until then).
+  final ClockNow? now;
   final List<StaffClockEntry> entries;
   final bool isLoading;
   final bool isSaving;
@@ -26,8 +30,10 @@ class StaffClockState {
     bool? isSaving,
     Object? error,
     bool clearError = false,
+    ClockNow? now,
   }) =>
       StaffClockState(
+        now: now ?? this.now,
         month: month ?? this.month,
         entries: entries ?? this.entries,
         isLoading: isLoading ?? this.isLoading,
@@ -52,9 +58,11 @@ class StaffClockController extends StateNotifier<StaffClockState> {
   Future<void> load() async {
     state = state.copyWith(isLoading: true, clearError: true);
     try {
+      final now = await _ds.now();
+      if (!mounted) return;
       final entries = await _ds.staffMonth(state.month.year, state.month.month);
       if (!mounted) return;
-      state = state.copyWith(isLoading: false, entries: entries);
+      state = state.copyWith(isLoading: false, entries: entries, now: now);
     } catch (e) {
       if (!mounted) return;
       state = state.copyWith(isLoading: false, error: e);
