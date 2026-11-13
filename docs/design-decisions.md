@@ -162,6 +162,13 @@ tables that exist (DuplicateTable).
   (check-out looks for an entry on the new business day). This predates the 2026-11-08 review. Ask
   whether night shifts exist; if they do, the time clock needs a cross-day
   rule.
+  2026-11-13: the flight presets are STA 06:00–06:30 and STD 13:35–13:55, so
+  no duty crosses midnight today; the admin can also correct such a day by
+  hand now (`PUT /attendance/clock/staff`).
+- **Sick cover in the employee's roster.** The A/D cover is written into the
+  colleague's ACTUAL attendance (their "My attendance" tab), not into the
+  published roster, and nobody is notified. Decide whether the roster cell
+  should change too or a notification should go out.
 
 ### Customer notes from the 2026-11-08 review fixes
 - Reports (#48): a disabled person is listed only when they have attendance
