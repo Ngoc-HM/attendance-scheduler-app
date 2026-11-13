@@ -5,6 +5,7 @@ import 'package:attendance_scheduler_app/core/storage/locale_storage.dart';
 import 'package:attendance_scheduler_app/design_system/design_system.dart';
 import 'package:attendance_scheduler_app/features/attendance/data/datasources/attendance_remote_datasource.dart';
 import 'package:attendance_scheduler_app/features/attendance/data/datasources/calculations_remote_datasource.dart';
+import 'package:attendance_scheduler_app/features/attendance/data/datasources/time_clock_remote_datasource.dart';
 import 'package:attendance_scheduler_app/features/attendance/domain/entities/attendance_entities.dart';
 import 'package:attendance_scheduler_app/features/attendance/presentation/pages/attendance_page.dart';
 import 'package:attendance_scheduler_app/features/attendance/presentation/providers/attendance_provider.dart';
@@ -62,7 +63,11 @@ User _user(UserRole role) => User(
   code: 'T3',
 );
 
-Future<_RecordingAttendance> _pump(WidgetTester tester, User user) async {
+Future<_RecordingAttendance> _pump(
+  WidgetTester tester,
+  User user, {
+  List<ClockBoardCell> board = const [],
+}) async {
   await tester.binding.setSurfaceSize(const Size(1600, 1000));
   addTearDown(() => tester.binding.setSurfaceSize(null));
   final attendance = _RecordingAttendance(user.id);
@@ -71,6 +76,7 @@ Future<_RecordingAttendance> _pump(WidgetTester tester, User user) async {
       overrides: [
         authControllerProvider.overrideWith((ref) => _SignedIn(user)),
         attendanceControllerProvider.overrideWith((ref) => attendance),
+        clockBoardProvider.overrideWith((ref, ym) async => board),
       ],
       child: MaterialApp(
         theme: AppTheme.light,
@@ -116,5 +122,32 @@ void main() {
     expect(find.text('Public holidays'), findsOneWidget);
     expect(find.text('Update attendance'), findsOneWidget);
     expect(find.text('Close month'), findsOneWidget);
+  });
+
+  testWidgets('admin grid shows the punches and marks a day without one', (
+    tester,
+  ) async {
+    final now = DateTime.now();
+    final day1 = DateTime(now.year, now.month, 1);
+    await _pump(
+      tester,
+      _user(UserRole.m),
+      board: [
+        ClockBoardCell(
+          userId: 7,
+          workDate: day1,
+          status: 'missed_out',
+          checkIn: '05:12',
+          corrected: true,
+        ),
+      ],
+    );
+
+    expect(
+      find.byTooltip('In 05:12 · No check-out · set by admin'),
+      findsOneWidget,
+    );
+    expect(find.byType(DsDayMarkDot), findsNWidgets(3)); // cell + 2 legend
+    expect(find.text('No check-in / no check-out'), findsOneWidget);
   });
 }

@@ -249,3 +249,64 @@ def test_seed_refuses_draft_schedule(client: TestClient) -> None:
     res = client.post("/api/v1/attendance/seed?year=2041&month=2", headers=admin)
     assert res.status_code == 409, res.text
     assert res.json()["detail"] == t("attendance.schedule_not_published")
+
+
+# --- taking a sick day back restores its cover (2026-11-13) ----------------
+
+def _put(client, admin, uid, day, code):
+    res = client.put("/api/v1/attendance", headers=admin,
+                     json={"user_id": uid, "work_date": day, "code": code})
+    assert res.status_code == 200, res.text
+    return res.json()
+
+
+def _cell(client, admin, uid, day):
+    year, month = day[:4], int(day[5:7])
+    rows = client.get(f"/api/v1/attendance?year={year}&month={month}", headers=admin).json()
+    return next(r for r in rows if r["user_id"] == uid and r["work_date"] == day)
+
+
+def test_taking_the_sick_day_back_restores_the_cover(client: TestClient) -> None:
+    admin = _admin(client)
+    sick = _mk(client, admin, "undo_s1", "A")
+    helper = _mk(client, admin, "undo_s2", "A")
+    day = "2093-04-07"
+    _put(client, admin, sick, day, "A")
+    _put(client, admin, helper, day, "D")
+    res = client.post("/api/v1/attendance/sick-cover", headers=admin,
+                      json={"user_id": sick, "work_date": day, "code": "S"})
+    assert res.json()["cover"]["user_id"] == helper
+
+    _put(client, admin, sick, day, "A")  # recorded by mistake
+
+    cover = _cell(client, admin, helper, day)
+    assert cover["code"] == "D"
+    assert cover["recorded_by"] is not None  # it was an admin-recorded D
+
+
+def test_a_cover_edited_since_is_left_alone(client: TestClient) -> None:
+    admin = _admin(client)
+    sick = _mk(client, admin, "undo_e1", "A")
+    helper = _mk(client, admin, "undo_e2", "A")
+    day = "2093-04-08"
+    _put(client, admin, sick, day, "A")
+    _put(client, admin, helper, day, "D")
+    client.post("/api/v1/attendance/sick-cover", headers=admin,
+                json={"user_id": sick, "work_date": day, "code": "S"})
+    _put(client, admin, helper, day, "T")  # the admin re-codes the cover
+
+    _put(client, admin, sick, day, "A")
+
+    assert _cell(client, admin, helper, day)["code"] == "T"
+
+
+def test_a_plain_s_without_cover_changes_nobody_else(client: TestClient) -> None:
+    admin = _admin(client)
+    sick = _mk(client, admin, "undo_p1", "A")
+    other = _mk(client, admin, "undo_p2", "A")
+    day = "2093-04-09"
+    _put(client, admin, other, day, "D")
+    _put(client, admin, sick, day, "S")
+    _put(client, admin, sick, day, "A")
+
+    assert _cell(client, admin, other, day)["code"] == "D"

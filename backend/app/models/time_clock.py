@@ -31,3 +31,9 @@ class TimeClockEntry(Base, TimestampMixin):
     check_out_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # Admin who last set this day by hand (PUT /attendance/clock/staff);
+    # NULL = the person punched it themself.
+    corrected_by: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", name="fk_time_clock_corrected_by", ondelete="SET NULL"),
+        nullable=True,
+    )

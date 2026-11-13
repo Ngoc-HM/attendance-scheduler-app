@@ -4,19 +4,34 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/network/api_error_message.dart';
 import '../../../../design_system/design_system.dart';
 import '../../../../i18n/app_localizations.dart';
-import '../../data/datasources/time_clock_remote_datasource.dart';
+import '../../../auth/presentation/providers/auth_provider.dart';
 import '../providers/time_clock_provider.dart';
+import 'staff_clock_page.dart';
 
-/// Check-in / check-out page for all employee roles (owner 2026-07-09).
-/// Timestamps only — the admin attendance code grid is untouched.
-class TimeClockPage extends ConsumerStatefulWidget {
+/// The clock tab: an employee checks in and out; the admin sees and
+/// corrects everyone's punches ([StaffClockPage]).
+class TimeClockPage extends ConsumerWidget {
   const TimeClockPage({super.key});
 
   @override
-  ConsumerState<TimeClockPage> createState() => _TimeClockPageState();
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isAdmin = ref.watch(
+      authControllerProvider.select((a) => a.user?.isAdmin ?? false),
+    );
+    return isAdmin ? const StaffClockPage() : const _OwnClockPage();
+  }
 }
 
-class _TimeClockPageState extends ConsumerState<TimeClockPage> {
+/// Check-in / check-out for all employee roles (owner 2026-07-09).
+/// Timestamps only — the admin attendance code grid is untouched.
+class _OwnClockPage extends ConsumerStatefulWidget {
+  const _OwnClockPage();
+
+  @override
+  ConsumerState<_OwnClockPage> createState() => _OwnClockPageState();
+}
+
+class _OwnClockPageState extends ConsumerState<_OwnClockPage> {
   @override
   void initState() {
     super.initState();
@@ -53,28 +68,43 @@ class _TimeClockPageState extends ConsumerState<TimeClockPage> {
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(DsSpacing.x4),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(l.text('clockTitle'),
-              style: Theme.of(context).textTheme.titleLarge),
-          const SizedBox(height: DsSpacing.x4),
-          _todayCard(l, state),
-          const SizedBox(height: DsSpacing.x6),
-          Text(l.text('clockHistory'),
-              style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: DsSpacing.x2),
-          if (state.isLoading)
-            const Center(child: CircularProgressIndicator())
-          else if (state.monthEntries.isEmpty)
-            Text(l.text('clockNoEntries'),
-                style: const TextStyle(color: DsColors.textMuted))
-          else
-            for (final e in state.monthEntries) _historyRow(l, e),
-        ],
+      child: Align(
+        alignment: Alignment.topLeft,
+        // A narrow column: two buttons and a short table do not need the
+        // whole window, and the eye stays on one line.
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 640),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(l.text('clockTitle'),
+                  style: Theme.of(context).textTheme.titleLarge),
+              const SizedBox(height: DsSpacing.x4),
+              _todayCard(l, state),
+              const SizedBox(height: DsSpacing.x6),
+              Text(l.text('clockHistory'),
+                  style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: DsSpacing.x2),
+              if (state.isLoading)
+                const Center(child: CircularProgressIndicator())
+              else if (state.monthEntries.isEmpty)
+                Text(l.text('clockNoEntries'),
+                    style: const TextStyle(color: DsColors.textMuted))
+              else
+                DsOwnClockTable(
+                  rows: [
+                    for (final e in state.monthEntries)
+                      (e.workDate, _hmOrNull(e.checkInAt), _hmOrNull(e.checkOutAt)),
+                  ],
+                ),
+            ],
+          ),
+        ),
       ),
     );
   }
+
+  static String? _hmOrNull(DateTime? t) => t == null ? null : _hm(t);
 
   Widget _todayCard(AppLocalizations l, TimeClockState state) {
     return DsSurface(
@@ -104,38 +134,14 @@ class _TimeClockPageState extends ConsumerState<TimeClockPage> {
               DsSecondaryButton(
                 label: l.text('clockCheckOut'),
                 icon: Icons.logout_outlined,
-                onPressed:
-                    !state.checkedIn || state.checkedOut || state.isMutating
-                        ? null
-                        : () => _act(false, l),
+                // Checking out again moves the check-out to now (the
+                // latest one ends the day).
+                onPressed: !state.checkedIn || state.isMutating
+                    ? null
+                    : () => _act(false, l),
               ),
             ],
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _historyRow(AppLocalizations l, TimeClockEntry e) {
-    final weekend = e.workDate.weekday == DateTime.saturday ||
-        e.workDate.weekday == DateTime.sunday;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: DsSpacing.x1),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 96,
-            child: Text(
-              '${e.workDate.day.toString().padLeft(2, '0')} '
-              '${l.shortWeekday(e.workDate)}',
-              style: TextStyle(
-                fontWeight: FontWeight.w600,
-                color: weekend ? DsColors.primary : DsColors.textPrimary,
-              ),
-            ),
-          ),
-          Text('${_hm(e.checkInAt)} → ${_hm(e.checkOutAt)}',
-              style: const TextStyle(color: DsColors.textSecondary)),
         ],
       ),
     );

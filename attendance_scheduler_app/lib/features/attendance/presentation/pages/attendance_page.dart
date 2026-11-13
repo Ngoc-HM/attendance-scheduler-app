@@ -8,6 +8,7 @@ import '../../../../design_system/design_system.dart';
 import '../../../../i18n/app_localizations.dart';
 import '../../../auth/domain/entities/user.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
+import '../../data/datasources/time_clock_remote_datasource.dart';
 import '../../domain/entities/attendance_entities.dart';
 import '../../domain/entities/calculations_entities.dart';
 import '../providers/attendance_provider.dart';
@@ -71,7 +72,12 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
     }
 
     final me = ref.watch(authControllerProvider.select((auth) => auth.user));
-    final rows = _buildRows(state, me, l);
+    // Admin: the check-in/out of each day, read against its code.
+    final board = isAdmin
+        ? ref.watch(clockBoardProvider((_month.year, _month.month))).value ??
+            const <ClockBoardCell>[]
+        : const <ClockBoardCell>[];
+    final rows = _buildRows(state, me, l, board);
 
     // Employees get a read-only view of their own month (GET /attendance/me):
     // every admin action is null, so DsAttendanceView hides its button.
@@ -147,7 +153,13 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
     AttendanceState state,
     User? me,
     AppLocalizations l,
+    List<ClockBoardCell> board,
   ) {
+    final clock = {
+      for (final c in board)
+        if (c.workDate.year == _month.year && c.workDate.month == _month.month)
+          (c.userId, c.workDate.day): c,
+    };
     final byUser = <int, List<AttendanceRecord>>{};
     for (final r in state.records) {
       if (r.workDate.year == _month.year &&
@@ -183,15 +195,43 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
       final workdays = shifts.fold<int>(0, (s, c) => s + c.workdayValue);
       final absences = shifts.where((c) => c == ShiftCode.x).length;
 
+      final cells = [
+        for (var day = 1; day <= daysInMonth; day++) clock[(userId, day)],
+      ];
+
       return DsAttendanceRowData(
         name: name,
         role: role,
         shifts: shifts,
         workdays: workdays,
         absences: absences,
+        dayNotes: [for (final c in cells) c == null ? null : _clockNote(c, l)],
+        dayMarks: [for (final c in cells) c == null ? null : _clockMark(c)],
       );
     }).toList();
   }
+
+  /// The cell's tooltip: the punches, or why the day is marked.
+  static String _clockNote(ClockBoardCell c, AppLocalizations l) {
+    final times = [
+      if (c.checkIn != null) '${l.text('clockIn')} ${c.checkIn}',
+      if (c.checkOut != null) '${l.text('clockOut')} ${c.checkOut}',
+    ];
+    final parts = switch (c.status) {
+      'absent' => [l.text('clockAbsent')],
+      'missed_out' => [...times, l.text('clockMissingOut')],
+      'working' => [...times, l.text('clockWorking')],
+      'off_day' => [l.text('clockOffDay'), ...times],
+      _ => times,
+    };
+    return [...parts, if (c.corrected) l.text('clockCorrected')].join(' · ');
+  }
+
+  static DsDayMark? _clockMark(ClockBoardCell c) => switch (c.status) {
+        'absent' || 'missed_out' => DsDayMark.danger,
+        'off_day' => DsDayMark.warning,
+        _ => null,
+      };
 
   ShiftCode _codeToShiftCode(String code) => switch (code) {
         'A' => ShiftCode.a,
@@ -216,6 +256,8 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
       context: context,
       builder: (_) => AttendanceUpsertDialog(users: users),
     );
+    // A new code can make a day due at work (or off): re-read the board.
+    ref.invalidate(clockBoardProvider);
   }
 
   Future<void> _showHolidaysDialog(BuildContext context) async {

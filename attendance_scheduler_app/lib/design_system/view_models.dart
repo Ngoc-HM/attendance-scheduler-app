@@ -83,6 +83,11 @@ class DsLeaveRowData {
   }
 }
 
+/// A mark in a day cell of the attendance grid: [danger] for a day that
+/// needs the admin (absent, forgotten check-out), [warning] for one worth a
+/// look (checked in on a day off).
+enum DsDayMark { danger, warning }
+
 class DsAttendanceRowData {
   const DsAttendanceRowData({
     required this.name,
@@ -90,6 +95,8 @@ class DsAttendanceRowData {
     required this.shifts,
     required this.workdays,
     required this.absences,
+    this.dayNotes = const [],
+    this.dayMarks = const [],
   });
 
   final String name;
@@ -97,6 +104,13 @@ class DsAttendanceRowData {
   final List<ShiftCode> shifts;
   final int workdays;
   final int absences;
+
+  /// Per day (index 0 = the 1st): the tooltip of the cell, e.g. the
+  /// check-in/out times; null or a short list = no tooltip.
+  final List<String?> dayNotes;
+
+  /// Per day: a mark drawn in the cell's corner; null = none.
+  final List<DsDayMark?> dayMarks;
 }
 
 class DsReportRowData {

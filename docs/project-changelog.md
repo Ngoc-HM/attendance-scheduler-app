@@ -71,6 +71,30 @@
   when it has none ("còn 2 người nhóm A, cần 1 ca ARR + 2 ca DEP").
   Approving shows the same lines (`services/leave_staffing.py`).
 
+## 2026-11-13 — Attendance flow review fixes
+
+- Sick cover undo (F-10): the A/D cover remembers the S it was assigned for
+  and the code it replaced (migration `0010`, `attendance_records.cover_of_id`,
+  `cover_prev_code`, `cover_prev_seeded`). Changing that S to another code
+  gives the colleague the old code back (a plan copy follows the plan again);
+  a cover the admin edited since is left alone. Before, both people kept the
+  shift and the colleague was credited an extra day and comp day.
+- Time clock for the admin: new tab "Check-in/out" lists everyone's punches of
+  the month in Frankfurt time (`GET /attendance/clock/staff`) and flags a
+  past day without check-out. `PUT /attendance/clock/staff` sets or adds a
+  person's day (check-out after check-in, no future day), audited as
+  `clock.correct`. Before, nobody could see or fix a forgotten check-out.
+- Admin attendance board (taken from the owner's company_management time
+  clock, without its device scanning): each day cell of the month grid shows
+  the check-in/out as a tooltip; a red corner mark flags a day due at work
+  (A, D, A/D, AD, O/D, T) without a check-in or a past day without a
+  check-out, an amber one a punch on a day off (X, CD, AL, S, no code). B
+  expects no punch. `GET /attendance/clock/board` reads the punches against
+  the month's actual codes, so an unpublished month shows no absences.
+- Checking out again moves the check-out to the latest time (was 409), and
+  a day the admin set by hand is marked "set by admin" (migration `0011`,
+  `time_clock_entries.corrected_by`).
+
 ## 2026-11-13 — Employee code in the user card
 
 - The user card at the bottom of the navigation shows the person's code

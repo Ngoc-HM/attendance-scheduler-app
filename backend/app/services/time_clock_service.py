@@ -9,15 +9,20 @@ so a 00:30 local check-in does not land on yesterday's row.
 
 from __future__ import annotations
 
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, time
+from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.business_time import business_today
+from app.core.config import settings
 from app.core.i18n import t
+from app.models.enums import AttendanceCode, Role, UserStatus
 from app.models.time_clock import TimeClockEntry
+from app.models.user import User
+from app.services import attendance_service
 
 
 def _today() -> date:
@@ -60,15 +65,16 @@ def check_in(db: Session, user_id: int) -> TimeClockEntry:
 
 
 def check_out(db: Session, user_id: int) -> TimeClockEntry:
-    """Record today's check-out; requires a prior check-in, no overwrite."""
+    """Record today's check-out; requires a prior check-in.
+
+    Checking out again moves the check-out to now: the latest one is the
+    day's end (someone who checked out, then went back to work, checks out
+    once more). Same rule as the owner's company_management time clock.
+    """
     entry = _get_entry(db, user_id, _today())
     if entry is None or entry.check_in_at is None:
         raise HTTPException(
             status.HTTP_409_CONFLICT, detail=t("clock.not_checked_in")
-        )
-    if entry.check_out_at is not None:
-        raise HTTPException(
-            status.HTTP_409_CONFLICT, detail=t("clock.already_checked_out")
         )
     entry.check_out_at = datetime.now(UTC)
     db.commit()
@@ -99,3 +105,136 @@ def list_month_for_user(
         .order_by(TimeClockEntry.work_date)
         .all()
     )
+
+
+# --- admin: everyone's month and corrections --------------------------------
+
+def list_month_all(
+    db: Session, year: int, month: int
+) -> list[tuple[TimeClockEntry, User]]:
+    """Every person's entries of the month with their user, by day then code."""
+    first = date(year, month, 1)
+    last = date(year + 1, 1, 1) if month == 12 else date(year, month + 1, 1)
+    rows = (
+        db.query(TimeClockEntry, User)
+        .join(User, User.id == TimeClockEntry.user_id)
+        .filter(TimeClockEntry.work_date >= first, TimeClockEntry.work_date < last)
+        .order_by(TimeClockEntry.work_date, User.code, User.id)
+        .all()
+    )
+    return [(entry, user) for entry, user in rows]
+
+
+def local_hm(moment: datetime | None) -> str | None:
+    """``moment`` as HH:MM in the business timezone (None stays None)."""
+    if moment is None:
+        return None
+    if moment.tzinfo is None:  # SQLite hands back naive UTC
+        moment = moment.replace(tzinfo=UTC)
+    return moment.astimezone(ZoneInfo(settings.TIMEZONE)).strftime("%H:%M")
+
+
+def _at(day: date, local: time) -> datetime:
+    """``local`` on ``day`` in the business timezone, as a UTC instant."""
+    zone = ZoneInfo(settings.TIMEZONE)
+    return datetime.combine(day, local.replace(tzinfo=None), zone).astimezone(UTC)
+
+
+def correct(
+    db: Session,
+    user_id: int,
+    day: date,
+    check_in: time,
+    check_out: time | None,
+    corrected_by: int,
+) -> TimeClockEntry:
+    """Set one person's punches for a day (creates the day when missing).
+
+    Check-out must come after check-in on the same day; a day in the future
+    cannot be recorded.
+    """
+    if db.get(User, user_id) is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=t("user.not_found"))
+    if day > _today():
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT, detail=t("clock.future_day")
+        )
+    if check_out is not None and check_out <= check_in:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT, detail=t("clock.out_before_in")
+        )
+    entry = _get_entry(db, user_id, day)
+    if entry is None:
+        entry = TimeClockEntry(user_id=user_id, work_date=day)
+        db.add(entry)
+    entry.check_in_at = _at(day, check_in)
+    entry.check_out_at = None if check_out is None else _at(day, check_out)
+    entry.corrected_by = corrected_by
+    db.commit()
+    db.refresh(entry)
+    return entry
+
+
+# --- admin board: the punches read against the month's attendance codes -----
+
+# Codes that mean the person was due at work and should have punched.
+# B (business trip) is work away from the station, so no punch is expected.
+DUE_AT_WORK = {
+    AttendanceCode.A, AttendanceCode.D, AttendanceCode.A_D, AttendanceCode.AD,
+    AttendanceCode.O_D, AttendanceCode.T,
+}
+
+
+def board(db: Session, year: int, month: int) -> list[dict]:
+    """Each (person, day) of the month the admin should look at.
+
+    A day with punches, plus a past working day without any. ``status``:
+    ``working`` (today, not checked out yet), ``missed_out`` (a past day
+    without check-out), ``absent`` (a working code but no check-in),
+    ``off_day`` (punched on a day off: X, CD, AL, S or no code), ``ok``.
+    Codes are the month's actual attendance, so an unpublished month has no
+    ``absent`` days. The admin account is left out.
+    """
+    today = _today()
+    codes = attendance_service.actual_records_map(db, year, month)
+    staff = {
+        u.id: u
+        for u in db.query(User).filter(
+            User.status == UserStatus.active, User.role != Role.M
+        )
+    }
+    cells: dict[tuple[int, date], dict] = {}
+    for entry, user in list_month_all(db, year, month):
+        if user.role is Role.M:
+            continue
+        code = codes.get((entry.user_id, entry.work_date))
+        if entry.check_out_at is None:
+            status_ = "working" if entry.work_date >= today else "missed_out"
+        elif code not in DUE_AT_WORK:
+            status_ = "off_day"
+        else:
+            status_ = "ok"
+        cells[(entry.user_id, entry.work_date)] = {
+            "user_id": entry.user_id,
+            "work_date": entry.work_date,
+            "check_in_local": local_hm(entry.check_in_at),
+            "check_out_local": local_hm(entry.check_out_at),
+            "corrected": entry.corrected_by is not None,
+            "status": status_,
+        }
+    for (user_id, day), code in codes.items():
+        if (
+            user_id in staff
+            and day < today
+            and code in DUE_AT_WORK
+            and (user_id, day) not in cells
+        ):
+            cells[(user_id, day)] = {
+                "user_id": user_id,
+                "work_date": day,
+                "check_in_local": None,
+                "check_out_local": None,
+                "corrected": False,
+                "status": "absent",
+            }
+    return sorted(cells.values(), key=lambda c: (c["work_date"], c["user_id"]))

@@ -725,7 +725,9 @@ class _DsDayGrid extends StatelessWidget {
         for (var i = 0; i < daysInMonth; i++)
           _scrollCell(
             _dayW,
-            Center(
+            _DsDayCell(
+              note: i < row.notes.length ? row.notes[i] : null,
+              mark: i < row.marks.length ? row.marks[i] : null,
               child: i < row.shifts.length
                   ? DsShiftBadge(code: row.shifts[i], compact: true)
                   : const Text(
@@ -766,12 +768,63 @@ class _DsDayGridRow {
     required this.role,
     required this.shifts,
     required this.trailing,
+    this.notes = const [],
+    this.marks = const [],
   });
 
   final String name;
   final String role;
   final List<ShiftCode> shifts;
   final List<String> trailing;
+  final List<String?> notes;
+  final List<DsDayMark?> marks;
+}
+
+/// A day cell: the code badge, the corner [mark] and the [note] as tooltip.
+class _DsDayCell extends StatelessWidget {
+  const _DsDayCell({required this.child, this.note, this.mark});
+
+  final Widget child;
+  final String? note;
+  final DsDayMark? mark;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget cell = Stack(
+      clipBehavior: Clip.none,
+      alignment: Alignment.center,
+      children: [
+        child,
+        if (mark != null)
+          Positioned(
+            top: 4,
+            right: 4,
+            child: DsDayMarkDot(mark: mark!),
+          ),
+      ],
+    );
+    if (note != null) {
+      cell = Tooltip(message: note!, child: cell);
+    }
+    return SizedBox.expand(child: cell);
+  }
+}
+
+/// The small square used for a [DsDayMark], in the grid and its legend.
+class DsDayMarkDot extends StatelessWidget {
+  const DsDayMarkDot({super.key, required this.mark});
+
+  final DsDayMark mark;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: 7,
+    height: 7,
+    decoration: BoxDecoration(
+      color: mark == DsDayMark.danger ? DsColors.danger : DsColors.warning,
+      borderRadius: BorderRadius.circular(2),
+    ),
+  );
 }
 
 /// Centered, full-surface placeholder shown when the month has no roster yet —
@@ -1557,6 +1610,8 @@ class DsAttendanceView extends StatelessWidget {
                           role: row.role,
                           shifts: row.shifts,
                           trailing: ['${row.workdays}', '${row.absences}'],
+                          notes: row.dayNotes,
+                          marks: row.dayMarks,
                         ),
                     ],
                   ),
@@ -1566,6 +1621,27 @@ class DsAttendanceView extends StatelessWidget {
           if (rows.isNotEmpty) ...[
             const SizedBox(height: DsSpacing.x4),
             const _DsShiftLegend(),
+          ],
+          if (rows.any((r) => r.dayMarks.any((m) => m != null))) ...[
+            const SizedBox(height: DsSpacing.x2),
+            Wrap(
+              spacing: DsSpacing.x4,
+              children: [
+                for (final (mark, key) in [
+                  (DsDayMark.danger, 'clockMarkDanger'),
+                  (DsDayMark.warning, 'clockMarkWarning'),
+                ])
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      DsDayMarkDot(mark: mark),
+                      const SizedBox(width: DsSpacing.x2),
+                      Text(l.text(key),
+                          style: Theme.of(context).textTheme.bodySmall),
+                    ],
+                  ),
+              ],
+            ),
           ],
         ],
       ),
