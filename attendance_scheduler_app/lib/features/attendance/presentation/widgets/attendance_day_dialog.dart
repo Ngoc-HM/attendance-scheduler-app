@@ -48,7 +48,10 @@ class _AttendanceDayDialogState extends ConsumerState<AttendanceDayDialog> {
   Object? _error;
 
   List<ShiftCode> get _codes {
-    final codes = [...ShiftCodeX.plannedCodesFor(widget.user.role), ShiftCode.s];
+    final codes = [
+      ...ShiftCodeX.plannedCodesFor(widget.user.role),
+      ShiftCode.s,
+    ];
     return codes.contains(_code) ? codes : [_code, ...codes];
   }
 
@@ -82,9 +85,7 @@ class _AttendanceDayDialogState extends ConsumerState<AttendanceDayDialog> {
       context: context,
       // The value already set, else the check-in, else the business clock.
       initialTime:
-          (isIn ? _in : (_out ?? _in)) ??
-          _time(_now?.time) ??
-          TimeOfDay.now(),
+          (isIn ? _in : (_out ?? _in)) ?? _time(_now?.time) ?? TimeOfDay.now(),
       builder: (context, child) => MediaQuery(
         data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: true),
         child: child!,
@@ -104,7 +105,10 @@ class _AttendanceDayDialogState extends ConsumerState<AttendanceDayDialog> {
 
     if (_code.code != widget.code) {
       if (_code == ShiftCode.s && _sickCover) {
-        ok = await attendance.markSick(userId: widget.user.id, workDate: widget.day);
+        ok = await attendance.markSick(
+          userId: widget.user.id,
+          workDate: widget.day,
+        );
         final cover = ref.read(attendanceControllerProvider).lastSickCover;
         message = cover?.cover != null
             ? l.text('sickCoverAssigned')
@@ -123,12 +127,14 @@ class _AttendanceDayDialogState extends ConsumerState<AttendanceDayDialog> {
         _in != _time(widget.checkIn) || _out != _time(widget.checkOut);
     if (ok && _in != null && timesChanged) {
       try {
-        await ref.read(timeClockRemoteDataSourceProvider).correct(
-          userId: widget.user.id,
-          workDate: widget.day,
-          checkIn: _hm(_in!),
-          checkOut: _out == null ? null : _hm(_out!),
-        );
+        await ref
+            .read(timeClockRemoteDataSourceProvider)
+            .correct(
+              userId: widget.user.id,
+              workDate: widget.day,
+              checkIn: _hm(_in!),
+              checkOut: _out == null ? null : _hm(_out!),
+            );
       } catch (e) {
         ok = false;
         _error = e;
@@ -211,19 +217,31 @@ class _AttendanceDayDialogState extends ConsumerState<AttendanceDayDialog> {
                   ),
                 ),
                 const SizedBox(width: DsSpacing.x2),
+                // The clear button sits inside the check-out button, so the
+                // row spans exactly the code field's width.
                 Expanded(
-                  child: DsSecondaryButton(
-                    label:
-                        '${l.text('clockOut')}: ${_out == null ? '—' : _hm(_out!)}',
-                    onPressed: _in == null ? null : () => _pickTime(false),
+                  child: Stack(
+                    alignment: Alignment.centerRight,
+                    children: [
+                      SizedBox(
+                        width: double.infinity,
+                        child: DsSecondaryButton(
+                          label:
+                              '${l.text('clockOut')}: ${_out == null ? '—' : _hm(_out!)}',
+                          onPressed: _in == null
+                              ? null
+                              : () => _pickTime(false),
+                        ),
+                      ),
+                      if (_out != null)
+                        IconButton(
+                          icon: const Icon(Icons.close, size: 16),
+                          tooltip: l.text('clockClearOut'),
+                          onPressed: () => setState(() => _out = null),
+                        ),
+                    ],
                   ),
                 ),
-                if (_out != null)
-                  IconButton(
-                    icon: const Icon(Icons.close, size: 16),
-                    tooltip: l.text('clockClearOut'),
-                    onPressed: () => setState(() => _out = null),
-                  ),
               ],
             ),
           ],
