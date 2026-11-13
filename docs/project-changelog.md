@@ -84,6 +84,16 @@
   past day without check-out. `PUT /attendance/clock/staff` sets or adds a
   person's day (check-out after check-in, no future day), audited as
   `clock.correct`. Before, nobody could see or fix a forgotten check-out.
+- Admin attendance board (taken from the owner's company_management time
+  clock, without its device scanning): each day cell of the month grid shows
+  the check-in/out as a tooltip; a red corner mark flags a day due at work
+  (A, D, A/D, AD, O/D, T) without a check-in or a past day without a
+  check-out, an amber one a punch on a day off (X, CD, AL, S, no code). B
+  expects no punch. `GET /attendance/clock/board` reads the punches against
+  the month's actual codes, so an unpublished month shows no absences.
+- Checking out again moves the check-out to the latest time (was 409), and
+  a day the admin set by hand is marked "set by admin" (migration `0011`,
+  `time_clock_entries.corrected_by`).
 
 ## 2026-11-13 — Employee code in the user card
 
