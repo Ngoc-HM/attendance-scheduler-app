@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../core/constants/shift_codes.dart';
 import '../i18n/app_localizations.dart';
 import 'tokens.dart';
+import 'view_models.dart';
 
 class DsLiquidGlassBackdrop extends StatelessWidget {
   const DsLiquidGlassBackdrop({
@@ -764,10 +765,19 @@ class DsMonthSwitcher extends StatelessWidget {
 }
 
 class DsShiftBadge extends StatelessWidget {
-  const DsShiftBadge({super.key, required this.code, this.compact = false});
+  const DsShiftBadge({
+    super.key,
+    required this.code,
+    this.compact = false,
+    this.mark,
+  });
 
   final ShiftCode code;
   final bool compact;
+
+  /// Paints the badge's own fill (not the cell around it): light red for a
+  /// missed day, light yellow for one the admin adjusted.
+  final DsDayMark? mark;
 
   @override
   Widget build(BuildContext context) {
@@ -791,9 +801,19 @@ class DsShiftBadge extends StatelessWidget {
         vertical: compact ? 3 : 4,
       ),
       decoration: BoxDecoration(
-        color: colors.background,
+        color: switch (mark) {
+          DsDayMark.missing => DsColors.dayMissing,
+          DsDayMark.adjusted => DsColors.dayAdjusted,
+          null => colors.background,
+        },
         borderRadius: BorderRadius.circular(DsRadius.small),
-        border: Border.all(color: colors.foreground.withValues(alpha: 0.2)),
+        border: Border.all(
+          color: switch (mark) {
+            DsDayMark.missing => DsColors.danger.withValues(alpha: 0.35),
+            DsDayMark.adjusted => DsColors.warning.withValues(alpha: 0.45),
+            null => colors.foreground.withValues(alpha: 0.2),
+          },
+        ),
       ),
       child: Text(
         code.code,

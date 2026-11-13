@@ -730,9 +730,12 @@ class _DsDayGrid extends StatelessWidget {
               borderRadius: BorderRadius.circular(6),
               child: _DsDayCell(
                 note: i < row.notes.length ? row.notes[i] : null,
-                mark: i < row.marks.length ? row.marks[i] : null,
                 child: i < row.shifts.length
-                    ? DsShiftBadge(code: row.shifts[i], compact: true)
+                    ? DsShiftBadge(
+                        code: row.shifts[i],
+                        compact: true,
+                        mark: i < row.marks.length ? row.marks[i] : null,
+                      )
                     : const Text(
                         '—',
                         style: TextStyle(color: DsColors.textMuted),
@@ -788,36 +791,17 @@ class _DsDayGridRow {
   final void Function(int day)? onDayTap;
 }
 
-/// A day cell: the code badge on the [mark]'s tint, the [note] as tooltip.
+/// A day cell: the code badge, the [note] as tooltip.
 class _DsDayCell extends StatelessWidget {
-  const _DsDayCell({required this.child, this.note, this.mark});
+  const _DsDayCell({required this.child, this.note});
 
   final Widget child;
   final String? note;
-  final DsDayMark? mark;
 
   @override
   Widget build(BuildContext context) {
-    Widget cell = DecoratedBox(
-      decoration: BoxDecoration(
-        color: mark == null ? null : dsDayMarkColor(mark!),
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Center(child: child),
-    );
-    if (note != null) {
-      cell = Tooltip(message: note!, child: cell);
-    }
-    // Fill a fixed-height cell (attendance grid); in a row that sizes to
-    // its content (roster grid) take the badge's height plus a margin.
-    return Padding(
-      padding: const EdgeInsets.all(2),
-      child: LayoutBuilder(
-        builder: (context, constraints) => constraints.hasBoundedHeight
-            ? SizedBox.expand(child: cell)
-            : SizedBox(width: double.infinity, height: 32, child: cell),
-      ),
-    );
+    final cell = SizedBox.expand(child: Center(child: child));
+    return note == null ? cell : Tooltip(message: note!, child: cell);
   }
 }
 
@@ -843,13 +827,18 @@ class DsDayMarkLegend extends StatelessWidget {
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
+              // The same fill and border the marked badges carry.
               DecoratedBox(
                 decoration: BoxDecoration(
                   color: dsDayMarkColor(mark),
-                  borderRadius: BorderRadius.circular(4),
-                  border: Border.all(color: DsColors.border),
+                  borderRadius: BorderRadius.circular(DsRadius.small),
+                  border: Border.all(
+                    color: mark == DsDayMark.missing
+                        ? DsColors.danger.withValues(alpha: 0.35)
+                        : DsColors.warning.withValues(alpha: 0.45),
+                  ),
                 ),
-                child: const SizedBox(width: 16, height: 16),
+                child: const SizedBox(width: 30, height: 22),
               ),
               const SizedBox(width: DsSpacing.x2),
               Text(l.text(key), style: Theme.of(context).textTheme.bodySmall),
