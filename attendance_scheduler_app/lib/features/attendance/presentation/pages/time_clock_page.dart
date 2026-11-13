@@ -58,8 +58,9 @@ class _OwnClockPageState extends ConsumerState<_OwnClockPage> {
     final l = AppLocalizations.of(context);
     final state = ref.watch(timeClockControllerProvider);
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(DsSpacing.x4),
+    // Same page frame as every other screen (title size, position, insets).
+    return DsPage(
+      title: l.text('clockTitle'),
       child: Align(
         alignment: Alignment.topLeft,
         // A narrow column: two buttons and a short table do not need the
@@ -69,9 +70,6 @@ class _OwnClockPageState extends ConsumerState<_OwnClockPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(l.text('clockTitle'),
-                  style: Theme.of(context).textTheme.titleLarge),
-              const SizedBox(height: DsSpacing.x4),
               _todayCard(l, state),
               const SizedBox(height: DsSpacing.x6),
               Text(l.text('clockHistory'),
