@@ -337,6 +337,10 @@ def delete(db: Session, user_id: int, acting_admin_id: int) -> None:
     db.query(TimeClockEntry).filter(TimeClockEntry.user_id == user.id).delete(
         synchronize_session=False
     )
+    # Days this admin corrected keep their times, without the corrector.
+    db.query(TimeClockEntry).filter(TimeClockEntry.corrected_by == user.id).update(
+        {TimeClockEntry.corrected_by: None}, synchronize_session=False
+    )
 
     # R8 — other users' requests outlive the people who decided or joined them.
     # Pending counterpart swaps go first; the null-out below would hide them.

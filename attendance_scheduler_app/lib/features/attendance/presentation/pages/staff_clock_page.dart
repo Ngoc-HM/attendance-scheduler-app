@@ -136,7 +136,10 @@ class _StaffClockPageState extends ConsumerState<StaffClockPage> {
             child: forgotten
                 ? Text(l.text('clockMissingOut'),
                     style: const TextStyle(color: DsColors.danger))
-                : null,
+                : e.corrected
+                    ? Text(l.text('clockCorrected'),
+                        style: const TextStyle(color: DsColors.textMuted))
+                    : null,
           ),
           IconButton(
             icon: const Icon(Icons.edit_outlined, size: 18),

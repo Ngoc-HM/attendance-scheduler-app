@@ -45,6 +45,7 @@ class ApiEndpoints {
   static const String clockMe = '/attendance/clock/me';
   // Admin: everyone's month (GET) and corrections (PUT).
   static const String clockStaff = '/attendance/clock/staff';
+  static const String clockBoard = '/attendance/clock/board';
 
   // Schedules (F-07..F-09)
   static const String generateSchedule = '/schedules/generate';

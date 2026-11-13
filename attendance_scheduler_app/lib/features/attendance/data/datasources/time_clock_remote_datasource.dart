@@ -50,6 +50,7 @@ class StaffClockEntry extends Equatable {
     required this.code,
     this.checkIn,
     this.checkOut,
+    this.corrected = false,
   });
 
   final int userId;
@@ -59,6 +60,9 @@ class StaffClockEntry extends Equatable {
   final String? checkIn;
   final String? checkOut;
 
+  /// Set by the admin rather than punched.
+  final bool corrected;
+
   factory StaffClockEntry.fromJson(Map<String, dynamic> json) =>
       StaffClockEntry(
         userId: json['user_id'] as int,
@@ -67,11 +71,46 @@ class StaffClockEntry extends Equatable {
         code: json['code'] as String,
         checkIn: json['check_in_local'] as String?,
         checkOut: json['check_out_local'] as String?,
+        corrected: json['corrected'] as bool? ?? false,
       );
 
   @override
   List<Object?> get props =>
-      [userId, workDate, fullName, code, checkIn, checkOut];
+      [userId, workDate, fullName, code, checkIn, checkOut, corrected];
+}
+
+/// One (person, day) of the admin's attendance board: the punches read
+/// against the day's code (`GET /attendance/clock/board`). [status] is
+/// `working`, `missed_out`, `absent`, `off_day` or `ok`.
+class ClockBoardCell extends Equatable {
+  const ClockBoardCell({
+    required this.userId,
+    required this.workDate,
+    required this.status,
+    this.checkIn,
+    this.checkOut,
+    this.corrected = false,
+  });
+
+  final int userId;
+  final DateTime workDate;
+  final String status;
+  final String? checkIn;
+  final String? checkOut;
+  final bool corrected;
+
+  factory ClockBoardCell.fromJson(Map<String, dynamic> json) => ClockBoardCell(
+        userId: json['user_id'] as int,
+        workDate: DateTime.parse(json['work_date'] as String),
+        status: json['status'] as String,
+        checkIn: json['check_in_local'] as String?,
+        checkOut: json['check_out_local'] as String?,
+        corrected: json['corrected'] as bool? ?? false,
+      );
+
+  @override
+  List<Object?> get props =>
+      [userId, workDate, status, checkIn, checkOut, corrected];
 }
 
 final timeClockRemoteDataSourceProvider = Provider<TimeClockRemoteDataSource>(
@@ -165,4 +204,25 @@ class TimeClockRemoteDataSource {
       throw ApiException.fromDio(e, 'clock_correct_failed');
     }
   }
+
+  /// Admin: the month's punches read against the attendance codes.
+  Future<List<ClockBoardCell>> board(int year, int month) async {
+    try {
+      final response = await _dio.get(
+        ApiEndpoints.clockBoard,
+        queryParameters: {'year': year, 'month': month},
+      );
+      return (response.data as List<dynamic>)
+          .map((e) => ClockBoardCell.fromJson(e as Map<String, dynamic>))
+          .toList();
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e, 'clock_board_failed');
+    }
+  }
 }
+
+/// Admin: the clock board of a month, keyed (year, month).
+final clockBoardProvider = FutureProvider.autoDispose
+    .family<List<ClockBoardCell>, (int, int)>(
+  (ref, ym) => ref.watch(timeClockRemoteDataSourceProvider).board(ym.$1, ym.$2),
+);

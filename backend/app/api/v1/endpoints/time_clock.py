@@ -10,7 +10,12 @@ from fastapi import APIRouter, status
 
 from app.api.deps import ActiveUser, AdminUser, DbSession
 from app.api.params import MonthQuery, YearQuery
-from app.schemas.time_clock import TimeClockCorrect, TimeClockRead, TimeClockStaffRead
+from app.schemas.time_clock import (
+    TimeClockBoardCell,
+    TimeClockCorrect,
+    TimeClockRead,
+    TimeClockStaffRead,
+)
 from app.services import audit_service, time_clock_service
 
 router = APIRouter()
@@ -55,6 +60,7 @@ def clock_month_staff(db: DbSession, year: YearQuery, month: MonthQuery, _admin:
             code=user.code,
             check_in_local=time_clock_service.local_hm(entry.check_in_at),
             check_out_local=time_clock_service.local_hm(entry.check_out_at),
+            corrected=entry.corrected_by is not None,
         )
         for entry, user in time_clock_service.list_month_all(db, year, month)
     ]
@@ -65,7 +71,8 @@ def clock_correct(db: DbSession, payload: TimeClockCorrect, admin: AdminUser):
     """Admin: set a person's check-in/out for a day (a forgotten check-out,
     a missed check-in, a wrong time). Audited."""
     entry = time_clock_service.correct(
-        db, payload.user_id, payload.work_date, payload.check_in, payload.check_out
+        db, payload.user_id, payload.work_date, payload.check_in, payload.check_out,
+        corrected_by=admin.id,
     )
     audit_service.record(
         db, admin.id, "clock.correct", "TimeClockEntry", entry.id,
@@ -73,3 +80,10 @@ def clock_correct(db: DbSession, payload: TimeClockCorrect, admin: AdminUser):
         f"{payload.check_in}-{payload.check_out or 'open'}",
     )
     return entry
+
+
+@router.get("/board", response_model=list[TimeClockBoardCell])
+def clock_board(db: DbSession, year: YearQuery, month: MonthQuery, _admin: AdminUser):
+    """Admin: the month's punches read against the attendance codes — who is
+    at work, who forgot to check out, who was due and never checked in."""
+    return time_clock_service.board(db, year, month)

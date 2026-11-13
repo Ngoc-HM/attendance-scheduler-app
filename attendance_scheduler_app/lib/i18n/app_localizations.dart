@@ -307,6 +307,14 @@ class AppLocalizations {
       'clockMissingOut': 'No check-out',
       'clockClearOut': 'Clear check-out',
       'clockSaved': 'Saved.',
+      'clockIn': 'In',
+      'clockOut': 'Out',
+      'clockCorrected': 'set by admin',
+      'clockAbsent': 'Due at work, no check-in',
+      'clockOffDay': 'Checked in on a day off',
+      'clockWorking': 'At work',
+      'clockMarkDanger': 'No check-in / no check-out',
+      'clockMarkWarning': 'Checked in on a day off',
       // --- Generate guard (owner 2026-07-17) ---
       'flightsMissingTitle': 'No flight data for this month',
       'flightsMissingBody':
@@ -720,6 +728,14 @@ class AppLocalizations {
       'clockMissingOut': 'Chưa check-out',
       'clockClearOut': 'Bỏ giờ ra',
       'clockSaved': 'Đã lưu.',
+      'clockIn': 'Vào',
+      'clockOut': 'Ra',
+      'clockCorrected': 'admin sửa',
+      'clockAbsent': 'Có ca mà không check-in',
+      'clockOffDay': 'Check-in ngày nghỉ',
+      'clockWorking': 'Đang làm',
+      'clockMarkDanger': 'Không check-in / chưa check-out',
+      'clockMarkWarning': 'Check-in ngày nghỉ',
       // --- Generate guard (owner 2026-07-17) ---
       'flightsMissingTitle': 'Tháng này chưa nhập lịch bay',
       'flightsMissingBody':

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime, time
+from typing import Literal
 
 from pydantic import BaseModel
 
@@ -26,6 +27,8 @@ class TimeClockStaffRead(TimeClockRead):
     # admin reads and corrects, whatever the device's own zone is.
     check_in_local: str | None = None
     check_out_local: str | None = None
+    # Set by the admin (PUT /attendance/clock/staff) rather than punched.
+    corrected: bool = False
 
 
 class TimeClockCorrect(BaseModel):
@@ -39,3 +42,15 @@ class TimeClockCorrect(BaseModel):
     work_date: date
     check_in: time
     check_out: time | None = None
+
+
+class TimeClockBoardCell(BaseModel):
+    """One (person, day) of the admin's attendance board (see
+    ``time_clock_service.board``)."""
+
+    user_id: int
+    work_date: date
+    check_in_local: str | None
+    check_out_local: str | None
+    corrected: bool
+    status: Literal["working", "missed_out", "absent", "off_day", "ok"]

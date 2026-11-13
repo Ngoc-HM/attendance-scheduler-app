@@ -51,15 +51,16 @@ def test_check_out_without_check_in_409(client: TestClient) -> None:
     assert res.json()["detail"] == t("clock.not_checked_in")
 
 
-def test_check_out_twice_409(client: TestClient) -> None:
+def test_the_latest_check_out_wins(client: TestClient) -> None:
     user = _employee(client, "clock_out_twice")
     assert client.post(f"{CLOCK}/check-in", headers=user).status_code == 201
     out = client.post(f"{CLOCK}/check-out", headers=user)
     assert out.status_code == 200, out.text
-    assert out.json()["check_out_at"] is not None
+    first = out.json()["check_out_at"]
+    assert first is not None
     again = client.post(f"{CLOCK}/check-out", headers=user)
-    assert again.status_code == 409
-    assert again.json()["detail"] == t("clock.already_checked_out")
+    assert again.status_code == 200, again.text
+    assert again.json()["check_out_at"] >= first
 
 
 @pytest.mark.parametrize(
@@ -145,6 +146,7 @@ def test_admin_fixes_a_forgotten_check_out(client: TestClient) -> None:
     assert len(mine) == 1 and mine[0]["full_name"] == "clock_fix_out"
     assert mine[0]["code"]
     assert (mine[0]["check_in_local"], mine[0]["check_out_local"]) == ("05:10", "14:20")
+    assert mine[0]["corrected"] is True
 
     # The employee sees the corrected day in their own history.
     own = client.get(f"{CLOCK}/me?year=2026&month=3", headers=user).json()
@@ -168,3 +170,33 @@ def test_staff_clock_is_admin_only(client: TestClient) -> None:
     res = client.put(f"{CLOCK}/staff", headers=user,
                      json={"user_id": uid, "work_date": "2026-03-12", "check_in": "06:00"})
     assert res.status_code == 403
+
+
+def test_board_reads_the_punches_against_the_codes(client: TestClient) -> None:
+    admin, uid, _ = _admin_and_id(client, "clock_board")
+    for day, code in (("2026-02-02", "A"), ("2026-02-03", "D"),
+                      ("2026-02-04", "X"), ("2026-02-05", "A"), ("2026-02-06", "B")):
+        res = client.put(f"{V}/attendance", headers=admin,
+                         json={"user_id": uid, "work_date": day, "code": code})
+        assert res.status_code == 200, res.text
+    punches = (("2026-02-03", "05:00", "13:30"), ("2026-02-04", "06:00", "09:00"),
+               ("2026-02-05", "05:30", None))
+    for day, cin, cout in punches:
+        body = {"user_id": uid, "work_date": day, "check_in": cin}
+        if cout:
+            body["check_out"] = cout
+        assert client.put(f"{CLOCK}/staff", headers=admin, json=body).status_code == 200
+
+    cells = {
+        c["work_date"]: c
+        for c in client.get(f"{CLOCK}/board?year=2026&month=2", headers=admin).json()
+        if c["user_id"] == uid
+    }
+    assert {d: c["status"] for d, c in cells.items()} == {
+        "2026-02-02": "absent",      # due at work, never checked in
+        "2026-02-03": "ok",
+        "2026-02-04": "off_day",     # punched on an X day
+        "2026-02-05": "missed_out",  # a past day still open
+    }  # B (business trip) expects no punch
+    assert cells["2026-02-03"]["check_in_local"] == "05:00"
+    assert cells["2026-02-03"]["corrected"] is True

@@ -38,13 +38,16 @@ class StaffClockState {
 
 /// Admin: everyone's check-in/out of a month and corrections.
 class StaffClockController extends StateNotifier<StaffClockState> {
-  StaffClockController(this._ds, {DateTime? now})
+  StaffClockController(this._ds, {DateTime? now, this.onChanged})
       : super(StaffClockState(
           month: DateTime((now ?? DateTime.now()).year,
               (now ?? DateTime.now()).month),
         ));
 
   final TimeClockRemoteDataSource _ds;
+
+  /// Called after a correction, so views reading the punches reload.
+  final void Function()? onChanged;
 
   Future<void> load() async {
     state = state.copyWith(isLoading: true, clearError: true);
@@ -80,6 +83,7 @@ class StaffClockController extends StateNotifier<StaffClockState> {
         checkIn: checkIn,
         checkOut: checkOut,
       );
+      onChanged?.call();
       if (!mounted) return true;
       state = state.copyWith(isSaving: false);
       await load();
@@ -94,5 +98,8 @@ class StaffClockController extends StateNotifier<StaffClockState> {
 
 final staffClockControllerProvider =
     StateNotifierProvider.autoDispose<StaffClockController, StaffClockState>(
-  (ref) => StaffClockController(ref.watch(timeClockRemoteDataSourceProvider)),
+  (ref) => StaffClockController(
+    ref.watch(timeClockRemoteDataSourceProvider),
+    onChanged: () => ref.invalidate(clockBoardProvider),
+  ),
 );

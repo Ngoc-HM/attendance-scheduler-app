@@ -120,10 +120,11 @@ class _OwnClockPageState extends ConsumerState<_OwnClockPage> {
               DsSecondaryButton(
                 label: l.text('clockCheckOut'),
                 icon: Icons.logout_outlined,
-                onPressed:
-                    !state.checkedIn || state.checkedOut || state.isMutating
-                        ? null
-                        : () => _act(false, l),
+                // Checking out again moves the check-out to now (the
+                // latest one ends the day).
+                onPressed: !state.checkedIn || state.isMutating
+                    ? null
+                    : () => _act(false, l),
               ),
             ],
           ),
