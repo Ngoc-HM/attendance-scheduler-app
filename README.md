@@ -79,7 +79,7 @@ uvicorn app.main:app --reload --port 8035
 ```
 `AUTO_CREATE_TABLES` (dev) only builds a brand-new, empty database; once the
 database has an `alembic_version` table it is ignored and the schema must be
-migrated with `alembic upgrade head` (head `0011`); startup logs a WARNING
+migrated with `alembic upgrade head` (head `0012`); startup logs a WARNING
 when it is behind. With `AUTORUN_ENABLED=true` (the default) the first start
 of a fresh install drafts the current month automatically (decision #55).
 The real setup today (dev backend on a workstation, shared PostgreSQL over
@@ -96,7 +96,7 @@ flutter run -d macos            # or windows / linux
 
 ## Status (2026-11-08)
 **Backend: F-01..F-15 implemented; 479 pytest tests, ruff and mypy clean;
-Alembic head `0011`.**
+Alembic head `0012`.**
 The OR-Tools CP-SAT engine enforces every §5.3 rule through an always-feasible
 slack model that reports violations instead of failing (§5.6), plus the §5.4
 objectives (A/D balance, adjacent off-pairing, cross-month premium-off

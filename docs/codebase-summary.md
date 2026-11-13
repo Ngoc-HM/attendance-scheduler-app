@@ -33,12 +33,12 @@ scheduler/   domain (SolverInput/Output), engine (CP-SAT), role_codes (per-role
              _monthly_off_target / _group_cover / _reserve_cover /
              _boundary_week / _premium_off / _off_pairing /
              _pair_points_fair, slack_registry, calendar_utils
-alembic/     0001 baseline … 0011 time_clock_corrected_by (head; see
+alembic/     0001 baseline … 0012 sick_cover_roster (head; see
              design-decisions "Migration strategy")
 scripts/     seed_demo_users.py, reset_all_passwords.py (both refuse unless
              ENVIRONMENT=dev and the database is local, app/core/script_guard.py;
              --allow-non-dev overrides; hidden password prompt)
-tests/       588 tests (pytest on SQLite, foreign keys on) — engine rules
+tests/       591 tests (pytest on SQLite, foreign keys on) — engine rules
              (bind + slack violation), solve phases, engine/checker agreement,
              roles, cross-month rules, services, endpoints, input bounds,
              RBAC/audit, user delete, sick privacy, production guard, bootstrap,

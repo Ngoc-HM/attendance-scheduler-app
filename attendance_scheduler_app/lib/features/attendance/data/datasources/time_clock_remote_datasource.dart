@@ -86,15 +86,21 @@ class ClockBoardCell extends Equatable {
   const ClockBoardCell({
     required this.userId,
     required this.workDate,
-    required this.status,
+    this.status,
     this.checkIn,
     this.checkOut,
     this.corrected = false,
+    this.tint,
   });
 
   final int userId;
   final DateTime workDate;
-  final String status;
+
+  /// null for an adjusted day with no punch and no duty.
+  final String? status;
+
+  /// `missing` (light red) or `adjusted` (light yellow); null = no tint.
+  final String? tint;
   final String? checkIn;
   final String? checkOut;
   final bool corrected;
@@ -102,7 +108,8 @@ class ClockBoardCell extends Equatable {
   factory ClockBoardCell.fromJson(Map<String, dynamic> json) => ClockBoardCell(
         userId: json['user_id'] as int,
         workDate: DateTime.parse(json['work_date'] as String),
-        status: json['status'] as String,
+        status: json['status'] as String?,
+        tint: json['tint'] as String?,
         checkIn: json['check_in_local'] as String?,
         checkOut: json['check_out_local'] as String?,
         corrected: json['corrected'] as bool? ?? false,
@@ -110,7 +117,7 @@ class ClockBoardCell extends Equatable {
 
   @override
   List<Object?> get props =>
-      [userId, workDate, status, checkIn, checkOut, corrected];
+      [userId, workDate, status, checkIn, checkOut, corrected, tint];
 }
 
 final timeClockRemoteDataSourceProvider = Provider<TimeClockRemoteDataSource>(

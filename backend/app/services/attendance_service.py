@@ -118,6 +118,16 @@ def _unlink_cover(cell: AttendanceRecord) -> None:
     cell.cover_of_id = None
     cell.cover_prev_code = None
     cell.cover_prev_seeded = False
+    cell.cover_prev_plan_code = None
+    cell.cover_prev_plan_override = False
+
+
+def _roster_cell(db: Session, user_id: int, day: date) -> ShiftAssignment | None:
+    return (
+        db.query(ShiftAssignment)
+        .filter(ShiftAssignment.user_id == user_id, ShiftAssignment.work_date == day)
+        .one_or_none()
+    )
 
 
 def _restore_covers(db: Session, sick: AttendanceRecord, recorded_by: int) -> None:
@@ -135,6 +145,14 @@ def _restore_covers(db: Session, sick: AttendanceRecord, recorded_by: int) -> No
         if cover.cover_prev_code is not None:
             cover.code = cover.cover_prev_code
             cover.recorded_by = None if cover.cover_prev_seeded else recorded_by
+        roster = _roster_cell(db, cover.user_id, cover.work_date)
+        if (
+            roster is not None
+            and cover.cover_prev_plan_code is not None
+            and roster.code is AttendanceCode.A_D
+        ):
+            roster.code = cover.cover_prev_plan_code
+            roster.is_manual_override = cover.cover_prev_plan_override
         _unlink_cover(cover)
 
 
@@ -265,6 +283,14 @@ def handle_sick(db: Session, payload: AttendanceUpsert, recorded_by: int) -> Sic
     cover_row.cover_of_id = sick_record.id
     cover_row.cover_prev_code = prev_code
     cover_row.cover_prev_seeded = prev_seeded
+    # The roster is the person's schedule (owner 2026-11-13): the cover goes
+    # into it too, as an admin edit, so they see it in their Schedule tab.
+    roster = _roster_cell(db, proposal.user_id, day)
+    if roster is not None:
+        cover_row.cover_prev_plan_code = roster.code
+        cover_row.cover_prev_plan_override = roster.is_manual_override
+        roster.code = proposal.new_code
+        roster.is_manual_override = True
     db.commit()
     db.refresh(cover_row)
     cover = AttendanceRead.model_validate(cover_row)

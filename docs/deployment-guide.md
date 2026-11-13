@@ -33,7 +33,7 @@ conveniences are live on that host (kept on purpose by the owner,
 1. **Migrate first, every time the code changes:**
    ```bash
    cd backend
-   .venv/bin/alembic upgrade head      # head is 0011 (2026-11-13)
+   .venv/bin/alembic upgrade head      # head is 0012 (2026-11-13)
    ```
    `AUTO_CREATE_TABLES` does not help here: it only builds a brand-new
    database and is ignored (with a warning in the log) once the database has
@@ -41,7 +41,7 @@ conveniences are live on that host (kept on purpose by the owner,
    (same day + FLT number, keeping the lowest id) and adds a unique
    constraint; without it the flight import cannot rely on that rule. If you
    forget, startup logs a WARNING such as "Database schema revision 0008
-   differs from the code's migration head 0011; run 'alembic upgrade head'"
+   differs from the code's migration head 0012; run 'alembic upgrade head'"
    and the API may then fail on missing columns (the warning does not stop
    startup).
 2. **Start the API**, bound to the workstation's tailnet address (find it

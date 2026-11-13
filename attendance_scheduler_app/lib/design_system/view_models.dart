@@ -9,6 +9,8 @@ class DsRosterRowData {
     required this.departures,
     required this.offDays,
     this.id,
+    this.dayNotes = const [],
+    this.dayMarks = const [],
   });
 
   /// Backing user id — needed by cell-edit callbacks (admin F-09); null for
@@ -21,6 +23,12 @@ class DsRosterRowData {
   final int arrivals;
   final int departures;
   final int offDays;
+
+  /// Per day (index 0 = the 1st): the cell's tooltip; null = none.
+  final List<String?> dayNotes;
+
+  /// Per day: the cell's background tint; null = none.
+  final List<DsDayMark?> dayMarks;
 }
 
 class DsFlightRowData {
@@ -83,10 +91,11 @@ class DsLeaveRowData {
   }
 }
 
-/// A mark in a day cell of the attendance grid: [danger] for a day that
-/// needs the admin (absent, forgotten check-out), [warning] for one worth a
-/// look (checked in on a day off).
-enum DsDayMark { danger, warning }
+/// The background of a day cell in the admin's grids (owner 2026-11-13):
+/// [missing] light red — due at work by the published roster, no check-in
+/// or no check-out; [adjusted] light yellow — the admin changed the day
+/// after hearing from the person.
+enum DsDayMark { missing, adjusted }
 
 class DsAttendanceRowData {
   const DsAttendanceRowData({
@@ -109,7 +118,7 @@ class DsAttendanceRowData {
   /// check-in/out times; null or a short list = no tooltip.
   final List<String?> dayNotes;
 
-  /// Per day: a mark drawn in the cell's corner; null = none.
+  /// Per day: the cell's background tint; null = none.
   final List<DsDayMark?> dayMarks;
 }
 

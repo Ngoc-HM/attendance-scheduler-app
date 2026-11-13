@@ -165,10 +165,10 @@ tables that exist (DuplicateTable).
   2026-11-13: the flight presets are STA 06:00–06:30 and STD 13:35–13:55, so
   no duty crosses midnight today; the admin can also correct such a day by
   hand now (`PUT /attendance/clock/staff`).
-- **Sick cover in the employee's roster.** The A/D cover is written into the
-  colleague's ACTUAL attendance (their "My attendance" tab), not into the
-  published roster, and nobody is notified. Decide whether the roster cell
-  should change too or a notification should go out.
+- **Sick cover in the employee's roster.** Settled 2026-11-13 by the owner:
+  the published roster is the person's schedule, so the cover is written
+  into the roster cell too and shows light yellow (adjusted) on the admin's
+  grids. No separate notification.
 
 ### Customer notes from the 2026-11-08 review fixes
 - Reports (#48): a disabled person is listed only when they have attendance

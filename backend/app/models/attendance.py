@@ -52,3 +52,11 @@ class AttendanceRecord(Base, TimestampMixin):
     cover_prev_seeded: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default=false()
     )
+    # The colleague's ROSTER cell before the cover went into it (the roster
+    # is the person's schedule), restored together with the actual.
+    cover_prev_plan_code: Mapped[AttendanceCode | None] = mapped_column(
+        SAEnum(AttendanceCode, name="attendance_code"), nullable=True
+    )
+    cover_prev_plan_override: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=false()
+    )

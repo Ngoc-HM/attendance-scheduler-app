@@ -139,6 +139,7 @@ void main() {
           status: 'missed_out',
           checkIn: '05:12',
           corrected: true,
+          tint: 'missing',
         ),
       ],
     );
@@ -147,7 +148,8 @@ void main() {
       find.byTooltip('In 05:12 · No check-out · set by admin'),
       findsOneWidget,
     );
-    expect(find.byType(DsDayMarkDot), findsNWidgets(3)); // cell + 2 legend
-    expect(find.text('No check-in / no check-out'), findsOneWidget);
+    expect(find.byType(DsDayMarkLegend), findsOneWidget);
+    expect(find.text('No check-in / check-out'), findsOneWidget);
+    expect(find.text('Adjusted by admin'), findsOneWidget);
   });
 }

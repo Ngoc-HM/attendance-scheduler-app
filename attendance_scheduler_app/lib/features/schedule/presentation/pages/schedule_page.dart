@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../attendance/data/datasources/time_clock_remote_datasource.dart';
+import '../../../attendance/presentation/clock_board_marks.dart';
 import '../../../../core/constants/shift_codes.dart';
 import '../../../../core/network/api_error_message.dart';
 import '../../../../core/network/api_exception.dart';
@@ -112,8 +114,14 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
     // Only the month on screen is ever drawn or published (A3): a month
     // without a schedule (404) shows the empty state and no Publish button.
     final onScreen = scheduleState.holds(_month.year, _month.month);
+    // Admin: each day of the published roster read against the punches —
+    // light red when missed, light yellow when adjusted (owner 2026-11-13).
+    final board = isAdmin && onScreen
+        ? ref.watch(clockBoardProvider((_month.year, _month.month))).value ??
+            const <ClockBoardCell>[]
+        : const <ClockBoardCell>[];
     final rows = onScreen
-        ? _buildRows(scheduleState)
+        ? _buildRows(scheduleState, board, l)
         : const <DsRosterRowData>[];
     final violations = isAdmin && onScreen
         ? (scheduleState.violations ?? const <ConstraintViolation>[])
@@ -241,7 +249,12 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
     );
   }
 
-  List<DsRosterRowData> _buildRows(ScheduleState state) {
+  List<DsRosterRowData> _buildRows(
+    ScheduleState state,
+    List<ClockBoardCell> board,
+    AppLocalizations l,
+  ) {
+    final clock = clockBoardByDay(board, _month);
     final schedule = state.schedule;
     if (schedule == null) return [];
 
@@ -276,6 +289,10 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
           .length;
       final offDays = shifts.where((s) => s == ShiftCode.x).length;
 
+      final cells = [
+        for (final a in assignments) clock[(userId, a.workDate.day)],
+      ];
+
       return DsRosterRowData(
         id: userId,
         name: name,
@@ -284,6 +301,8 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
         arrivals: arrivals,
         departures: departures,
         offDays: offDays,
+        dayNotes: [for (final c in cells) c == null ? null : clockNote(c, l)],
+        dayMarks: [for (final c in cells) c == null ? null : clockMark(c)],
       );
     }).toList();
 
@@ -499,6 +518,7 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
       return;
     }
     _loadMonth();
+    ref.invalidate(clockBoardProvider);
     if (decided.warnings.isEmpty) {
       DsFeedback.show(context, l.text('requestApproved'), tone: DsTone.success);
       return;
@@ -576,6 +596,8 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
     final warnings = await ref
         .read(scheduleControllerProvider.notifier)
         .overrideCell(userId: userId, workDate: workDate, code: code.code);
+    // An edited cell turns light yellow: re-read the day tints.
+    ref.invalidate(clockBoardProvider);
     if (!context.mounted) return;
     if (warnings == null) {
       DsFeedback.show(
