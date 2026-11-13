@@ -71,6 +71,17 @@
   when it has none ("còn 2 người nhóm A, cần 1 ca ARR + 2 ca DEP").
   Approving shows the same lines (`services/leave_staffing.py`).
 
+## 2026-11-13 — Edit a day from its cell; holidays get their own screen
+
+- Admin attendance grid: hovering a cell shows the punches; tapping it opens
+  one dialog for that person and day with the attendance code (S offers the
+  automatic A/D cover) and the check-in/out times. The "Update attendance"
+  button, its person/date pickers and the admin's separate check-in/out tab
+  are gone (owner 2026-11-13: fewer buttons).
+- Public holidays: a "Holidays" screen in the admin navigation (year switcher,
+  add a day with its name, list with delete) replaces the popup on the
+  attendance page.
+
 ## 2026-11-13 — Every clock screen reads the server's Frankfurt clock
 
 - Punches were always stamped by the server; now every screen also shows

@@ -91,6 +91,7 @@ enum DsDayMark { missing, adjusted }
 
 class DsAttendanceRowData {
   const DsAttendanceRowData({
+    this.id,
     required this.name,
     required this.role,
     required this.shifts,
@@ -99,6 +100,9 @@ class DsAttendanceRowData {
     this.dayNotes = const [],
     this.dayMarks = const [],
   });
+
+  /// Backing user id (admin cell edits); null for read-only rows.
+  final int? id;
 
   final String name;
   final String role;

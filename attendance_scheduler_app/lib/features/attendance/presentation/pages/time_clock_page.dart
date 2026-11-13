@@ -4,22 +4,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/network/api_error_message.dart';
 import '../../../../design_system/design_system.dart';
 import '../../../../i18n/app_localizations.dart';
-import '../../../auth/presentation/providers/auth_provider.dart';
 import '../providers/time_clock_provider.dart';
-import 'staff_clock_page.dart';
 
-/// The clock tab: an employee checks in and out; the admin sees and
-/// corrects everyone's punches ([StaffClockPage]).
-class TimeClockPage extends ConsumerWidget {
+/// The employee's check-in/out tab (owner 2026-07-09). The admin reads and
+/// edits everyone's punches from the attendance grid instead.
+class TimeClockPage extends StatelessWidget {
   const TimeClockPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final isAdmin = ref.watch(
-      authControllerProvider.select((a) => a.user?.isAdmin ?? false),
-    );
-    return isAdmin ? const StaffClockPage() : const _OwnClockPage();
-  }
+  Widget build(BuildContext context) => const _OwnClockPage();
 }
 
 /// Check-in / check-out for all employee roles (owner 2026-07-09).

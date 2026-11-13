@@ -66,46 +66,6 @@ class ClockNow {
       );
 }
 
-/// An entry in the admin's month list. Times are HH:MM in the business
-/// timezone (Frankfurt), as the server reports them, so an admin abroad
-/// reads and corrects the same clock the staff punched on.
-class StaffClockEntry extends Equatable {
-  const StaffClockEntry({
-    required this.userId,
-    required this.workDate,
-    required this.fullName,
-    required this.code,
-    this.checkIn,
-    this.checkOut,
-    this.corrected = false,
-  });
-
-  final int userId;
-  final DateTime workDate;
-  final String fullName;
-  final String code;
-  final String? checkIn;
-  final String? checkOut;
-
-  /// Set by the admin rather than punched.
-  final bool corrected;
-
-  factory StaffClockEntry.fromJson(Map<String, dynamic> json) =>
-      StaffClockEntry(
-        userId: json['user_id'] as int,
-        workDate: DateTime.parse(json['work_date'] as String),
-        fullName: json['full_name'] as String,
-        code: json['code'] as String,
-        checkIn: json['check_in_local'] as String?,
-        checkOut: json['check_out_local'] as String?,
-        corrected: json['corrected'] as bool? ?? false,
-      );
-
-  @override
-  List<Object?> get props =>
-      [userId, workDate, fullName, code, checkIn, checkOut, corrected];
-}
-
 /// One (person, day) of the admin's attendance board: the punches read
 /// against the day's code (`GET /attendance/clock/board`). [status] is
 /// `working`, `missed_out`, `absent`, `off_day` or `ok`.
@@ -209,21 +169,6 @@ class TimeClockRemoteDataSource {
       return ClockNow.fromJson(response.data as Map<String, dynamic>);
     } on DioException catch (e) {
       throw ApiException.fromDio(e, 'clock_now_failed');
-    }
-  }
-
-  /// Admin: everyone's entries of the month.
-  Future<List<StaffClockEntry>> staffMonth(int year, int month) async {
-    try {
-      final response = await _dio.get(
-        ApiEndpoints.clockStaff,
-        queryParameters: {'year': year, 'month': month},
-      );
-      return (response.data as List<dynamic>)
-          .map((e) => StaffClockEntry.fromJson(e as Map<String, dynamic>))
-          .toList();
-    } on DioException catch (e) {
-      throw ApiException.fromDio(e, 'clock_staff_failed');
     }
   }
 

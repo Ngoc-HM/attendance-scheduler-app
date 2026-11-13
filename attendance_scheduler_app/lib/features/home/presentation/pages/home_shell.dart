@@ -96,9 +96,9 @@ class _HomeShellState extends ConsumerState<HomeShell> {
           icon: Icons.fact_check_outlined,
         ),
         DsNavigationDestination(
-          path: AppRoute.clock,
-          label: l.text('navClock'),
-          icon: Icons.timer_outlined,
+          path: AppRoute.holidays,
+          label: l.text('navHolidays'),
+          icon: Icons.celebration_outlined,
         ),
         DsNavigationDestination(
           path: AppRoute.reports,

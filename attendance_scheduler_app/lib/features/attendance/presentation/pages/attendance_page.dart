@@ -13,9 +13,8 @@ import '../../domain/entities/attendance_entities.dart';
 import '../../domain/entities/calculations_entities.dart';
 import '../clock_board_marks.dart';
 import '../providers/attendance_provider.dart';
-import '../widgets/attendance_upsert_dialog.dart';
+import '../widgets/attendance_day_dialog.dart';
 import '../widgets/close_month_dialog.dart';
-import '../widgets/holidays_dialog.dart';
 
 /// isAdmin selector — avoids rebuilding the whole page on unrelated auth changes.
 final _isAdminProvider = Provider<bool>(
@@ -87,8 +86,8 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
       rows: rows,
       onPreviousMonth: _prevMonth,
       onNextMonth: _nextMonth,
-      onUpdate: isAdmin ? () => _showUpsertDialog(context, state.users) : null,
-      onHolidays: isAdmin ? () => _showHolidaysDialog(context) : null,
+      // Admin: tap a person's day to edit its code and check-in/out.
+      onDayTap: isAdmin ? (row, day) => _openDay(context, state, board, row, day) : null,
       onCloseMonth: isAdmin ? _closeMonth : null,
     );
   }
@@ -201,6 +200,7 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
       ];
 
       return DsAttendanceRowData(
+        id: userId,
         name: name,
         role: role,
         shifts: shifts,
@@ -229,22 +229,33 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
 
   // ── Dialogs ───────────────────────────────────────────────────────────────
 
-  Future<void> _showUpsertDialog(
-      BuildContext context, List<User> users) async {
+  Future<void> _openDay(
+    BuildContext context,
+    AttendanceState state,
+    List<ClockBoardCell> board,
+    DsAttendanceRowData row,
+    int day,
+  ) async {
+    final user = state.users.where((u) => u.id == row.id).firstOrNull;
+    if (user == null) return;
+    final date = DateTime(_month.year, _month.month, day);
+    final record = state.records
+        .where((r) => r.userId == user.id && r.workDate == date)
+        .firstOrNull;
+    final punch = clockBoardByDay(board, _month)[(user.id, day)];
     await showDialog<bool>(
       context: context,
-      builder: (_) => AttendanceUpsertDialog(users: users),
+      builder: (_) => AttendanceDayDialog(
+        user: user,
+        day: date,
+        code: record?.code ?? 'X',
+        checkIn: punch?.checkIn,
+        checkOut: punch?.checkOut,
+      ),
     );
-    // A new code can make a day due at work (or off): re-read the board.
-    ref.invalidate(clockBoardProvider);
   }
 
-  Future<void> _showHolidaysDialog(BuildContext context) async {
-    await showDialog<void>(
-      context: context,
-      builder: (_) => HolidaysDialog(year: _month.year),
-    );
-  }
+
 }
 
 // ── Error widget ──────────────────────────────────────────────────────────────
