@@ -91,7 +91,7 @@ void main() {
     await tester.pumpWidget(_signedOutApp());
     await tester.pumpAndSettle();
 
-    expect(find.text('Use your approved account to continue.'), findsOneWidget);
+    expect(find.text('Log in'), findsNWidgets(2)); // title + button
     expect(find.text('Đăng nhập'), findsNothing);
 
     await tester.tap(find.byKey(const Key('language-selector')));
@@ -100,11 +100,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Đăng nhập'), findsNWidgets(2));
-    expect(
-      find.text('Sử dụng tài khoản đã được phê duyệt để tiếp tục.'),
-      findsOneWidget,
-    );
-    expect(find.text('Use your approved account to continue.'), findsNothing);
+    expect(find.text('Log in'), findsNothing);
   });
 
   testWidgets('tab content updates on navigation', (tester) async {

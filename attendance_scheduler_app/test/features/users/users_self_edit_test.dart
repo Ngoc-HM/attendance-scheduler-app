@@ -125,8 +125,16 @@ Future<(ProviderContainer, _Repo, _Users)> _pump(WidgetTester tester) async {
 
 Finder _inDialog(Finder f) => find.descendant(of: find.byType(AlertDialog), matching: f);
 
-Future<void> _changeRole(WidgetTester tester, Finder menu, String roleLabel) async {
-  await tester.tap(menu);
+/// Opens the row's "⋯" actions menu (first or last row).
+Future<void> _actions(WidgetTester tester, {bool last = false}) async {
+  final menus = find.byTooltip('Actions');
+  await tester.tap(last ? menus.last : menus.first);
+  await tester.pumpAndSettle();
+}
+
+Future<void> _changeRole(WidgetTester tester, String roleLabel, {bool last = false}) async {
+  await _actions(tester, last: last);
+  await tester.tap(find.text('Change role'));
   await tester.pumpAndSettle();
   await tester.tap(find.text(roleLabel).last);
   await tester.pumpAndSettle();
@@ -139,7 +147,7 @@ void main() {
     final (c, repo, users) = await _pump(tester);
     repo.me = _demoted;
 
-    await _changeRole(tester, find.text('Change role').first, 'T — Flexible');
+    await _changeRole(tester, 'T — Flexible');
 
     final (id, changes) = users.updates.single;
     expect(id, 1);
@@ -154,7 +162,7 @@ void main() {
   testWidgets('editing someone else does not re-read /users/me', (tester) async {
     final (c, repo, users) = await _pump(tester);
 
-    await _changeRole(tester, find.text('Change role').last, 'A — Fixed');
+    await _changeRole(tester, 'A — Fixed', last: true);
 
     final (id, changes) = users.updates.single;
     expect(id, 2);
@@ -168,7 +176,8 @@ void main() {
     final (c, repo, _) = await _pump(tester);
     repo.meError = _forbidden();
 
-    await tester.tap(find.text('Disable').first);
+    await _actions(tester);
+    await tester.tap(find.text('Disable'));
     await tester.pumpAndSettle();
     await tester.tap(_inDialog(find.text('Confirm')));
     await tester.pumpAndSettle();
@@ -183,7 +192,8 @@ void main() {
   testWidgets('deleting yourself logs out without a "session expired" banner', (tester) async {
     final (c, repo, users) = await _pump(tester);
 
-    await tester.tap(find.text('Delete').first);
+    await _actions(tester);
+    await tester.tap(find.text('Delete'));
     await tester.pumpAndSettle();
     await tester.tap(_inDialog(find.text('Delete')));
     await tester.pumpAndSettle();
@@ -200,7 +210,8 @@ void main() {
   testWidgets('deleting someone else keeps the session and reloads the list', (tester) async {
     final (c, _, users) = await _pump(tester);
 
-    await tester.tap(find.text('Delete').last);
+    await _actions(tester, last: true);
+    await tester.tap(find.text('Delete'));
     await tester.pumpAndSettle();
     await tester.tap(_inDialog(find.text('Delete')));
     await tester.pumpAndSettle();

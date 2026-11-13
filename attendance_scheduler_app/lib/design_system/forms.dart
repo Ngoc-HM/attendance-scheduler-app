@@ -201,7 +201,7 @@ class DsAuthPage extends StatelessWidget {
   const DsAuthPage({
     super.key,
     required this.title,
-    required this.subtitle,
+    this.subtitle,
     required this.form,
     required this.footer,
     required this.languageCode,
@@ -213,7 +213,9 @@ class DsAuthPage extends StatelessWidget {
   static const photoAsset = 'assets/images/login_aircraft.jpg';
 
   final String title;
-  final String subtitle;
+
+  /// One line under the title; null = none (the login needs no explanation).
+  final String? subtitle;
   final Widget form;
   final Widget footer;
   final String languageCode;
@@ -293,16 +295,18 @@ class DsAuthPage extends StatelessWidget {
                                     .headlineMedium
                                     ?.copyWith(color: DsColors.surface),
                               ),
-                              const SizedBox(height: DsSpacing.x2),
-                              Text(
-                                subtitle,
-                                style: Theme.of(context).textTheme.bodyMedium
-                                    ?.copyWith(
-                                      color: DsColors.surface.withValues(
-                                        alpha: 0.88,
+                              if (subtitle != null) ...[
+                                const SizedBox(height: DsSpacing.x2),
+                                Text(
+                                  subtitle!,
+                                  style: Theme.of(context).textTheme.bodyMedium
+                                      ?.copyWith(
+                                        color: DsColors.surface.withValues(
+                                          alpha: 0.88,
+                                        ),
                                       ),
-                                    ),
-                              ),
+                                ),
+                              ],
                               const SizedBox(height: DsSpacing.x8),
                               Theme(data: _onGlassTheme(context), child: form),
                               const SizedBox(height: DsSpacing.x4),

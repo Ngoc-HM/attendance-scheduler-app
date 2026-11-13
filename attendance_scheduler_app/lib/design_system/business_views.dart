@@ -19,7 +19,7 @@ class DsLoginView extends StatelessWidget {
     required this.usernameController,
     required this.passwordController,
     required this.title,
-    required this.subtitle,
+    this.subtitle,
     required this.usernameLabel,
     required this.passwordLabel,
     required this.loginLabel,
@@ -37,7 +37,7 @@ class DsLoginView extends StatelessWidget {
   final TextEditingController usernameController;
   final TextEditingController passwordController;
   final String title;
-  final String subtitle;
+  final String? subtitle;
   final String usernameLabel;
   final String passwordLabel;
   final String loginLabel;
@@ -306,7 +306,9 @@ class DsScheduleView extends StatelessWidget {
               DsMetricCard(
                 label: l.text('doubleDuties'),
                 value: '$doubleDuty',
-                icon: Icons.warning_amber_outlined,
+                // A double shift is a fact, not a warning (same orange as
+                // its A/D badge).
+                icon: Icons.more_time_outlined,
                 tone: DsTone.warning,
               ),
             ],
@@ -601,10 +603,14 @@ class _DsDayGrid extends StatelessWidget {
   final List<String> trailingHeaders;
   final List<_DsDayGridRow> rows;
 
-  static const double _nameW = 150;
-  static const double _roleW = 80;
-  static const double _dayW = 46;
-  static const double _trailW = 72;
+  static const double _nameW = 140;
+  static const double _roleW = 72;
+  // A day column is as wide as the window allows, between the compact badge
+  // plus a margin and the comfortable width: a whole month fits a laptop
+  // window instead of scrolling past the 25th.
+  static const double _dayMinW = 32;
+  static const double _dayMaxW = 46;
+  static const double _trailW = 60;
   static const double _headerH = 48;
   static const double _rowH = 44;
 
@@ -613,10 +619,14 @@ class _DsDayGrid extends StatelessWidget {
     final l = AppLocalizations.of(context);
     final daysInMonth = DateTime(month.year, month.month + 1, 0).day;
     final leftWidth = _nameW + _roleW;
-    final rightNatural = daysInMonth * _dayW + trailingHeaders.length * _trailW;
 
     return LayoutBuilder(
       builder: (context, constraints) {
+        final trailWidth = trailingHeaders.length * _trailW;
+        final dayW = ((constraints.maxWidth - leftWidth - trailWidth) /
+                daysInMonth)
+            .clamp(_dayMinW, _dayMaxW);
+        final rightNatural = daysInMonth * dayW + trailWidth;
         final rightWidth = math.max(
           rightNatural,
           constraints.maxWidth - leftWidth,
@@ -643,8 +653,8 @@ class _DsDayGrid extends StatelessWidget {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      _scrollHeader(l, daysInMonth),
-                      for (final row in rows) _scrollRow(row, daysInMonth),
+                      _scrollHeader(l, daysInMonth, dayW),
+                      for (final row in rows) _scrollRow(row, daysInMonth, dayW),
                     ],
                   ),
                 ),
@@ -698,14 +708,14 @@ class _DsDayGrid extends StatelessWidget {
     ),
   );
 
-  Widget _scrollHeader(AppLocalizations l, int daysInMonth) => Container(
+  Widget _scrollHeader(AppLocalizations l, int daysInMonth, double dayW) => Container(
     height: _headerH,
     color: DsColors.surfaceSubtle,
     child: Row(
       children: [
         for (var day = 1; day <= daysInMonth; day++)
           _scrollCell(
-            _dayW,
+            dayW,
             Center(
               child: _DsDayHeader(date: DateTime(month.year, month.month, day)),
             ),
@@ -715,7 +725,7 @@ class _DsDayGrid extends StatelessWidget {
     ),
   );
 
-  Widget _scrollRow(_DsDayGridRow row, int daysInMonth) => Container(
+  Widget _scrollRow(_DsDayGridRow row, int daysInMonth, double dayW) => Container(
     height: _rowH,
     decoration: const BoxDecoration(
       border: Border(bottom: BorderSide(color: DsColors.border)),
@@ -724,17 +734,22 @@ class _DsDayGrid extends StatelessWidget {
       children: [
         for (var i = 0; i < daysInMonth; i++)
           _scrollCell(
-            _dayW,
+            dayW,
             InkWell(
               onTap: row.onDayTap == null ? null : () => row.onDayTap!(i + 1),
               borderRadius: BorderRadius.circular(6),
               child: _DsDayCell(
                 note: i < row.notes.length ? row.notes[i] : null,
                 child: i < row.shifts.length
-                    ? DsShiftBadge(
-                        code: row.shifts[i],
-                        compact: true,
-                        mark: i < row.marks.length ? row.marks[i] : null,
+                    // Scaled down, never wrapped, when the column is narrow
+                    // ("O/D" must stay on one line).
+                    ? FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: DsShiftBadge(
+                          code: row.shifts[i],
+                          compact: true,
+                          mark: i < row.marks.length ? row.marks[i] : null,
+                        ),
                       )
                     : const Text(
                         '—',
@@ -766,7 +781,14 @@ class _DsDayGrid extends StatelessWidget {
   );
 
   Widget _headerText(String label, {TextAlign align = TextAlign.center}) =>
-      Text(label, textAlign: align, style: DsType.tableHeader);
+      Text(
+        label,
+        textAlign: align,
+        maxLines: 1,
+        softWrap: false,
+        overflow: TextOverflow.ellipsis,
+        style: DsType.tableHeader,
+      );
 }
 
 class _DsDayGridRow {
@@ -1228,13 +1250,9 @@ class DsLeavesView extends StatelessWidget {
     return DsPage(
       title: l.text('leaveRequests'),
       subtitle: day == null ? null : l.leaveSubtitle(day),
+      // No reload button: the list reloads itself on open and after every
+      // action (owner 2026-11-13: fewer buttons).
       actions: [
-        if (onRefresh != null)
-          DsSecondaryButton(
-            label: l.refresh,
-            icon: Icons.refresh,
-            onPressed: onRefresh,
-          ),
         DsSecondaryButton(
           label: l.text('requestAnnualLeave'),
           icon: Icons.calendar_month_outlined,
@@ -1846,11 +1864,6 @@ class DsUsersView extends StatelessWidget {
       title: l.text('usersTitle'),
       subtitle: l.text('usersSubtitle'),
       actions: [
-        DsSecondaryButton(
-          label: l.refresh,
-          icon: Icons.refresh,
-          onPressed: onRefresh,
-        ),
         DsPrimaryButton(
           label: l.createUser,
           icon: Icons.person_add_outlined,
@@ -1980,60 +1993,132 @@ class _UsersTable extends StatelessWidget {
                 _ => DsTone.neutral,
               },
             ),
-            // Actions cell: the status action(s) — approve / change-role +
-            // disable / enable — then edit quota and delete; wraps if cramped.
-            Wrap(
-              spacing: DsSpacing.x2,
-              runSpacing: DsSpacing.x1,
-              crossAxisAlignment: WrapCrossAlignment.center,
+            // Actions cell: approving a sign-up stays a visible button (the
+            // one action the admin came for); everything else lives in one
+            // "⋯" menu so rows stay one line tall (owner 2026-11-13).
+            Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                ...switch (user.status) {
-                  'pending' => [
-                    _ActionButton(
-                      label: l.approve,
-                      tone: DsTone.success,
-                      onPressed: () => onApprove(user.id),
-                    ),
-                  ],
-                  // Active users can be disabled AND have their role changed
-                  // (e.g. promoted to admin `M`).
-                  'active' => [
-                    _RoleChangeMenu(
-                      currentRole: user.role,
-                      onSelected: (role) => onChangeRole(user.id, role),
-                    ),
-                    _ActionButton(
-                      label: l.disable,
-                      tone: DsTone.danger,
-                      onPressed: () => onDisable(user.id),
-                    ),
-                  ],
-                  // Disabled (or any other non-pending, non-active status).
-                  _ => [
-                    _ActionButton(
-                      label: l.enable,
-                      tone: DsTone.primary,
-                      onPressed: () => onEnable(user.id),
-                    ),
-                  ],
-                },
-                // Every status: a pending account can be set up before
-                // approval, a disabled one before re-enabling.
-                if (onEditQuota != null)
+                if (user.status == 'pending') ...[
                   _ActionButton(
-                    label: l.text('editAnnualLeaveQuota'),
-                    tone: DsTone.primary,
-                    onPressed: () => onEditQuota!(user.id),
+                    label: l.approve,
+                    tone: DsTone.success,
+                    onPressed: () => onApprove(user.id),
                   ),
-                if (onDelete != null)
-                  _ActionButton(
-                    label: l.text('delete'),
-                    tone: DsTone.danger,
-                    onPressed: () => onDelete!(user.id),
-                  ),
+                  const SizedBox(width: DsSpacing.x2),
+                ],
+                _UserActionsMenu(
+                  user: user,
+                  onChangeRole: (role) => onChangeRole(user.id, role),
+                  onDisable: () => onDisable(user.id),
+                  onEnable: () => onEnable(user.id),
+                  onEditQuota: onEditQuota == null
+                      ? null
+                      : () => onEditQuota!(user.id),
+                  onDelete:
+                      onDelete == null ? null : () => onDelete!(user.id),
+                ),
               ],
             ),
           ],
+      ],
+    );
+  }
+}
+
+/// The row's "⋯" menu: change role, edit leave quota, disable / enable,
+/// delete (destructive items last, in red, after a divider).
+class _UserActionsMenu extends StatelessWidget {
+  const _UserActionsMenu({
+    required this.user,
+    required this.onChangeRole,
+    required this.onDisable,
+    required this.onEnable,
+    this.onEditQuota,
+    this.onDelete,
+  });
+
+  final DsUserRowData user;
+  final ValueChanged<String> onChangeRole;
+  final VoidCallback onDisable;
+  final VoidCallback onEnable;
+  final VoidCallback? onEditQuota;
+  final VoidCallback? onDelete;
+
+  static const _roles = ['M', 'T', 'A', 'F'];
+
+  Future<void> _pickRole(BuildContext context) async {
+    final l = AppLocalizations.of(context);
+    final box = context.findRenderObject()! as RenderBox;
+    final overlay =
+        Overlay.of(context).context.findRenderObject()! as RenderBox;
+    final topLeft = box.localToGlobal(
+      Offset(0, box.size.height),
+      ancestor: overlay,
+    );
+    final role = await showMenu<String>(
+      context: context,
+      position: RelativeRect.fromRect(
+        topLeft & box.size,
+        Offset.zero & overlay.size,
+      ),
+      items: [
+        for (final r in _roles)
+          PopupMenuItem<String>(
+            value: r,
+            enabled: r != user.role,
+            child: Row(
+              children: [
+                SizedBox(
+                  width: 24,
+                  child: r == user.role
+                      ? const Icon(Icons.check, size: 16, color: DsColors.primary)
+                      : null,
+                ),
+                Text(l.roleLabel(r)),
+              ],
+            ),
+          ),
+      ],
+    );
+    if (role != null) onChangeRole(role);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    PopupMenuItem<String> item(String value, String label,
+            {bool danger = false}) =>
+        PopupMenuItem<String>(
+          value: value,
+          height: 40,
+          child: Text(
+            label,
+            style: TextStyle(color: danger ? DsColors.danger : null),
+          ),
+        );
+    return PopupMenuButton<String>(
+      tooltip: l.actions,
+      position: PopupMenuPosition.under,
+      icon: const Icon(Icons.more_horiz, color: DsColors.textSecondary),
+      onSelected: (value) => switch (value) {
+        'role' => _pickRole(context),
+        'quota' => onEditQuota?.call(),
+        'disable' => onDisable(),
+        'enable' => onEnable(),
+        'delete' => onDelete?.call(),
+        _ => null,
+      },
+      itemBuilder: (_) => [
+        if (user.status == 'active') item('role', l.text('changeRole')),
+        if (onEditQuota != null)
+          item('quota', l.text('editAnnualLeaveQuota')),
+        const PopupMenuDivider(),
+        if (user.status == 'active')
+          item('disable', l.disable, danger: true)
+        else if (user.status != 'pending')
+          item('enable', l.enable),
+        if (onDelete != null) item('delete', l.text('delete'), danger: true),
       ],
     );
   }
@@ -2084,73 +2169,6 @@ class _ActionButton extends StatelessWidget {
 /// Bordered button that opens a small menu to switch a user's role between
 /// M / T / A. Current role is checked + disabled; selecting another fires
 /// [onSelected] with the new role letter (the caller confirms + persists).
-class _RoleChangeMenu extends StatelessWidget {
-  const _RoleChangeMenu({required this.currentRole, required this.onSelected});
-
-  final String currentRole;
-  final ValueChanged<String> onSelected;
-
-  static const _roles = ['M', 'T', 'A', 'F'];
-
-  @override
-  Widget build(BuildContext context) {
-    final l = AppLocalizations.of(context);
-    return PopupMenuButton<String>(
-      tooltip: l.text('changeRole'),
-      onSelected: onSelected,
-      position: PopupMenuPosition.under,
-      itemBuilder: (_) => [
-        for (final role in _roles)
-          PopupMenuItem<String>(
-            value: role,
-            enabled: role != currentRole,
-            child: Row(
-              children: [
-                if (role == currentRole) ...[
-                  const Icon(Icons.check, size: 16, color: DsColors.primary),
-                  const SizedBox(width: DsSpacing.x2),
-                ],
-                Text(l.roleLabel(role)),
-              ],
-            ),
-          ),
-      ],
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(
-          DsSpacing.x3,
-          DsSpacing.x2,
-          DsSpacing.x1,
-          DsSpacing.x2,
-        ),
-        decoration: BoxDecoration(
-          color: DsColors.primarySoft,
-          borderRadius: BorderRadius.circular(DsRadius.medium),
-          border: Border.all(
-            color: DsColors.primaryHover.withValues(alpha: 0.30),
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              l.text('changeRole'),
-              style: const TextStyle(
-                fontSize: DsFontSize.footnote,
-                fontWeight: FontWeight.w600,
-                color: DsColors.primaryHover,
-              ),
-            ),
-            const Icon(
-              Icons.arrow_drop_down,
-              size: 18,
-              color: DsColors.primaryHover,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
 
 class DsCreateUserDialog<T> extends StatelessWidget {
   const DsCreateUserDialog({

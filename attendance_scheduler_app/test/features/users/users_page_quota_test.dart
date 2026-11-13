@@ -73,6 +73,8 @@ Finder _inDialog(Finder finder) =>
 
 /// Opens the row's quota dialog and returns its numeric field.
 Future<Finder> _openQuotaDialog(WidgetTester tester) async {
+  await tester.tap(find.byTooltip('Actions').first);
+  await tester.pumpAndSettle();
   await tester.tap(find.text('Edit leave quota'));
   await tester.pumpAndSettle();
   expect(find.byType(AlertDialog), findsOneWidget);

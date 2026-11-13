@@ -133,6 +133,8 @@ void main() {
 
     testWidgets('last-admin 409 on Disable shows the backend message', (tester) async {
       await _pump(tester, const UsersPage());
+      await tester.tap(find.byTooltip('Actions').first);
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Disable'));
       await tester.pumpAndSettle();
       await tester.tap(_inDialog(find.text('Confirm')));
@@ -156,6 +158,8 @@ void main() {
 
     testWidgets('quota 422 shows the validation message, not the raw list', (tester) async {
       await _pump(tester, const UsersPage());
+      await tester.tap(find.byTooltip('Actions').last);
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Edit leave quota').last);
       await tester.pumpAndSettle();
       await tester.enterText(_inDialog(find.byType(TextField)), '300');
@@ -169,6 +173,8 @@ void main() {
 
     testWidgets('a 5xx on Delete shows a localized server error', (tester) async {
       await _pump(tester, const UsersPage());
+      await tester.tap(find.byTooltip('Actions').last);
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Delete').last);
       await tester.pumpAndSettle();
       await tester.tap(_inDialog(find.text('Delete')));

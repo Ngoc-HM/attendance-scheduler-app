@@ -1,5 +1,5 @@
-// D4: the Leaves page reloads every time it is opened and has a refresh
-// button. Leave dates (E): the end date never stays before the start date,
+// D4: the Leaves page reloads every time it is opened (the refresh button
+// was removed on 2026-11-13). Leave dates (E): the end date never stays before the start date,
 // and monthly leave pickers only offer the target month.
 
 import 'package:attendance_scheduler_app/core/storage/locale_storage.dart';
@@ -119,7 +119,7 @@ String _fieldText(WidgetTester tester, String label) => tester
     .text;
 
 void main() {
-  testWidgets('leaves_page_reloads_on_entry_and_refresh_button', (
+  testWidgets('leaves_page_reloads_on_entry', (
     tester,
   ) async {
     final shown = ValueNotifier(true);
@@ -132,10 +132,7 @@ void main() {
     shown.value = true;
     await tester.pumpAndSettle();
     expect(leaves.listCalls, 2);
-
-    await tester.tap(find.text('Refresh'));
-    await tester.pumpAndSettle();
-    expect(leaves.listCalls, 3);
+    expect(find.text('Refresh'), findsNothing);
   });
 
   testWidgets('end_date_resets_when_start_moves_past_it', (tester) async {

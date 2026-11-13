@@ -51,7 +51,6 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       usernameController: _username,
       passwordController: _password,
       title: l.login,
-      subtitle: l.text('loginSubtitle'),
       usernameLabel: l.username,
       passwordLabel: l.password,
       loginLabel: l.login,
