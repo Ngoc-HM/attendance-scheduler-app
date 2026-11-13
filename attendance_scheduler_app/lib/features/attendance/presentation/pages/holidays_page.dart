@@ -9,12 +9,15 @@ import '../../domain/entities/attendance_entities.dart';
 
 /// The public holidays of a year (F-13), on their own screen (owner
 /// 2026-11-13): add a day with its name, see the year's list, delete one.
-final holidaysProvider = FutureProvider.autoDispose.family<List<Holiday>, int>(
-  (ref, year) async {
-    final days = await ref.watch(attendanceRemoteDataSourceProvider).fetchHolidays(year);
-    return [...days]..sort((a, b) => a.day.compareTo(b.day));
-  },
-);
+final holidaysProvider = FutureProvider.autoDispose.family<List<Holiday>, int>((
+  ref,
+  year,
+) async {
+  final days = await ref
+      .watch(attendanceRemoteDataSourceProvider)
+      .fetchHolidays(year);
+  return [...days]..sort((a, b) => a.day.compareTo(b.day));
+});
 
 class HolidaysPage extends ConsumerStatefulWidget {
   const HolidaysPage({super.key});
@@ -60,7 +63,9 @@ class _HolidaysPageState extends ConsumerState<HolidaysPage> {
     try {
       await action();
       ref.invalidate(holidaysProvider(_year));
-      if (mounted) DsFeedback.show(context, l.text(doneKey), tone: DsTone.success);
+      if (mounted) {
+        DsFeedback.show(context, l.text(doneKey), tone: DsTone.success);
+      }
     } catch (e) {
       if (mounted) {
         DsFeedback.show(context, apiErrorMessage(l, e), tone: DsTone.danger);
@@ -104,30 +109,39 @@ class _HolidaysPageState extends ConsumerState<HolidaysPage> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           DsSurface(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                DsSecondaryButton(
-                  icon: Icons.calendar_today,
-                  label: _day == null ? l.text('pickDate') : _date(_day!),
-                  onPressed: _pickDay,
-                ),
-                const SizedBox(width: DsSpacing.x3),
-                Expanded(
-                  child: DsTextField(
-                    controller: _name,
-                    label: l.text('holidayName'),
-                    onSubmitted: (_) => canAdd ? _add() : null,
+            // One line, every control the field's height: the buttons stretch
+            // to it so the three edges line up.
+            child: IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // A fixed minimum width: picking a date must not shift the
+                  // name field sideways.
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(minWidth: 168),
+                    child: DsSecondaryButton(
+                      icon: Icons.calendar_today,
+                      label: _day == null ? l.text('pickDate') : _date(_day!),
+                      onPressed: _pickDay,
+                    ),
                   ),
-                ),
-                const SizedBox(width: DsSpacing.x3),
-                DsPrimaryButton(
-                  label: l.text('addHoliday'),
-                  icon: Icons.add,
-                  loading: _busy,
-                  onPressed: canAdd ? _add : null,
-                ),
-              ],
+                  const SizedBox(width: DsSpacing.x3),
+                  Expanded(
+                    child: DsTextField(
+                      controller: _name,
+                      label: l.text('holidayName'),
+                      onSubmitted: (_) => canAdd ? _add() : null,
+                    ),
+                  ),
+                  const SizedBox(width: DsSpacing.x3),
+                  DsPrimaryButton(
+                    label: l.text('addHoliday'),
+                    icon: Icons.add,
+                    loading: _busy,
+                    onPressed: canAdd ? _add : null,
+                  ),
+                ],
+              ),
             ),
           ),
           const SizedBox(height: DsSpacing.x4),
@@ -148,21 +162,48 @@ class _HolidaysPageState extends ConsumerState<HolidaysPage> {
                       children: [
                         for (var i = 0; i < days.length; i++) ...[
                           if (i > 0) const Divider(height: 1),
-                          ListTile(
-                            dense: true,
-                            leading: SizedBox(
-                              width: 120,
-                              child: Text(
-                                '${_date(days[i].day)} · ${l.shortWeekday(days[i].day)}',
-                                style: const TextStyle(fontWeight: FontWeight.w600),
-                              ),
+                          // Same inset and type size as the form above: the
+                          // date column lines up with the date button.
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: DsSpacing.x5,
+                              vertical: DsSpacing.x2,
                             ),
-                            title: Text(days[i].name),
-                            trailing: IconButton(
-                              icon: const Icon(Icons.delete_outline, size: 18),
-                              color: DsColors.danger,
-                              tooltip: l.text('delete'),
-                              onPressed: _busy ? null : () => _delete(days[i]),
+                            child: Row(
+                              children: [
+                                SizedBox(
+                                  // date button + gap + the field's text inset (14):
+                                  // the name starts where the typed name does.
+                                  width: 168 + DsSpacing.x3 + 14,
+                                  child: Text(
+                                    '${_date(days[i].day)} · '
+                                    '${l.shortWeekday(days[i].day)}',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodyMedium
+                                        ?.copyWith(fontWeight: FontWeight.w600),
+                                  ),
+                                ),
+                                Expanded(
+                                  child: Text(
+                                    days[i].name,
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.bodyMedium,
+                                  ),
+                                ),
+                                IconButton(
+                                  icon: const Icon(
+                                    Icons.delete_outline,
+                                    size: 18,
+                                  ),
+                                  color: DsColors.danger,
+                                  tooltip: l.text('delete'),
+                                  onPressed: _busy
+                                      ? null
+                                      : () => _delete(days[i]),
+                                ),
+                              ],
                             ),
                           ),
                         ],
