@@ -57,79 +57,61 @@ class _OwnClockPageState extends ConsumerState<_OwnClockPage> {
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
     final state = ref.watch(timeClockControllerProvider);
+    final today = state.today;
 
-    // Same page frame as every other screen (title size, position, insets).
+    // Same frame as the other screens: title, the one action that applies
+    // now at the top right, today's numbers, then the month's table.
     return DsPage(
       title: l.text('clockTitle'),
-      child: Align(
-        alignment: Alignment.topLeft,
-        // A narrow column: two buttons and a short table do not need the
-        // whole window, and the eye stays on one line.
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 640),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _todayCard(l, state),
-              const SizedBox(height: DsSpacing.x6),
-              Text(l.text('clockHistory'),
-                  style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(height: DsSpacing.x2),
-              if (state.isLoading)
-                const Center(child: CircularProgressIndicator())
-              else if (state.monthEntries.isEmpty)
-                Text(l.text('clockNoEntries'),
-                    style: const TextStyle(color: DsColors.textMuted))
-              else
-                DsOwnClockTable(
-                  rows: [
-                    for (final e in state.monthEntries)
-                      (e.workDate, e.checkInLocal, e.checkOutLocal),
-                  ],
-                ),
-            ],
-          ),
+      actions: [
+        DsPrimaryButton(
+          label: l.text(state.checkedIn ? 'clockCheckOut' : 'clockCheckIn'),
+          icon: state.checkedIn ? Icons.logout_outlined : Icons.login_outlined,
+          loading: state.isMutating,
+          onPressed: state.isMutating || state.isLoading
+              ? null
+              : () => _act(!state.checkedIn, l),
         ),
-      ),
-    );
-  }
-
-  Widget _todayCard(AppLocalizations l, TimeClockState state) {
-    return DsSurface(
-      padding: const EdgeInsets.all(DsSpacing.x4),
+      ],
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            state.checkedIn
-                ? '${l.text('clockCheckedInAt')} ${state.today?.checkInLocal ?? '—'}'
-                    '${state.checkedOut ? ' · ${l.text('clockCheckedOutAt')} ${state.today?.checkOutLocal ?? '—'}' : ''}'
-                : l.text('clockNotCheckedIn'),
-            style: const TextStyle(fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: DsSpacing.x3),
-          Row(
+          DsResponsiveGrid(
             children: [
-              DsPrimaryButton(
-                label: l.text('clockCheckIn'),
+              DsMetricCard(
+                label: l.text('clockTodayIn'),
+                value: today?.checkInLocal ?? '—',
                 icon: Icons.login_outlined,
-                loading: state.isMutating,
-                onPressed: state.checkedIn || state.isMutating
-                    ? null
-                    : () => _act(true, l),
+                tone: DsTone.primary,
               ),
-              const SizedBox(width: DsSpacing.x3),
-              DsSecondaryButton(
-                label: l.text('clockCheckOut'),
+              DsMetricCard(
+                label: l.text('clockTodayOut'),
+                value: today?.checkOutLocal ?? '—',
                 icon: Icons.logout_outlined,
-                // Checking out again moves the check-out to now (the
-                // latest one ends the day).
-                onPressed: !state.checkedIn || state.isMutating
-                    ? null
-                    : () => _act(false, l),
+                tone: DsTone.warning,
+              ),
+              DsMetricCard(
+                label: l.text('clockTodayWorked'),
+                value:
+                    workedTime(today?.checkInLocal, today?.checkOutLocal) ??
+                    '—',
+                icon: Icons.timer_outlined,
+                tone: DsTone.success,
               ),
             ],
           ),
+          const SizedBox(height: DsSpacing.x6),
+          if (state.isLoading)
+            const Center(child: CircularProgressIndicator())
+          else
+            DsOwnClockTable(
+              title: l.text('clockHistory'),
+              emptyText: l.text('clockNoEntries'),
+              rows: [
+                for (final e in state.monthEntries)
+                  (e.workDate, e.checkInLocal, e.checkOutLocal),
+              ],
+            ),
         ],
       ),
     );

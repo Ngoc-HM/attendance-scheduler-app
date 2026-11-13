@@ -40,14 +40,14 @@ class DsClockTableRow extends StatelessWidget {
     super.key,
     bool withPerson = true,
   }) : day = l.text('clockDay'),
-        person = withPerson ? l.text('clockPerson') : null,
-        checkIn = l.text('clockIn'),
-        checkOut = l.text('clockOut'),
-        note = null,
-        noteIsAlert = false,
-        dayStart = false,
-        action = null,
-        _header = l.text('clockWorked');
+       person = withPerson ? l.text('clockPerson') : null,
+       checkIn = l.text('clockIn'),
+       checkOut = l.text('clockOut'),
+       note = null,
+       noteIsAlert = false,
+       dayStart = false,
+       action = null,
+       _header = l.text('clockWorked');
 
   final String? day;
   final String? person;
@@ -73,10 +73,10 @@ class DsClockTableRow extends StatelessWidget {
       fontWeight: FontWeight.w600,
     );
     Text cell(String? text, {TextStyle? style}) => Text(
-          text ?? '—',
-          overflow: TextOverflow.ellipsis,
-          style: isHeader ? head : (style ?? base),
-        );
+      text ?? '—',
+      overflow: TextOverflow.ellipsis,
+      style: isHeader ? head : (style ?? base),
+    );
     return DecoratedBox(
       decoration: BoxDecoration(
         color: isHeader ? DsColors.surfaceSubtle : null,
@@ -97,27 +97,33 @@ class DsClockTableRow extends StatelessWidget {
                 width: 96,
                 child: day == null
                     ? null
-                    : cell(day,
-                        style: base.copyWith(fontWeight: FontWeight.w600)),
+                    : cell(
+                        day,
+                        style: base.copyWith(fontWeight: FontWeight.w600),
+                      ),
               ),
               if (person != null) Expanded(child: cell(person)),
               SizedBox(width: 72, child: cell(checkIn)),
               SizedBox(width: 72, child: cell(checkOut)),
               SizedBox(
                 width: 72,
-                child: cell(isHeader ? _header : workedTime(checkIn, checkOut),
-                    style: base.copyWith(color: DsColors.textSecondary)),
+                child: cell(
+                  isHeader ? _header : workedTime(checkIn, checkOut),
+                  style: base.copyWith(color: DsColors.textSecondary),
+                ),
               ),
               SizedBox(
                 width: 132,
                 child: note == null
                     ? null
-                    : cell(note,
+                    : cell(
+                        note,
                         style: base.copyWith(
                           color: noteIsAlert
                               ? DsColors.danger
                               : DsColors.textMuted,
-                        )),
+                        ),
+                      ),
               ),
               SizedBox(width: 40, child: action),
               if (person == null) const Spacer(),
@@ -129,9 +135,18 @@ class DsClockTableRow extends StatelessWidget {
   }
 }
 
-/// The employee's own month, in the same table as the admin's list.
+/// The employee's month of punches: a titled surface like the attendance
+/// board ("Bảng chấm công"), with the table or an empty line inside.
 class DsOwnClockTable extends StatelessWidget {
-  const DsOwnClockTable({super.key, required this.rows});
+  const DsOwnClockTable({
+    super.key,
+    required this.title,
+    required this.emptyText,
+    required this.rows,
+  });
+
+  final String title;
+  final String emptyText;
 
   /// (day, check-in "HH:MM", check-out "HH:MM"), newest first.
   final List<(DateTime, String?, String?)> rows;
@@ -142,19 +157,35 @@ class DsOwnClockTable extends StatelessWidget {
     return DsSurface(
       padding: EdgeInsets.zero,
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          DsClockTableRow.header(l, withPerson: false),
-          for (final (day, cin, cout) in rows)
-            DsClockTableRow(
-              day: '${day.day.toString().padLeft(2, '0')}/'
-                  '${day.month.toString().padLeft(2, '0')} '
-                  '${l.shortWeekday(day)}',
-              checkIn: cin,
-              checkOut: cout,
-            ),
+          Padding(
+            padding: const EdgeInsets.all(DsSpacing.x4),
+            child: DsSectionHeader(title),
+          ),
+          const Divider(height: 1),
+          if (rows.isEmpty)
+            Padding(
+              padding: const EdgeInsets.all(DsSpacing.x4),
+              child: Text(
+                emptyText,
+                style: const TextStyle(color: DsColors.textMuted),
+              ),
+            )
+          else ...[
+            DsClockTableRow.header(l, withPerson: false),
+            for (final (day, cin, cout) in rows)
+              DsClockTableRow(
+                day:
+                    '${day.day.toString().padLeft(2, '0')}/'
+                    '${day.month.toString().padLeft(2, '0')} '
+                    '${l.shortWeekday(day)}',
+                checkIn: cin,
+                checkOut: cout,
+              ),
+          ],
         ],
       ),
     );
   }
 }
-
