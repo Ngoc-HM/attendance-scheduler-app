@@ -145,3 +145,7 @@ backups/
 # the exact package versions CI and the goldens were verified with.
 !attendance_scheduler_app/pubspec.lock
 !backend/requirements.lock
+
+# Server secrets for docker-compose.prod.yml
+.env.prod
+backend/.env.prod
