@@ -317,10 +317,6 @@ class DsScheduleView extends StatelessWidget {
             const _DsShiftLegend(),
             const SizedBox(height: DsSpacing.x4),
           ],
-          if (rows.any((r) => r.dayMarks.any((m) => m != null))) ...[
-            const DsDayMarkLegend(),
-            const SizedBox(height: DsSpacing.x4),
-          ],
           DsSurface(
             padding: EdgeInsets.zero,
             child: Column(
@@ -541,9 +537,7 @@ class _DsRosterTable extends StatelessWidget {
                     ? () => onCellTap!(row, i)
                     : null,
                 borderRadius: BorderRadius.circular(6),
-                child: _DsDayCell(
-                  note: i < row.dayNotes.length ? row.dayNotes[i] : null,
-                  mark: i < row.dayMarks.length ? row.dayMarks[i] : null,
+                child: Center(
                   child: i < row.shifts.length
                       ? DsShiftBadge(code: row.shifts[i], compact: true)
                       : const Text(

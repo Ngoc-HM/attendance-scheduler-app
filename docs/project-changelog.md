@@ -73,13 +73,17 @@
 
 ## 2026-11-13 — Roster day tints (owner rule)
 
-- The published roster is each person's schedule. On the admin's Schedule
-  and Attendance grids a past day due at work (A, D, A/D, AD, O/D, T) with no
+- The published roster is each person's schedule. On the admin's
+  Attendance grid (not the Schedule grid: the roster shows the plan only,
+  owner 2026-11-13) a past day due at work (A, D, A/D, AD, O/D, T) with no
   check-in or no check-out is painted light red; a day the admin adjusted
   after hearing from the person (manually edited roster cell, approved swap,
   sick cover, or an actual recorded differently from the roster such as S or
   AL) is light yellow and never red. Unpublished months paint nothing. The
   tooltip keeps the punch times. Replaces the corner dots of the morning.
+- Fixed in the real app: publishing a month did not refresh the tints until
+  the page was reopened; the Attendance grid now re-reads them whenever the
+  roster changes.
   `GET /attendance/clock/board` now returns `tint` (`missing` / `adjusted`).
 - The A/D sick cover also goes into the colleague's roster cell (as an admin
   edit), so they see it in their Schedule tab; taking the S back restores

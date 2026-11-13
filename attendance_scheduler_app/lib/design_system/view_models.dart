@@ -9,8 +9,6 @@ class DsRosterRowData {
     required this.departures,
     required this.offDays,
     this.id,
-    this.dayNotes = const [],
-    this.dayMarks = const [],
   });
 
   /// Backing user id — needed by cell-edit callbacks (admin F-09); null for
@@ -23,12 +21,6 @@ class DsRosterRowData {
   final int arrivals;
   final int departures;
   final int offDays;
-
-  /// Per day (index 0 = the 1st): the cell's tooltip; null = none.
-  final List<String?> dayNotes;
-
-  /// Per day: the cell's background tint; null = none.
-  final List<DsDayMark?> dayMarks;
 }
 
 class DsFlightRowData {
