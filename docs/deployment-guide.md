@@ -91,6 +91,41 @@ Consequences:
 overrides on purpose. Both prompt for the password without echo when
 `--password` is omitted (`seed_demo_users.py` has no default password).
 
+## Shared server at 160.187.228.64 (2026-11-13)
+The API now also runs on the owner's VPS (Ubuntu 24.04, user `trunggian`,
+reached over Tailscale at `100.114.205.121`), published as
+`http://160.187.228.64/` (desktop clients use `http://160.187.228.64/api/v1`).
+
+- **Code:** `~/attendance-scheduler/backend` (a copy of `backend/`, not a git
+  checkout). Stack: `backend/docker-compose.prod.yml` — PostgreSQL 16 and the
+  API image, both bound to the host only (API on `127.0.0.1:8035`, the
+  database on the compose network). The host already runs another PostgreSQL
+  on `0.0.0.0:5432`; this stack does not use or touch it.
+- **Settings:** `~/attendance-scheduler/backend/.env.prod` (mode 600, never in
+  git; template `backend/.env.prod.example`). `ENVIRONMENT=prod` because the
+  server is on the public internet and the dev admin password is public in
+  this repository: the leave window, the two-month limit for employees and the
+  startup guard are all active, `/docs` is not served.
+- **Admin:** the database was copied from the owner's workstation on
+  2026-11-13 (users, November roster, flights for November–December), then
+  the seed admin got the random `FIRST_ADMIN_PASSWORD` of `.env.prod`. The
+  other accounts kept their passwords.
+- **nginx:** `deploy/nginx-attendance.conf`, installed as the site
+  `attendance-scheduler` (`server_name 160.187.228.64`, so the named sites and
+  the `default` site are unchanged). Plain HTTP: Let's Encrypt does not issue
+  certificates for a bare IP; use a domain name and certbot for HTTPS.
+- **Update the code:** copy `backend/` again (without `.env`, `.venv`,
+  `tests`), then
+  `docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build`
+  in `~/attendance-scheduler/backend` (the image runs `alembic upgrade head`).
+- **Clients:** macOS on a Mac with
+  `flutter build macos --release --dart-define=API_BASE_URL=http://160.187.228.64/api/v1`;
+  Windows and Linux from the manual workflow
+  `.github/workflows/desktop-release.yml`
+  (`gh workflow run desktop-release.yml -f api_base_url=...`). The builds are
+  not code-signed: macOS asks to confirm the first start (right-click → Open),
+  Windows SmartScreen shows "More info → Run anyway".
+
 ## Target production layout
 
 ### Hosting

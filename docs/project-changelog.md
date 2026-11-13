@@ -71,6 +71,16 @@
   when it has none ("còn 2 người nhóm A, cần 1 ca ARR + 2 ca DEP").
   Approving shows the same lines (`services/leave_staffing.py`).
 
+## 2026-11-13 — Deployed to the shared server
+
+- The API runs on the owner's VPS behind nginx at `http://160.187.228.64/`
+  in `ENVIRONMENT=prod` (`backend/docker-compose.prod.yml`,
+  `backend/.env.prod.example`, `deploy/nginx-attendance.conf`). The
+  workstation database was copied there; the seed admin got a new random
+  password. Details in `docs/deployment-guide.md`.
+- New manual workflow `desktop-release.yml` builds the Windows (with the VC++
+  runtime DLLs) and Linux clients with `API_BASE_URL` baked in.
+
 ## 2026-11-13 — Live run in the app, follow-ups
 
 - Generating a month whose next month already has a schedule now lists
