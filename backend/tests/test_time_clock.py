@@ -246,8 +246,8 @@ def test_roster_days_are_tinted_red_when_missed_and_yellow_when_adjusted(
         if cout:
             body["check_out"] = cout
         assert client.put(f"{CLOCK}/staff", headers=admin, json=body).status_code == 200
-    assert client.put(f"{V}/attendance", headers=admin,
-                      json={"user_id": uid, "work_date": "2025-07-05", "code": "S"}).status_code == 200
+    sick = {"user_id": uid, "work_date": "2025-07-05", "code": "S"}
+    assert client.put(f"{V}/attendance", headers=admin, json=sick).status_code == 200
 
     tints = {
         c["work_date"]: c["tint"]

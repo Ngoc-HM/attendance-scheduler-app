@@ -307,14 +307,10 @@ class _CorrectDialogState extends ConsumerState<_CorrectDialog> {
                       '${_day!.month.toString().padLeft(2, '0')}/${_day!.year}',
               onPressed: _pickDay,
             ),
-            const SizedBox(height: DsSpacing.x2),
-            Text(l.text('clockFrankfurtTime'),
-                style: const TextStyle(color: DsColors.textMuted)),
           ] else
             Text(
               '${_day!.day.toString().padLeft(2, '0')}/'
-              '${_day!.month.toString().padLeft(2, '0')}/${_day!.year}'
-              ' · ${l.text('clockFrankfurtTime')}',
+              '${_day!.month.toString().padLeft(2, '0')}/${_day!.year}',
               style: Theme.of(context).textTheme.titleSmall,
             ),
           const SizedBox(height: DsSpacing.x3),
