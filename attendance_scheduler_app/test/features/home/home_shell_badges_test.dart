@@ -115,4 +115,13 @@ void main() {
     expect(counts.calls, 0);
     expect(find.byType(DsNavigationCountPill), findsNothing);
   });
+
+  testWidgets('the user card shows the person\'s code, not the role', (
+    tester,
+  ) async {
+    await _pumpShell(tester, UserRole.f);
+
+    expect(find.text('F1'), findsOneWidget);
+    expect(find.text('F — Flexible'), findsNothing);
+  });
 }

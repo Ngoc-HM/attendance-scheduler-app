@@ -156,9 +156,13 @@ class _HomeShellState extends ConsumerState<HomeShell> {
       destinations: destinations,
       selectedIndex: selected < 0 ? 0 : selected,
       userName: auth.user?.fullName,
-      userRole: auth.user == null
-          ? null
-          : l.roleLabel(auth.user!.role.apiValue),
+      // The person's code (A3, F1, …) under the name; the role label only
+      // when the server has not assigned one.
+      userRole: switch (auth.user) {
+        null => null,
+        final user when user.code.trim().isNotEmpty => user.code.trim(),
+        final user => l.roleLabel(user.role.apiValue),
+      },
       logoutLabel: l.logout,
       languageCode: locale.languageCode,
       onLanguageChanged: ref
