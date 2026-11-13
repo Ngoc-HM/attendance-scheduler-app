@@ -113,3 +113,58 @@ def test_schedule_visibility_window_uses_business_day(
     )
     assert client.get(f"{V}/schedules/2041/3", headers=user).status_code == 404
     assert client.get(f"{V}/schedules/2041/4", headers=user).status_code == 403
+
+
+# --- admin: everyone's month and corrections (2026-11-13) -------------------
+
+def _admin_and_id(client: TestClient, username: str) -> tuple[dict[str, str], int, dict[str, str]]:
+    user = _employee(client, username)
+    uid = client.get(f"{V}/users/me", headers=user).json()["id"]
+    return _login(client, "admin", "admin123"), uid, user
+
+
+def test_admin_fixes_a_forgotten_check_out(client: TestClient) -> None:
+    admin, uid, user = _admin_and_id(client, "clock_fix_out")
+    day = "2026-03-10"
+    res = client.put(f"{CLOCK}/staff", headers=admin,
+                     json={"user_id": uid, "work_date": day, "check_in": "05:10"})
+    assert res.status_code == 200, res.text
+    assert res.json()["check_out_at"] is None
+
+    res = client.put(f"{CLOCK}/staff", headers=admin,
+                     json={"user_id": uid, "work_date": day,
+                           "check_in": "05:10", "check_out": "14:20"})
+    assert res.status_code == 200, res.text
+    body = res.json()
+    # Europe/Berlin in March is UTC+1.
+    assert body["check_in_at"].startswith("2026-03-10T04:10")
+    assert body["check_out_at"].startswith("2026-03-10T13:20")
+
+    rows = client.get(f"{CLOCK}/staff?year=2026&month=3", headers=admin).json()
+    mine = [r for r in rows if r["user_id"] == uid]
+    assert len(mine) == 1 and mine[0]["full_name"] == "clock_fix_out"
+    assert mine[0]["code"]
+    assert (mine[0]["check_in_local"], mine[0]["check_out_local"]) == ("05:10", "14:20")
+
+    # The employee sees the corrected day in their own history.
+    own = client.get(f"{CLOCK}/me?year=2026&month=3", headers=user).json()
+    assert own[0]["check_out_at"].startswith("2026-03-10T13:20")
+
+
+def test_correction_rejects_out_before_in_and_future_days(client: TestClient) -> None:
+    admin, uid, _ = _admin_and_id(client, "clock_fix_bad")
+    res = client.put(f"{CLOCK}/staff", headers=admin,
+                     json={"user_id": uid, "work_date": "2026-03-11",
+                           "check_in": "14:00", "check_out": "06:00"})
+    assert res.status_code == 422
+    res = client.put(f"{CLOCK}/staff", headers=admin,
+                     json={"user_id": uid, "work_date": "2099-01-01", "check_in": "06:00"})
+    assert res.status_code == 422
+
+
+def test_staff_clock_is_admin_only(client: TestClient) -> None:
+    _, uid, user = _admin_and_id(client, "clock_fix_rbac")
+    assert client.get(f"{CLOCK}/staff?year=2026&month=3", headers=user).status_code == 403
+    res = client.put(f"{CLOCK}/staff", headers=user,
+                     json={"user_id": uid, "work_date": "2026-03-12", "check_in": "06:00"})
+    assert res.status_code == 403

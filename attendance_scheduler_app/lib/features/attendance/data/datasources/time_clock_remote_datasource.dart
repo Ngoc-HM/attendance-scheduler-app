@@ -39,6 +39,41 @@ class TimeClockEntry extends Equatable {
   List<Object?> get props => [id, userId, workDate, checkInAt, checkOutAt];
 }
 
+/// An entry in the admin's month list. Times are HH:MM in the business
+/// timezone (Frankfurt), as the server reports them, so an admin abroad
+/// reads and corrects the same clock the staff punched on.
+class StaffClockEntry extends Equatable {
+  const StaffClockEntry({
+    required this.userId,
+    required this.workDate,
+    required this.fullName,
+    required this.code,
+    this.checkIn,
+    this.checkOut,
+  });
+
+  final int userId;
+  final DateTime workDate;
+  final String fullName;
+  final String code;
+  final String? checkIn;
+  final String? checkOut;
+
+  factory StaffClockEntry.fromJson(Map<String, dynamic> json) =>
+      StaffClockEntry(
+        userId: json['user_id'] as int,
+        workDate: DateTime.parse(json['work_date'] as String),
+        fullName: json['full_name'] as String,
+        code: json['code'] as String,
+        checkIn: json['check_in_local'] as String?,
+        checkOut: json['check_out_local'] as String?,
+      );
+
+  @override
+  List<Object?> get props =>
+      [userId, workDate, fullName, code, checkIn, checkOut];
+}
+
 final timeClockRemoteDataSourceProvider = Provider<TimeClockRemoteDataSource>(
   (ref) => TimeClockRemoteDataSource(ref.watch(dioProvider)),
 );
@@ -91,6 +126,43 @@ class TimeClockRemoteDataSource {
           .toList();
     } on DioException catch (e) {
       throw ApiException.fromDio(e, 'clock_month_failed');
+    }
+  }
+
+  /// Admin: everyone's entries of the month.
+  Future<List<StaffClockEntry>> staffMonth(int year, int month) async {
+    try {
+      final response = await _dio.get(
+        ApiEndpoints.clockStaff,
+        queryParameters: {'year': year, 'month': month},
+      );
+      return (response.data as List<dynamic>)
+          .map((e) => StaffClockEntry.fromJson(e as Map<String, dynamic>))
+          .toList();
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e, 'clock_staff_failed');
+    }
+  }
+
+  /// Admin: set a person's punches for a day ("HH:MM", Frankfurt time);
+  /// a null [checkOut] leaves the day open.
+  Future<void> correct({
+    required int userId,
+    required DateTime workDate,
+    required String checkIn,
+    String? checkOut,
+  }) async {
+    try {
+      await _dio.put(ApiEndpoints.clockStaff, data: {
+        'user_id': userId,
+        'work_date': '${workDate.year.toString().padLeft(4, '0')}-'
+            '${workDate.month.toString().padLeft(2, '0')}-'
+            '${workDate.day.toString().padLeft(2, '0')}',
+        'check_in': checkIn,
+        'check_out': ?checkOut,
+      });
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e, 'clock_correct_failed');
     }
   }
 }

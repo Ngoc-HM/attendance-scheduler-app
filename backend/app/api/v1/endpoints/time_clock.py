@@ -8,9 +8,9 @@ from __future__ import annotations
 
 from fastapi import APIRouter, status
 
-from app.api.deps import ActiveUser, DbSession
+from app.api.deps import ActiveUser, AdminUser, DbSession
 from app.api.params import MonthQuery, YearQuery
-from app.schemas.time_clock import TimeClockRead
+from app.schemas.time_clock import TimeClockCorrect, TimeClockRead, TimeClockStaffRead
 from app.services import audit_service, time_clock_service
 
 router = APIRouter()
@@ -42,3 +42,34 @@ def clock_today(db: DbSession, current_user: ActiveUser):
 def clock_month_me(db: DbSession, year: YearQuery, month: MonthQuery, current_user: ActiveUser):
     """Own check-in/out history for the given month."""
     return time_clock_service.list_month_for_user(db, current_user.id, year, month)
+
+
+@router.get("/staff", response_model=list[TimeClockStaffRead])
+def clock_month_staff(db: DbSession, year: YearQuery, month: MonthQuery, _admin: AdminUser):
+    """Admin: everyone's check-in/out of the month (who was in, who forgot to
+    check out)."""
+    return [
+        TimeClockStaffRead(
+            **TimeClockRead.model_validate(entry).model_dump(),
+            full_name=user.full_name,
+            code=user.code,
+            check_in_local=time_clock_service.local_hm(entry.check_in_at),
+            check_out_local=time_clock_service.local_hm(entry.check_out_at),
+        )
+        for entry, user in time_clock_service.list_month_all(db, year, month)
+    ]
+
+
+@router.put("/staff", response_model=TimeClockRead)
+def clock_correct(db: DbSession, payload: TimeClockCorrect, admin: AdminUser):
+    """Admin: set a person's check-in/out for a day (a forgotten check-out,
+    a missed check-in, a wrong time). Audited."""
+    entry = time_clock_service.correct(
+        db, payload.user_id, payload.work_date, payload.check_in, payload.check_out
+    )
+    audit_service.record(
+        db, admin.id, "clock.correct", "TimeClockEntry", entry.id,
+        detail=f"user={payload.user_id} {payload.work_date} "
+        f"{payload.check_in}-{payload.check_out or 'open'}",
+    )
+    return entry

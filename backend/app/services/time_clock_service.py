@@ -9,15 +9,18 @@ so a 00:30 local check-in does not land on yesterday's row.
 
 from __future__ import annotations
 
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, time
+from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.business_time import business_today
+from app.core.config import settings
 from app.core.i18n import t
 from app.models.time_clock import TimeClockEntry
+from app.models.user import User
 
 
 def _today() -> date:
@@ -99,3 +102,65 @@ def list_month_for_user(
         .order_by(TimeClockEntry.work_date)
         .all()
     )
+
+
+# --- admin: everyone's month and corrections --------------------------------
+
+def list_month_all(
+    db: Session, year: int, month: int
+) -> list[tuple[TimeClockEntry, User]]:
+    """Every person's entries of the month with their user, by day then code."""
+    first = date(year, month, 1)
+    last = date(year + 1, 1, 1) if month == 12 else date(year, month + 1, 1)
+    rows = (
+        db.query(TimeClockEntry, User)
+        .join(User, User.id == TimeClockEntry.user_id)
+        .filter(TimeClockEntry.work_date >= first, TimeClockEntry.work_date < last)
+        .order_by(TimeClockEntry.work_date, User.code, User.id)
+        .all()
+    )
+    return [(entry, user) for entry, user in rows]
+
+
+def local_hm(moment: datetime | None) -> str | None:
+    """``moment`` as HH:MM in the business timezone (None stays None)."""
+    if moment is None:
+        return None
+    if moment.tzinfo is None:  # SQLite hands back naive UTC
+        moment = moment.replace(tzinfo=UTC)
+    return moment.astimezone(ZoneInfo(settings.TIMEZONE)).strftime("%H:%M")
+
+
+def _at(day: date, local: time) -> datetime:
+    """``local`` on ``day`` in the business timezone, as a UTC instant."""
+    zone = ZoneInfo(settings.TIMEZONE)
+    return datetime.combine(day, local.replace(tzinfo=None), zone).astimezone(UTC)
+
+
+def correct(
+    db: Session, user_id: int, day: date, check_in: time, check_out: time | None
+) -> TimeClockEntry:
+    """Set one person's punches for a day (creates the day when missing).
+
+    Check-out must come after check-in on the same day; a day in the future
+    cannot be recorded.
+    """
+    if db.get(User, user_id) is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=t("user.not_found"))
+    if day > _today():
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT, detail=t("clock.future_day")
+        )
+    if check_out is not None and check_out <= check_in:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT, detail=t("clock.out_before_in")
+        )
+    entry = _get_entry(db, user_id, day)
+    if entry is None:
+        entry = TimeClockEntry(user_id=user_id, work_date=day)
+        db.add(entry)
+    entry.check_in_at = _at(day, check_in)
+    entry.check_out_at = None if check_out is None else _at(day, check_out)
+    db.commit()
+    db.refresh(entry)
+    return entry

@@ -5,18 +5,34 @@ import '../../../../core/network/api_error_message.dart';
 import '../../../../design_system/design_system.dart';
 import '../../../../i18n/app_localizations.dart';
 import '../../data/datasources/time_clock_remote_datasource.dart';
+import '../../../auth/presentation/providers/auth_provider.dart';
 import '../providers/time_clock_provider.dart';
+import 'staff_clock_page.dart';
 
-/// Check-in / check-out page for all employee roles (owner 2026-07-09).
-/// Timestamps only — the admin attendance code grid is untouched.
-class TimeClockPage extends ConsumerStatefulWidget {
+/// The clock tab: an employee checks in and out; the admin sees and
+/// corrects everyone's punches ([StaffClockPage]).
+class TimeClockPage extends ConsumerWidget {
   const TimeClockPage({super.key});
 
   @override
-  ConsumerState<TimeClockPage> createState() => _TimeClockPageState();
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isAdmin = ref.watch(
+      authControllerProvider.select((a) => a.user?.isAdmin ?? false),
+    );
+    return isAdmin ? const StaffClockPage() : const _OwnClockPage();
+  }
 }
 
-class _TimeClockPageState extends ConsumerState<TimeClockPage> {
+/// Check-in / check-out for all employee roles (owner 2026-07-09).
+/// Timestamps only — the admin attendance code grid is untouched.
+class _OwnClockPage extends ConsumerStatefulWidget {
+  const _OwnClockPage();
+
+  @override
+  ConsumerState<_OwnClockPage> createState() => _OwnClockPageState();
+}
+
+class _OwnClockPageState extends ConsumerState<_OwnClockPage> {
   @override
   void initState() {
     super.initState();

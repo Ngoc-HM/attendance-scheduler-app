@@ -301,6 +301,12 @@ class AppLocalizations {
       'clockHistory': 'This month',
       'clockNoEntries': 'No entries this month yet.',
       'clockActionFailed': 'Action failed.',
+      'staffClockTitle': 'Staff check-in/out',
+      'clockAddDay': 'Add day',
+      'clockPerson': 'Person',
+      'clockMissingOut': 'No check-out',
+      'clockClearOut': 'Clear check-out',
+      'clockSaved': 'Saved.',
       // --- Generate guard (owner 2026-07-17) ---
       'flightsMissingTitle': 'No flight data for this month',
       'flightsMissingBody':
@@ -708,6 +714,12 @@ class AppLocalizations {
       'clockHistory': 'Trong tháng',
       'clockNoEntries': 'Chưa có dữ liệu trong tháng.',
       'clockActionFailed': 'Thao tác thất bại.',
+      'staffClockTitle': 'Giờ vào/ra nhân viên',
+      'clockAddDay': 'Thêm ngày',
+      'clockPerson': 'Nhân viên',
+      'clockMissingOut': 'Chưa check-out',
+      'clockClearOut': 'Bỏ giờ ra',
+      'clockSaved': 'Đã lưu.',
       // --- Generate guard (owner 2026-07-17) ---
       'flightsMissingTitle': 'Tháng này chưa nhập lịch bay',
       'flightsMissingBody':
