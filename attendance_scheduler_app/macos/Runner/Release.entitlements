@@ -2,8 +2,11 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<!-- No sandbox: the app updates itself in place (replaces its own .app
+	     bundle, see lib/core/update/app_updater.dart), which a sandboxed app
+	     cannot do. It is distributed outside the App Store. -->
 	<key>com.apple.security.app-sandbox</key>
-	<true/>
+	<false/>
 	<!-- Allow outbound HTTP to the backend REST API. -->
 	<key>com.apple.security.network.client</key>
 	<true/>

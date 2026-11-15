@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from app.api.v1.endpoints import (
+    app_release,
     attendance,
     auth,
     calculations,
@@ -41,3 +42,4 @@ api_router.include_router(compliance.router, prefix="/compliance", tags=["compli
 api_router.include_router(
     pending_counts.router, prefix="/pending-counts", tags=["pending-counts"]
 )
+api_router.include_router(app_release.router, prefix="/app", tags=["app"])

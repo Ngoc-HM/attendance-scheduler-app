@@ -3,6 +3,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/router/app_router.dart';
+import 'core/update/update_gate.dart';
 import 'design_system/design_system.dart';
 import 'features/auth/presentation/providers/auth_provider.dart';
 import 'i18n/app_localizations.dart';
@@ -35,6 +36,8 @@ class AttendanceSchedulerApp extends ConsumerWidget {
       themeMode: ThemeMode.light,
       locale: locale,
       routerConfig: router,
+      // Offers a newer published build over every screen, login included.
+      builder: (context, child) => UpdateGate(child: child!),
       // English primary, Vietnamese optional (spec §2).
       supportedLocales: AppLocalizations.supportedLocales,
       localizationsDelegates: const [

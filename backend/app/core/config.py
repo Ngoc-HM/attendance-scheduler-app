@@ -111,6 +111,11 @@ class Settings(BaseSettings):
     # day after, the background job generates the next month's DRAFT (skips if
     # a schedule already exists). Manual generate stays available regardless.
     # Capped at 27 so AUTORUN_DAY + 1 exists in every month (February: 28).
+    # --- Desktop app updates (owner 2026-11-15) -------------------------------
+    # Folder holding latest.json and the client packages the apps update from
+    # (see app/api/v1/endpoints/app_release.py). Relative to the working dir.
+    APP_RELEASES_DIR: str = "releases"
+
     AUTORUN_ENABLED: bool = True
     AUTORUN_DAY: int = Field(default=20, ge=1, le=27)
 

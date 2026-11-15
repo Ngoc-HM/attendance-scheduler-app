@@ -164,6 +164,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "clock.already_checked_in": "Already checked in today.",
         "clock.not_checked_in": "You have not checked in today.",
         "clock.future_day": "A day that has not started yet cannot be recorded.",
+        "app.release_not_found": "No app update is published for this platform.",
         "clock.out_before_in": "Check-out must be later than check-in.",
         "schedule.month_out_of_range": "Future months beyond next-next month are not visible.",
         "schedule.sick_not_planned": (
@@ -329,6 +330,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "clock.already_checked_in": "Hôm nay đã check-in rồi.",
         "clock.not_checked_in": "Bạn chưa check-in hôm nay.",
         "clock.future_day": "Không ghi giờ cho ngày chưa tới.",
+        "app.release_not_found": "Chưa có bản cập nhật cho hệ điều hành này.",
         "clock.out_before_in": "Giờ check-out phải sau giờ check-in.",
         "schedule.month_out_of_range": "Chỉ xem được tối đa 2 tháng tương lai.",
         "schedule.sick_not_planned": (
