@@ -69,7 +69,7 @@ MESSAGES: dict[str, dict[str, str]] = {
             "day off within the first {within} day(s)."
         ),
         "schedule.violation.max_consecutive_off": (
-            "{person}: more than 5 days off in a row from {start}; a break this "
+            "{person}: more than 3 days off in a row from {start}; a break this "
             "long must be registered as annual leave."
         ),
         "schedule.violation.role_a_minimum_a_days": (
@@ -239,7 +239,7 @@ MESSAGES: dict[str, dict[str, str]] = {
             "ngày nghỉ trong {within} ngày đầu tháng."
         ),
         "schedule.violation.max_consecutive_off": (
-            "{person}: nghỉ quá 5 ngày liên tiếp từ {start}; nghỉ dài như vậy "
+            "{person}: nghỉ quá 3 ngày liên tiếp từ {start}; nghỉ dài như vậy "
             "phải đăng ký nghỉ phép năm."
         ),
         "schedule.violation.role_a_minimum_a_days": (

@@ -53,7 +53,7 @@ def test_comp_days_shortfall_excess_and_non_a_roles() -> None:
     assert check_comp_days(grid, {1: Role.T}, days, {1: 1}) == []
 
 
-def test_off_chain_flags_six_off_once_and_exempts_annual_leave() -> None:
+def test_off_chain_flags_long_run_once_and_exempts_annual_leave() -> None:
     grid, days = _full_month(1, [A, D, A, D, D, X, X])
     for d in days[7:15]:  # days 8–15 off; with days 6–7 (X, X) the run starts day 6
         grid[(1, d)] = X
@@ -100,20 +100,20 @@ def test_checker_flags_carry_streak_six_then_work() -> None:
 
 
 def test_checker_flags_off_chain_after_annual_leave_start() -> None:
-    """F7: six ordinary X days right after an annual leave are still a long
+    """F7: four ordinary X days right after an annual leave are still a long
     ordinary break — the exemption covers the windows that contain leave, not
     the run behind it, exactly like the engine's window constraint."""
     days = month_days(2026, 9)
     annual = {d for d in days if d.day <= 3}
     grid = {
-        (1, d): AL if d in annual else (X if d.day <= 9 else AttendanceCode.AD)
+        (1, d): AL if d in annual else (X if d.day <= 7 else AttendanceCode.AD)
         for d in days
     }
     warnings = check_off_chain(grid, {1: Role.T}, days, {1: annual})
     assert len(warnings) == 1
     assert str(days[3]) in warnings[0].message
-    # Five X after the leave (4–8) are allowed (ruling R1).
-    grid[(1, days[8])] = AttendanceCode.AD
+    # Three X after the leave (4–6) are allowed.
+    grid[(1, days[6])] = AttendanceCode.AD
     assert check_off_chain(grid, {1: Role.T}, days, {1: annual}) == []
 
 

@@ -21,6 +21,7 @@ from app.scheduler import (
     objective_pair_points_fair,
     objective_premium_off,
     objective_reserve_cover,
+    objective_rest_spacing,
 )
 from app.scheduler.domain import SolverInput
 
@@ -37,7 +38,8 @@ def ordered_terms(
     x: dict[tuple[int, date, AttendanceCode], cp_model.IntVar],
     inp: SolverInput,
 ) -> list[tuple[str, cp_model.LinearExprT]]:
-    stages = objective_balance.ordered_terms(model, x, inp)
+    stages = [("ordinary_rest_spacing", sum(objective_rest_spacing.terms(model, x, inp)))]
+    stages += objective_balance.ordered_terms(model, x, inp)
     # Keep every role group operational before maximizing preferred turns.
     # Otherwise groups without flight demand could all take every weekend.
     cover = objective_group_cover.terms(model, x, inp, 1)

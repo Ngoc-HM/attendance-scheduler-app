@@ -74,8 +74,8 @@ def _max_off_run(grid, user_id, days) -> int:
     return best
 
 
-def test_no_more_than_five_consecutive_off_days() -> None:
-    """Customer rule 2026-06-12: ordinary off-runs never exceed 5 days."""
+def test_no_more_than_three_consecutive_off_days() -> None:
+    """Ordinary off-runs never exceed three days."""
     days = month_days(2026, 7)
     people = [
         PersonInput(1, Role.A), PersonInput(2, Role.A),
@@ -86,11 +86,11 @@ def test_no_more_than_five_consecutive_off_days() -> None:
     assert out.feasible and not out.violations
     grid = {(a.user_id, a.day): a.code for a in out.assignments}
     for p in people:
-        assert _max_off_run(grid, p.user_id, days) <= 5
+        assert _max_off_run(grid, p.user_id, days) <= 3
 
 
 def test_annual_leave_block_exempt_from_off_chain() -> None:
-    """A registered 7-day annual leave is allowed (>5 off) — no violation."""
+    """A registered 7-day annual leave is allowed (>3 off) — no violation."""
     days = month_days(2026, 7)
     leave_days = {date(2026, 7, d): AttendanceCode.AL for d in range(10, 17)}
     people = [PersonInput(1, Role.T), PersonInput(2, Role.A)]

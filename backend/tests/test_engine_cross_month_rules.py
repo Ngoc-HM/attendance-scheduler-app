@@ -104,10 +104,10 @@ def test_each_role_a_person_gets_two_a_days_and_near_equal_a_d() -> None:
 
 
 def test_cd_counts_toward_consecutive_off_limit() -> None:
-    """A solver-placed CD next to five X is a six-day off-run (B7).
+    """A solver-placed CD next to three X is a four-day off-run.
 
     The post-edit recheck already counts CD as OFF; the engine must agree, so
-    five X followed by the owed comp day breaks "no more than 5 off in a row".
+    three X followed by the owed CD breaks the three-day ordinary rest limit.
     """
     days = month_days(2026, 9)
     person = PersonInput(1, Role.A, carry_comp=1)
@@ -125,8 +125,8 @@ def test_cd_counts_toward_consecutive_off_limit() -> None:
         for code in codes_for(person.role)
     }
     constraints.one_status_per_day(model, x, inp)
-    off_run = [date(2026, 9, d) for d in range(7, 12)]
-    comp_day = date(2026, 9, 12)
+    off_run = [date(2026, 9, d) for d in range(7, 10)]
+    comp_day = date(2026, 9, 10)
     for day in days:
         if day in off_run:
             code = AttendanceCode.X
@@ -209,18 +209,18 @@ def test_five_day_monthly_leave_is_rest_no_violation() -> None:
 
 
 def test_off_chain_crosses_month_boundary() -> None:
-    """F8: five off days ending July plus X on 1 August is a six-day off-run.
+    """F8: three off days ending July plus X on 1 August is a four-day off-run.
 
     The engine sees July through ``PersonInput.prev_codes`` (oldest first) and
-    the checker through ``prev_codes``; both flag the run at 27 July. With
+    the checker through ``prev_codes``; both flag the run at 29 July. With
     approved leave in those July days the run is exempt (ruling R1).
     """
     days = month_days(2026, 8)
     X, CD, AD, AL = (
         AttendanceCode.X, AttendanceCode.CD, AttendanceCode.AD, AttendanceCode.AL,
     )
-    # 26 Jul worked, 27–31 Jul off.
-    prev = (AD, X, X, CD, X, X)
+    # 28 Jul worked, 29–31 Jul off.
+    prev = (AD, CD, X, X)
 
     def inp_for(prev_codes):
         return SolverInput(
@@ -238,11 +238,11 @@ def test_off_chain_crosses_month_boundary() -> None:
 
     engine = _fixed_grid_violations(inp_for(prev), grid)
     assert [(v.rule, v.day) for v in engine] == [
-        ("max_consecutive_off", date(2026, 7, 27))
+        ("max_consecutive_off", date(2026, 7, 29))
     ]
     checker = check_off_chain(grid, {1: Role.T}, days, {}, prev_codes={1: prev})
     assert [(v.rule, v.day) for v in checker] == [
-        ("max_consecutive_off", date(2026, 7, 27))
+        ("max_consecutive_off", date(2026, 7, 29))
     ]
 
     # Left alone, the engine now keeps 1 August a working day.

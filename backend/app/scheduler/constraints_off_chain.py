@@ -1,9 +1,8 @@
-"""No more than 5 consecutive OFF days (soft) — customer rule 2026-06-12.
+"""No more than 3 consecutive ordinary OFF days (soft).
 
-A break of MORE than 5 consecutive off days is, by policy, annual leave (it
-must be registered the prior year). So the scheduler keeps ordinary off-runs
-to at most 5 in a row: every window of 6 consecutive days must contain at
-least one working day.
+Ordinary rest normally occurs in pairs; three days may be necessary, but
+four consecutive ordinary rest days violate the rule. Every four-day
+window must contain at least one working day unless it holds approved AL.
 
 Every rest code in the person's domain counts as OFF (``OFF_CODES`` ∩
 ``codes_for(role)``): weekly X, approved leave (pinned as ``X`` in the
@@ -11,10 +10,10 @@ decision layer) AND the comp days (CD) the solver places itself — matching
 the post-edit recheck in ``schedule_violation_checker.check_off_chain``.
 
 A window that holds approved leave is EXEMPT (ruling R1, 2026-11-08): a
-pinned leave day of this month (``inp.approved_off`` — annual or monthly AL),
+pinned AL day of this month (``inp.approved_off`` — annual or monthly AL),
 an approved annual-leave day (``inp.long_leave_off``), or an AL among the
 previous month's codes. So the weekly X days next to a leave are legal, while
-six ordinary off days in a row are still flagged even right after a leave.
+four ordinary off days in a row are still flagged even right after a leave.
 
 The windows reach back into the previous month through
 ``PersonInput.prev_codes`` (oldest first, ending on its last day): those days
@@ -35,7 +34,8 @@ from app.scheduler.domain import SolverInput
 from app.scheduler.role_codes import OFF_CODES, codes_for
 from app.scheduler.slack_registry import SlackRegistry
 
-WINDOW = 6  # a 6-day all-off window is the smallest violation (> 5 off)
+MAX_CONSECUTIVE_OFF = 3
+WINDOW = MAX_CONSECUTIVE_OFF + 1
 
 
 def add(
@@ -49,11 +49,13 @@ def add(
         return
 
     for p in inp.people:
-        # Role F is T-like (owner 2026-07-22): the max-5-consecutive-OFF rule
+        # Role F is T-like (owner 2026-07-22): the max-3-consecutive-OFF rule
         # applies to F exactly as it does to T.
-        leave = set(inp.approved_off.get(p.user_id, {})) | inp.long_leave_off.get(
-            p.user_id, set()
-        )
+        leave = {
+            d
+            for d, code in inp.approved_off.get(p.user_id, {}).items()
+            if code is AttendanceCode.AL
+        } | inp.long_leave_off.get(p.user_id, set())
         off_codes = [c for c in codes_for(p.role) if c in OFF_CODES]
 
         # Only the last WINDOW-1 previous days can share a window with this month.
@@ -83,7 +85,7 @@ def add(
                 slack,
                 rule="max_consecutive_off",
                 message=(
-                    f"User {p.user_id}: more than 5 consecutive OFF days "
+                    f"User {p.user_id}: more than {MAX_CONSECUTIVE_OFF} consecutive OFF days "
                     f"in the window starting {start} — such a break must "
                     f"be registered as annual leave"
                 ),

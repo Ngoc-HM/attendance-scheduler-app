@@ -24,3 +24,13 @@
 ## Acceptance
 
 Monthly 28/29/30/31-day tests; one-rest/three-rest weeks; six consecutive work days detected; boundary 5+1 detected; monthly work/leave/CD accounting; balanced gaps preferred to concentrated gaps; chronological rotation and per-kind independence; six-person fairness; history actual-over-plan and rerun idempotence; infeasible staffing warnings; timeout fallback; same violations after generation and edit; multi-month regression.
+
+## Owner correction: ordinary rest spacing
+
+Ordinary rest must never silently pass a four-day run: maximum three consecutive
+non-working ordinary-rest days, including X/CD and month boundaries. Approved AL
+remains exempt. Prefer two-day rest and use triples only when operational rules
+and monthly entitlements require them. After minimizing rule violations, minimize
+ordinary three-day windows before shift balance and preferred weekday turns, so
+extra weekend awards cannot purchase an unnecessary longer break. Existing
+diagnostic architecture still reports infeasible entitlements/coverage explicitly.

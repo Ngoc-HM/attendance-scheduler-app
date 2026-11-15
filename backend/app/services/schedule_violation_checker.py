@@ -13,7 +13,7 @@ Rules mirrored (engine module in brackets):
 * flight staffing floor for role A                 [constraints_staffing]
 * >= 2 pure A days per role-A person / full month  [constraints_role_a_distribution]
 * owed comp days (CD) granted, none unearned       [constraints_comp_days]
-* no more than 5 consecutive OFF days              [constraints_off_chain]
+* no more than 3 consecutive OFF days              [constraints_off_chain]
 
 Each breach is a ``Violation`` with the engine's rule name, ``key`` and
 ``params`` (no prose for the client): ``schedule_violation_text`` renders it
@@ -26,6 +26,7 @@ from __future__ import annotations
 from datetime import date, timedelta
 
 from app.models.enums import AttendanceCode, Role
+from app.scheduler.constraints_off_chain import MAX_CONSECUTIVE_OFF
 from app.scheduler.constraints_role_a_distribution import (
     MIN_A_DAYS,
     MIN_FULL_MONTH_DAYS,
@@ -38,9 +39,6 @@ DEMAND: dict[int, tuple[int, int]] = {0: (0, 0), 1: (1, 1), 2: (1, 2)}
 
 # Codes that count as a day off for the consecutive-run rules (§5.2).
 OFF_CODES = {AttendanceCode.X, AttendanceCode.CD, AttendanceCode.S, AttendanceCode.AL}
-
-# Longest ordinary off-run allowed; a longer break must be annual leave.
-MAX_CONSECUTIVE_OFF = 5
 
 
 def recheck(
@@ -265,9 +263,9 @@ def check_comp_days(grid, roles, days, carry_comps) -> list[Violation]:
 
 
 def check_off_chain(grid, roles, days, annual_off, prev_codes=None) -> list[Violation]:
-    """Customer rule 2026-06-12 — no more than 5 consecutive OFF days.
+    """No more than 3 consecutive ordinary OFF days.
 
-    Mirrors ``constraints_off_chain``: any 6-day window that is entirely off
+    Mirrors ``constraints_off_chain``: any 4-day window that is entirely off
     warns, unless it holds approved leave — an AL cell, an approved
     annual-leave day, or an AL among the previous month's codes (ruling R1).
     Windows reach back into the previous month through ``prev_codes``
