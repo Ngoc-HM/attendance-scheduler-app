@@ -35,6 +35,10 @@ services:
     # Loopback only: the host's reverse proxy is the public entry point.
     ports:
       - "127.0.0.1:8035:8035"
+    # Desktop app packages the clients update from (scripts/publish_release.sh
+    # writes them on the host); read-only inside the API container.
+    volumes:
+      - ../releases:/app/releases:ro
 
 volumes:
   pgdata:

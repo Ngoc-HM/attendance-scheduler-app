@@ -16,6 +16,11 @@ class AppConfig {
 
   static const String _dartDefine = String.fromEnvironment('API_BASE_URL');
 
+  /// This build's number (`--dart-define=APP_BUILD=…`, set by the release
+  /// builds); the updater compares it with the server's newest. 0 in
+  /// development builds, which never update themselves.
+  static const int appBuild = int.fromEnvironment('APP_BUILD');
+
   static String get apiBaseUrl {
     // `isInitialized` guards the case where `.env` was never loaded (e.g. in
     // widget tests), so this getter never throws.

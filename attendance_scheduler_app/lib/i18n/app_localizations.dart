@@ -314,6 +314,12 @@ class AppLocalizations {
       'clockFilterAll': 'All',
       'clockDay': 'Day',
       'clockWorked': 'Worked',
+      'updateTitle': 'Update available',
+      'updateNow': 'Update',
+      'updateLater': 'Later',
+      'updateMandatory': 'This version must be updated to continue.',
+      'updateDownloading': 'Downloading the update…',
+      'updateFailed': 'The update failed. Try again.',
       'clockTodayIn': 'In today',
       'clockTodayOut': 'Out today',
       'clockTodayWorked': 'Worked today',
@@ -747,6 +753,12 @@ class AppLocalizations {
       'clockFilterAll': 'Tất cả',
       'clockDay': 'Ngày',
       'clockWorked': 'Giờ làm',
+      'updateTitle': 'Có phiên bản mới',
+      'updateNow': 'Cập nhật',
+      'updateLater': 'Để sau',
+      'updateMandatory': 'Cần cập nhật để tiếp tục dùng app.',
+      'updateDownloading': 'Đang tải bản cập nhật…',
+      'updateFailed': 'Không cập nhật được. Thử lại.',
       'clockTodayIn': 'Vào hôm nay',
       'clockTodayOut': 'Ra hôm nay',
       'clockTodayWorked': 'Giờ làm hôm nay',
@@ -924,6 +936,10 @@ class AppLocalizations {
   String get createUser => text('createUser');
   String get createUserFailed => text('createUserFailed');
   String get cancel => text('cancel');
+
+  /// "Build 230 is ready." — the update card without release notes.
+  String updateVersion(int build) =>
+      isVietnamese ? 'Bản $build đã sẵn sàng.' : 'Build $build is ready.';
   String get create => text('create');
   String get refresh => text('refresh');
   String get loadFailed => text('loadFailed');
