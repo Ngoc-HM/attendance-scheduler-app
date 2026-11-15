@@ -107,7 +107,8 @@ def _all_solver_violations() -> list[Violation]:
 SOLVER_TEXTS = {
     ("flight_staffing", "flight_staffing"),
     ("flight_staffing", "flight_staffing_no_role_a"),
-    ("weekly_max_five_working", "weekly_max_five_working"),
+    ("monthly_off_shortfall", "monthly_off_shortfall"),
+    ("monthly_off_excess", "monthly_off_excess"),
     ("max_consecutive_working", "max_consecutive_working"),
     ("max_consecutive_working_carry", "max_consecutive_working_carry"),
     ("max_consecutive_off", "max_consecutive_off"),
@@ -126,7 +127,7 @@ def _all_checker_violations() -> list[Violation]:
     grid: dict[tuple[int, date], AttendanceCode] = {}
     for d in days:
         # 1 (role A): works D every day → consecutive, weekly rest, no pure
-        #   A, owed comp not granted, staffing short of ARR.
+        #   A, owed comp not granted, staffing short of A.
         grid[(1, d)] = D
         # 3 (role T): off every day → off chain, CD excess.
         grid[(3, d)] = X
@@ -152,7 +153,8 @@ def _all_checker_violations() -> list[Violation]:
 CHECKER_TEXTS = {
     ("flight_staffing", "flight_staffing"),
     ("flight_staffing", "flight_staffing_no_role_a"),
-    ("weekly_max_five_working", "weekly_max_five_working"),
+    ("monthly_off_shortfall", "monthly_off_shortfall"),
+    ("monthly_off_excess", "monthly_off_excess"),
     ("max_consecutive_working", "max_consecutive_working"),
     ("max_consecutive_off", "max_consecutive_off"),
     ("role_a_minimum_a_days", "role_a_minimum_a_days"),
@@ -251,7 +253,7 @@ def test_solver_and_checker_read_the_same_for_the_same_rule() -> None:
     for lang in ("en", "vi"):
         assert render(engine, people, lang) == render(checker, people, lang)
     assert render(engine, people, "vi") == (
-        "2026-11-13: thiếu 1 người ca DEP (cần ít nhất 2); "
+        "2026-11-13: thiếu 1 người ca D (cần ít nhất 2); "
         "lịch tự động không xếp ca kép A/D."
     )
 
@@ -369,7 +371,7 @@ def test_generate_and_violations_follow_accept_language(
     assert res.status_code == 200, res.text
     body = res.json()
     generated = staffing_on_short_day(body["violations"])
-    assert any("ca DEP (cần ít nhất 2)" in m for m in generated), generated
+    assert any("ca D (cần ít nhất 2)" in m for m in generated), generated
     assert all(m.startswith(f"{short_day.isoformat()}: thiếu") for m in generated)
     assert not any("shortfall" in v["message"] for v in body["violations"])
     schedule_id = body["schedule"]["id"]
@@ -377,12 +379,12 @@ def test_generate_and_violations_follow_accept_language(
     checked_vi = client.get(f"{V}/schedules/{schedule_id}/violations", headers=vi)
     assert checked_vi.status_code == 200, checked_vi.text
     rechecked = staffing_on_short_day(checked_vi.json())
-    assert any("ca DEP" in m for m in rechecked), rechecked
+    assert any("ca D" in m for m in rechecked), rechecked
     assert all("thiếu" in m for m in rechecked)
 
     checked_en = client.get(f"{V}/schedules/{schedule_id}/violations", headers=en)
     english = staffing_on_short_day(checked_en.json())
-    assert any("DEP" in m for m in english), english
+    assert any("D" in m for m in english), english
     assert all("short on the" in m for m in english)
     assert set(english).isdisjoint(rechecked)
 

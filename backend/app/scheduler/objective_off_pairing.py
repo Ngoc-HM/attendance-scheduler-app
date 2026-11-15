@@ -44,7 +44,7 @@ class BonusPair:
 
     user_id: int
     first: date                       # may be last month's last day
-    var: cp_model.IntVar | cp_model.LinearExpr  # 1 when both days are off
+    var: cp_model.IntVar  # bool: 1 when both days are off
     bonus: int
 
 

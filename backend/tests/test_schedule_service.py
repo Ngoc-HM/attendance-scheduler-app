@@ -17,9 +17,7 @@ YEAR, MONTH = 2027, 3  # a clean month nothing else touches
 
 
 def _admin_headers(client: TestClient) -> dict[str, str]:
-    res = client.post(
-        "/api/v1/auth/login", data={"username": "admin", "password": "admin123"}
-    )
+    res = client.post("/api/v1/auth/login", data={"username": "admin", "password": "admin123"})
     return {"Authorization": f"Bearer {res.json()['access_token']}"}
 
 
@@ -27,17 +25,14 @@ def _make_user(client, admin, username, role) -> dict:
     res = client.post(
         "/api/v1/users",
         headers=admin,
-        json={"username": username, "password": "pass123",
-              "full_name": username, "role": role},
+        json={"username": username, "password": "pass123", "full_name": username, "role": role},
     )
     assert res.status_code in (200, 201), res.text
     return res.json()
 
 
 def _login(client, username) -> dict[str, str]:
-    res = client.post(
-        "/api/v1/auth/login", data={"username": username, "password": "pass123"}
-    )
+    res = client.post("/api/v1/auth/login", data={"username": username, "password": "pass123"})
     return {"Authorization": f"Bearer {res.json()['access_token']}"}
 
 
@@ -63,10 +58,11 @@ def test_generate_override_publish_pipeline(client: TestClient) -> None:
     assert res.status_code == 200, res.text
     body = res.json()
     assert body["feasible"] is True
+    assert body["solver_status"] in ("optimal", "feasible")
+    assert body["phase_diagnostics"]
+    assert all("proven_optimal" in phase for phase in body["phase_diagnostics"])
     schedule = body["schedule"]
-    days_in_month = len(
-        [a for a in schedule["assignments"] if a["user_id"] == fixed[0]["id"]]
-    )
+    days_in_month = len([a for a in schedule["assignments"] if a["user_id"] == fixed[0]["id"]])
     assert days_in_month == 31  # March 2027 — full grid per person
 
     # Draft invisible to non-admin (G4), visible to admin.
@@ -78,7 +74,8 @@ def test_generate_override_publish_pipeline(client: TestClient) -> None:
     # (X) days — always saved, and the re-check warns because that week now has
     # one fewer than the required 2 off days (off-quota drift).
     off_day = next(
-        a["work_date"] for a in schedule["assignments"]
+        a["work_date"]
+        for a in schedule["assignments"]
         if a["user_id"] == fixed[0]["id"] and a["code"] == "X"
     )
     res = client.post(
@@ -89,7 +86,8 @@ def test_generate_override_publish_pipeline(client: TestClient) -> None:
     assert res.status_code == 200, res.text
     over = res.json()
     cell = next(
-        a for a in over["schedule"]["assignments"]
+        a
+        for a in over["schedule"]["assignments"]
         if a["user_id"] == fixed[0]["id"] and a["work_date"] == off_day
     )
     assert cell["code"] == "A/D" and cell["is_manual_override"] is True
@@ -97,7 +95,8 @@ def test_generate_override_publish_pipeline(client: TestClient) -> None:
 
     # A manually edited month is protected: regenerate without force → 409.
     res = client.post(
-        "/api/v1/schedules/generate", headers=admin,
+        "/api/v1/schedules/generate",
+        headers=admin,
         json={"year": YEAR, "month": MONTH},
     )
     assert res.status_code == 409
@@ -107,7 +106,8 @@ def test_generate_override_publish_pipeline(client: TestClient) -> None:
     assert res.status_code == 200 and res.json()["status"] == "published"
     assert client.get(f"/api/v1/schedules/{YEAR}/{MONTH}", headers=user_hdr).status_code == 200
     res = client.post(
-        "/api/v1/schedules/generate", headers=admin,
+        "/api/v1/schedules/generate",
+        headers=admin,
         json={"year": YEAR, "month": MONTH},
     )
     assert res.status_code == 409
@@ -139,7 +139,6 @@ def test_regenerate_with_force_replaces_cells(client: TestClient) -> None:
     assert len(second.json()["schedule"]["assignments"]) == n_first
 
 
-
 def _generate(client, admin, year, month, force=None):
     body = {"year": year, "month": month}
     if force is not None:
@@ -150,11 +149,13 @@ def _generate(client, admin, year, month, force=None):
 def _override_off_day(client, admin, schedule: dict, user_id: int) -> None:
     """Force a working code onto one of ``user_id``'s off (X) days."""
     off_day = next(
-        a["work_date"] for a in schedule["assignments"]
+        a["work_date"]
+        for a in schedule["assignments"]
         if a["user_id"] == user_id and a["code"] == "X"
     )
     res = client.post(
-        f"{V}/schedules/{schedule['id']}/override", headers=admin,
+        f"{V}/schedules/{schedule['id']}/override",
+        headers=admin,
         json={"user_id": user_id, "work_date": off_day, "code": "A/D"},
     )
     assert res.status_code == 200, res.text
@@ -297,15 +298,15 @@ def _db_schedule(
     from app.models.schedule import MonthlySchedule, ShiftAssignment
 
     with SessionLocal() as db:
-        schedule = MonthlySchedule(
-            year=year, month=month, status=ScheduleStatus(status)
-        )
+        schedule = MonthlySchedule(year=year, month=month, status=ScheduleStatus(status))
         db.add(schedule)
         db.flush()
         for (user_id, day), code in cells.items():
             db.add(
                 ShiftAssignment(
-                    schedule_id=schedule.id, user_id=user_id, work_date=day,
+                    schedule_id=schedule.id,
+                    user_id=user_id,
+                    work_date=day,
                     code=AttendanceCode(code),
                 )
             )
@@ -317,11 +318,7 @@ def _month_cells(year: int, month: int, user_ids, code: str = "X"):
     import calendar
 
     last = calendar.monthrange(year, month)[1]
-    return {
-        (uid, date(year, month, d)): code
-        for uid in user_ids
-        for d in range(1, last + 1)
-    }
+    return {(uid, date(year, month, d)): code for uid in user_ids for d in range(1, last + 1)}
 
 
 def test_violations_endpoint_returns_recheck(client: TestClient) -> None:
@@ -334,7 +331,8 @@ def test_violations_endpoint_returns_recheck(client: TestClient) -> None:
     schedule_id = _db_schedule(2051, 5, _month_cells(2051, 5, ids))
 
     res = client.post(
-        f"{V}/schedules/{schedule_id}/override", headers=admin,
+        f"{V}/schedules/{schedule_id}/override",
+        headers=admin,
         json={"user_id": ids[0], "work_date": "2051-05-10", "code": "A"},
     )
     assert res.status_code == 200, res.text
@@ -356,17 +354,13 @@ def test_violations_endpoint_admin_only(client: TestClient) -> None:
     user = _make_user(client, admin, "viol_emp1", "A")
     schedule_id = _db_schedule(2051, 6, _month_cells(2051, 6, [user["id"]]))
 
-    res = client.get(
-        f"{V}/schedules/{schedule_id}/violations", headers=_login(client, "viol_emp1")
-    )
+    res = client.get(f"{V}/schedules/{schedule_id}/violations", headers=_login(client, "viol_emp1"))
     assert res.status_code == 403
     assert res.json()["detail"] == t("auth.admin_required")
     assert client.get(f"{V}/schedules/{schedule_id}/violations").status_code == 401
 
 
-def test_force_regenerate_published_resyncs_seeded_actuals(
-    client: TestClient, monkeypatch
-) -> None:
+def test_force_regenerate_published_resyncs_seeded_actuals(client: TestClient, monkeypatch) -> None:
     """F11 — force-regenerating a published month must not leave actuals
     seeded from the OLD plan behind: seeded rows (``recorded_by`` NULL) follow
     the new plan at once, an admin-recorded actual stays, and the next month's
@@ -396,7 +390,8 @@ def test_force_regenerate_published_resyncs_seeded_actuals(
 
     # An actual the admin recorded by hand.
     put = client.put(
-        f"{V}/attendance", headers=admin,
+        f"{V}/attendance",
+        headers=admin,
         json={"user_id": u, "work_date": f"{yr}-{mo:02d}-10", "code": "B"},
     )
     assert put.status_code == 200, put.text
@@ -420,14 +415,11 @@ def test_force_regenerate_published_resyncs_seeded_actuals(
     regen = _generate(client, admin, yr, mo, force=True)
     assert regen.status_code == 200 and regen.json()["feasible"] is True, regen.text
     plan = {
-        (a["user_id"], a["work_date"]): a["code"]
-        for a in regen.json()["schedule"]["assignments"]
+        (a["user_id"], a["work_date"]): a["code"] for a in regen.json()["schedule"]["assignments"]
     }
     assert all(plan[(u, d.isoformat())] != "O/D" for d in stale_days)
 
-    rows = client.get(
-        f"{V}/attendance", params={"year": yr, "month": mo}, headers=admin
-    ).json()
+    rows = client.get(f"{V}/attendance", params={"year": yr, "month": mo}, headers=admin).json()
     mine = [r for r in rows if r["user_id"] in {x["id"] for x in users}]
     assert mine
     for row in mine:
@@ -477,7 +469,8 @@ def test_force_regenerate_hides_draft_seeded_actuals_from_employee(
     pub = client.post(f"{V}/schedules/{schedule_id}/publish", headers=admin)
     assert pub.status_code == 200, pub.text
     put = client.put(
-        f"{V}/attendance", headers=admin,
+        f"{V}/attendance",
+        headers=admin,
         json={"user_id": me, "work_date": recorded_day, "code": "B"},
     )
     assert put.status_code == 200, put.text
@@ -485,9 +478,7 @@ def test_force_regenerate_hides_draft_seeded_actuals_from_employee(
     employee = _login(client, "draftleak_a1")
 
     def _mine() -> list[dict]:
-        r = client.get(
-            f"{V}/attendance/me", params={"year": yr, "month": mo}, headers=employee
-        )
+        r = client.get(f"{V}/attendance/me", params={"year": yr, "month": mo}, headers=employee)
         assert r.status_code == 200, r.text
         return r.json()
 
@@ -519,26 +510,20 @@ def test_override_creates_missing_cell_for_active_user(client: TestClient) -> No
     seeded actual)."""
     admin = _admin_headers(client)
     old = _make_user(client, admin, "rowadd_a1", "A")
-    schedule_id = _db_schedule(
-        2051, 9, _month_cells(2051, 9, [old["id"]]), status="published"
-    )
+    schedule_id = _db_schedule(2051, 9, _month_cells(2051, 9, [old["id"]]), status="published")
     newcomer = _make_user(client, admin, "rowadd_a2", "A")
 
     res = client.post(
-        f"{V}/schedules/{schedule_id}/override", headers=admin,
+        f"{V}/schedules/{schedule_id}/override",
+        headers=admin,
         json={"user_id": newcomer["id"], "work_date": "2051-09-05", "code": "A"},
     )
     assert res.status_code == 200, res.text
-    cell = next(
-        a for a in res.json()["schedule"]["assignments"]
-        if a["user_id"] == newcomer["id"]
-    )
+    cell = next(a for a in res.json()["schedule"]["assignments"] if a["user_id"] == newcomer["id"])
     assert cell["work_date"] == "2051-09-05"
     assert cell["code"] == "A" and cell["is_manual_override"] is True
 
-    rows = client.get(
-        f"{V}/attendance", params={"year": 2051, "month": 9}, headers=admin
-    ).json()
+    rows = client.get(f"{V}/attendance", params={"year": 2051, "month": 9}, headers=admin).json()
     actual = next(r for r in rows if r["user_id"] == newcomer["id"])
     assert actual["work_date"] == "2051-09-05" and actual["code"] == "A"
     assert actual["recorded_by"] is None
@@ -549,13 +534,12 @@ def test_override_missing_cell_for_disabled_user_404(client: TestClient) -> None
     keep = _make_user(client, admin, "rowdis_a1", "A")
     gone = _make_user(client, admin, "rowdis_a2", "A")
     schedule_id = _db_schedule(2051, 10, _month_cells(2051, 10, [keep["id"]]))
-    res = client.patch(
-        f"{V}/users/{gone['id']}", headers=admin, json={"status": "disabled"}
-    )
+    res = client.patch(f"{V}/users/{gone['id']}", headers=admin, json={"status": "disabled"})
     assert res.status_code == 200, res.text
 
     res = client.post(
-        f"{V}/schedules/{schedule_id}/override", headers=admin,
+        f"{V}/schedules/{schedule_id}/override",
+        headers=admin,
         json={"user_id": gone["id"], "work_date": "2051-10-05", "code": "A"},
     )
     assert res.status_code == 404
@@ -567,7 +551,8 @@ def test_override_date_outside_month_is_catalog_key(client: TestClient) -> None:
     user = _make_user(client, admin, "rowout_a1", "A")
     schedule_id = _db_schedule(2051, 11, _month_cells(2051, 11, [user["id"]]))
     res = client.post(
-        f"{V}/schedules/{schedule_id}/override", headers=admin,
+        f"{V}/schedules/{schedule_id}/override",
+        headers=admin,
         json={"user_id": user["id"], "work_date": "2051-12-01", "code": "A"},
     )
     assert res.status_code == 422
@@ -589,7 +574,8 @@ def test_recheck_flags_disabled_user_ad_cells(client: TestClient) -> None:
     a2 = _make_user(client, admin, "recheckdis_a2", "A")
     duty_day = date(2052, 3, 10)
     res = client.put(
-        f"{V}/flights/days", headers=admin,
+        f"{V}/flights/days",
+        headers=admin,
         json={"day": duty_day.isoformat(), "flight_pairs": 1},
     )
     assert res.status_code in (200, 201), res.text
@@ -604,24 +590,19 @@ def test_recheck_flags_disabled_user_ad_cells(client: TestClient) -> None:
 
     def _short_on_duty_day(items: list[dict]) -> bool:
         return any(
-            v["rule"] == "flight_staffing" and v["day"] == duty_day.isoformat()
-            for v in items
+            v["rule"] == "flight_staffing" and v["day"] == duty_day.isoformat() for v in items
         )
 
     before = _check()
     assert not _short_on_duty_day(before)
     assert not any(v["rule"] == "disabled_user_duty" for v in before)
 
-    res = client.patch(
-        f"{V}/users/{a1['id']}", headers=admin, json={"status": "disabled"}
-    )
+    res = client.patch(f"{V}/users/{a1['id']}", headers=admin, json={"status": "disabled"})
     assert res.status_code == 200, res.text
 
     after = _check()
     flagged = [v for v in after if v["rule"] == "disabled_user_duty"]
-    assert [(v["day"], v["user_id"]) for v in flagged] == [
-        (duty_day.isoformat(), a1["id"])
-    ]
+    assert [(v["day"], v["user_id"]) for v in flagged] == [(duty_day.isoformat(), a1["id"])]
     # The message itself names the day once (text-only callers show it too).
     assert flagged[0]["message"] == t("schedule.violation.disabled_user_duty").format(
         day=duty_day.isoformat(), person=f"{a1['code']} ({a1['full_name']})", code="A/D"
@@ -629,14 +610,13 @@ def test_recheck_flags_disabled_user_ad_cells(client: TestClient) -> None:
     # The disabled user's A/D is no longer cover: the day is now short.
     assert _short_on_duty_day(after)
     staffing = [
-        v["message"] for v in after
+        v["message"]
+        for v in after
         if v["rule"] == "flight_staffing" and v["day"] == duty_day.isoformat()
     ]
     assert staffing and all(m.count(str(duty_day)) == 1 for m in staffing)
     # Per-person rules no longer report the disabled user.
-    assert not any(
-        v["user_id"] == a1["id"] for v in after if v["rule"] != "disabled_user_duty"
-    )
+    assert not any(v["user_id"] == a1["id"] for v in after if v["rule"] != "disabled_user_duty")
 
     # Text-only caller (leave decision): each line is "YYYY-MM: <message>" with
     # the message unchanged — no second day prefix on either kind of line.
@@ -666,12 +646,27 @@ def _seed_actuals(cells: dict[tuple[int, date], str]) -> None:
 
     with SessionLocal() as db:
         for (user_id, day), code in cells.items():
-            db.add(
-                AttendanceRecord(
-                    user_id=user_id, work_date=day, code=AttendanceCode(code)
-                )
-            )
+            db.add(AttendanceRecord(user_id=user_id, work_date=day, code=AttendanceCode(code)))
         db.commit()
+
+
+def test_override_warns_when_it_creates_next_month_work_run(client: TestClient) -> None:
+    admin = _admin_headers(client)
+    uid = _make_user(client, admin, "boundary_override_turns", "A")["id"]
+    previous = _month_cells(2074, 1, [uid])
+    previous[(uid, date(2074, 1, 30))] = "A"
+    sid = _db_schedule(2074, 1, previous)
+    following = _month_cells(2074, 2, [uid])
+    for day in range(1, 5):
+        following[(uid, date(2074, 2, day))] = "D"
+    _db_schedule(2074, 2, following)
+    response = client.post(
+        f"{V}/schedules/{sid}/override",
+        headers=admin,
+        json={"user_id": uid, "work_date": "2074-01-31", "code": "A"},
+    )
+    assert response.status_code == 200, response.text
+    assert any("2074-02:" in line for line in response.json()["next_month_warnings"])
 
 
 def _actual(user_id: int, day: date) -> str | None:
@@ -723,9 +718,7 @@ def test_force_regenerate_then_override_reaches_next_month_boundary(
 
     def _boundary():  # noqa: ANN202
         with SessionLocal() as db:
-            return schedule_history.build_boundary_states(
-                db, [db.get(User, u)], yr, mo + 1
-            )[u]
+            return schedule_history.build_boundary_states(db, [db.get(User, u)], yr, mo + 1)[u]
 
     # Whatever the solver planned, make the seeded actual of the last day a
     # working code, so the edit below has something to move.
@@ -737,7 +730,8 @@ def test_force_regenerate_then_override_reaches_next_month_boundary(
     assert _boundary().prev_codes[-1] is AttendanceCode.A
 
     res = client.post(
-        f"{V}/schedules/{schedule_id}/override", headers=admin,
+        f"{V}/schedules/{schedule_id}/override",
+        headers=admin,
         json={"user_id": u, "work_date": last_day.isoformat(), "code": "X"},
     )
     assert res.status_code == 200, res.text
@@ -756,12 +750,9 @@ def test_force_regenerate_then_override_reaches_next_month_boundary(
     regen = _generate(client, admin, yr, mo, force=True)
     assert regen.status_code == 200 and regen.json()["feasible"] is True, regen.text
     plan = {
-        (a["user_id"], a["work_date"]): a["code"]
-        for a in regen.json()["schedule"]["assignments"]
+        (a["user_id"], a["work_date"]): a["code"] for a in regen.json()["schedule"]["assignments"]
     }
-    rows = client.get(
-        f"{V}/attendance", params={"year": yr, "month": mo}, headers=admin
-    ).json()
+    rows = client.get(f"{V}/attendance", params={"year": yr, "month": mo}, headers=admin).json()
     mine = [r for r in rows if r["user_id"] in ids]
     assert mine
     for row in mine:
@@ -785,15 +776,15 @@ def test_draft_edits_move_seeded_actuals(client: TestClient) -> None:
     _seed_actuals({(uid, leave_day): "AD", (uid, change_day): "AD"})
 
     with SessionLocal() as db:
-        schedule_service.apply_leave_span(
-            db, uid, leave_day, leave_day, AttendanceCode.AL
-        )
+        schedule_service.apply_leave_span(db, uid, leave_day, leave_day, AttendanceCode.AL)
         db.commit()
     assert _actual(uid, leave_day) == "AL"
 
     with SessionLocal() as db:
         req = ShiftChangeRequest(
-            requester_id=uid, work_date=change_day, kind=SwapKind.change_code,
+            requester_id=uid,
+            work_date=change_day,
+            kind=SwapKind.change_code,
             requested_code=AttendanceCode.X,
         )
         schedule_service.apply_shift_change(db, req)
@@ -801,9 +792,7 @@ def test_draft_edits_move_seeded_actuals(client: TestClient) -> None:
     assert _actual(uid, change_day) == "X"
 
 
-def test_disabled_user_past_cells_still_count_as_cover(
-    client: TestClient, monkeypatch
-) -> None:
+def test_disabled_user_past_cells_still_count_as_cover(client: TestClient, monkeypatch) -> None:
     """I2 — a user disabled on the 15th really worked the days before: those
     cells stay normal cover and are not flagged; only cells from business
     today on are flagged and no longer count."""
@@ -811,9 +800,7 @@ def test_disabled_user_past_cells_still_count_as_cover(
 
     from app.core import business_time
 
-    monkeypatch.setattr(
-        business_time, "_utcnow", lambda: datetime(2063, 5, 15, 10, 0, tzinfo=UTC)
-    )
+    monkeypatch.setattr(business_time, "_utcnow", lambda: datetime(2063, 5, 15, 10, 0, tzinfo=UTC))
     admin = _admin_headers(client)
     a1 = _make_user(client, admin, "i2past_a1", "A")
     a2 = _make_user(client, admin, "i2past_a2", "A")
@@ -821,40 +808,30 @@ def test_disabled_user_past_cells_still_count_as_cover(
     cells = _month_cells(2063, 5, [a1["id"], a2["id"]])
     for day in (past_day, today, future_day):
         res = client.put(
-            f"{V}/flights/days", headers=admin,
+            f"{V}/flights/days",
+            headers=admin,
             json={"day": day.isoformat(), "flight_pairs": 1},
         )
         assert res.status_code in (200, 201), res.text
         cells[(a1["id"], day)] = "A/D"  # a1 alone covers the day's pair
     schedule_id = _db_schedule(2063, 5, cells)
-    res = client.patch(
-        f"{V}/users/{a1['id']}", headers=admin, json={"status": "disabled"}
-    )
+    res = client.patch(f"{V}/users/{a1['id']}", headers=admin, json={"status": "disabled"})
     assert res.status_code == 200, res.text
 
     res = client.get(f"{V}/schedules/{schedule_id}/violations", headers=admin)
     assert res.status_code == 200, res.text
     items = res.json()
 
-    flagged = [
-        (v["day"], v["user_id"]) for v in items if v["rule"] == "disabled_user_duty"
-    ]
-    assert flagged == [
-        (today.isoformat(), a1["id"]), (future_day.isoformat(), a1["id"])
-    ]
+    flagged = [(v["day"], v["user_id"]) for v in items if v["rule"] == "disabled_user_duty"]
+    assert flagged == [(today.isoformat(), a1["id"]), (future_day.isoformat(), a1["id"])]
 
     def _short(day: date) -> bool:
-        return any(
-            v["rule"] == "flight_staffing" and v["day"] == day.isoformat()
-            for v in items
-        )
+        return any(v["rule"] == "flight_staffing" and v["day"] == day.isoformat() for v in items)
 
     assert not _short(past_day)
     assert _short(today) and _short(future_day)
     # Per-person rules still never report the disabled user.
-    assert not any(
-        v["user_id"] == a1["id"] for v in items if v["rule"] != "disabled_user_duty"
-    )
+    assert not any(v["user_id"] == a1["id"] for v in items if v["rule"] != "disabled_user_duty")
 
 
 def test_resync_seeded_actuals_query_count_is_flat(client: TestClient) -> None:
@@ -896,9 +873,7 @@ def test_resync_seeded_actuals_query_count_is_flat(client: TestClient) -> None:
     assert two_users <= 2
 
 
-def test_generate_reports_what_it_breaks_in_the_next_month(
-    client: TestClient, monkeypatch
-) -> None:
+def test_generate_reports_what_it_breaks_in_the_next_month(client: TestClient, monkeypatch) -> None:
     """Owner 2026-11-13: regenerating December silently broke January's
     first week (a run across New Year), visible only when January was opened.
     Generating a month now returns the breaches it CREATES in the following

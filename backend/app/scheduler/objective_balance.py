@@ -1,12 +1,9 @@
-"""§5.4 #7 — balance A and D shift counts ACROSS role-A people (soft).
+"""Monthly ordinary A/D fairness for role-A people only.
 
-Scoped to ROLE-A people only (owner decision 2026-06-26 — only the fixed group
-A takes A or D flight duties; M→O/D, T/F→AD are not flight-scheduled).
-
-Per spec §5.4: minimise the spread (max − min) of monthly A totals across
-role-A people, and likewise for D totals. A separate objective minimizes each
-person's own A-versus-D gap as far as flight demand allows. Emergency A/D is
-not part of an automatic solver run.
+``ordered_terms`` minimizes every sorted individual absolute gap, worst first,
+then aggregate balance and cross-person shift totals. The original ``terms``
+and ``individual_terms`` builders remain available for source compatibility.
+Emergency A/D never participates in an automatic solver run.
 """
 
 from __future__ import annotations
@@ -37,10 +34,7 @@ def terms(
         totals: list[cp_model.IntVar] = []
         for p in role_a:
             total = model.new_int_var(0, n_days, f"total_{shift.name}_{p.user_id}")
-            model.add(
-                total
-                == sum(x[(p.user_id, d, shift)] for d in inp.days)
-            )
+            model.add(total == sum(x[(p.user_id, d, shift)] for d in inp.days))
             totals.append(total)
 
         hi = model.new_int_var(0, n_days, f"max_{shift.name}")
@@ -67,15 +61,61 @@ def individual_terms(
     for person in inp.people:
         if person.role is not Role.A:
             continue
-        total_a = sum(
-            x[(person.user_id, day, AttendanceCode.A)]
-            for day in inp.days
-        )
-        total_d = sum(
-            x[(person.user_id, day, AttendanceCode.D)]
-            for day in inp.days
-        )
+        total_a = sum(x[(person.user_id, day, AttendanceCode.A)] for day in inp.days)
+        total_d = sum(x[(person.user_id, day, AttendanceCode.D)] for day in inp.days)
         gap = model.new_int_var(0, n_days, f"individual_ad_gap_{person.user_id}")
         model.add_abs_equality(gap, total_a - total_d)
         penalties.append(weight * gap)
     return penalties
+
+
+def ordered_terms(
+    model: cp_model.CpModel,
+    x: dict[tuple[int, date, AttendanceCode], cp_model.IntVar],
+    inp: SolverInput,
+) -> list[tuple[str, cp_model.LinearExprT]]:
+    """Minimize the sorted individual gaps, worst first, across every rank.
+
+    A comparator network gives exact ordered gaps without exponential weights
+    or a rank cutoff. Each expression is frozen before a lower stage runs.
+    After individual fairness, prefer aggregate A/D equality and then equal
+    shift totals across people. Only ordinary role-A shifts participate.
+    """
+    people = [p for p in inp.people if p.role is Role.A]
+    if not people:
+        return []
+    bound = len(inp.days)
+    gaps = []
+    net_totals = []
+    for person in people:
+        net = sum(
+            x[person.user_id, day, AttendanceCode.A] - x[person.user_id, day, AttendanceCode.D]
+            for day in inp.days
+        )
+        gap = model.new_int_var(0, bound, f"ordered_ad_gap_{person.user_id}")
+        model.add_abs_equality(gap, net)
+        gaps.append(gap)
+        net_totals.append(net)
+
+    # Insertion sorting network (descending): all n ranks remain explicit.
+    ranked: list[cp_model.IntVar] = []
+    for i, gap in enumerate(gaps):
+        carry = gap
+        following = []
+        for j, previous in enumerate(ranked):
+            high = model.new_int_var(0, bound, f"ad_sort_hi_{i}_{j}")
+            low = model.new_int_var(0, bound, f"ad_sort_lo_{i}_{j}")
+            model.add_max_equality(high, [previous, carry])
+            model.add_min_equality(low, [previous, carry])
+            following.append(high)
+            carry = low
+        ranked = following + [carry]
+    stages: list[tuple[str, cp_model.LinearExprT]] = [
+        (f"ad_gap_rank_{i + 1}", gap) for i, gap in enumerate(ranked)
+    ]
+    aggregate = model.new_int_var(0, bound * len(people), "aggregate_ad_gap")
+    model.add_abs_equality(aggregate, sum(net_totals))
+    stages.append(("ad_aggregate_gap", aggregate))
+    if len(people) > 1:
+        stages.append(("ad_shift_spread", sum(terms(model, x, inp, 1))))
+    return stages

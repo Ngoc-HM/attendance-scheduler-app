@@ -91,25 +91,19 @@ def test_zero_time_budget_reports_unknown() -> None:
     assert out.slack_proven_minimal is False
 
 
-def test_phase1_without_plan_falls_back_to_combined_solve(monkeypatch) -> None:
-    """Phase 1 gets no time at all; the combined solve uses what is left."""
+def test_phase1_without_plan_retries_rules_without_combined_fallback(monkeypatch) -> None:
+    """Zero initial share retries only rule slack; preferences cannot buy rules."""
     monkeypatch.setattr(engine_module, "PHASE1_TIME_SHARE", 0.0)
-    calls: list[int] = []
-    combined = SchedulerEngine._combined_solve
-
-    def spy(self, *args, **kwargs):
-        calls.append(1)
-        return combined(self, *args, **kwargs)
-
-    monkeypatch.setattr(SchedulerEngine, "_combined_solve", spy)
     inp = _small_instance()
     out = SchedulerEngine(num_workers=1).solve(inp)
 
-    assert calls == [1]
     assert out.feasible
     assert len(out.assignments) == len(inp.days) * len(inp.people)
-    assert out.status == "feasible"
-    assert out.slack_proven_minimal is False
+    assert out.violations == []
+    assert out.phase_diagnostics[0]["name"] == "rules"
+    assert out.phase_diagnostics[0]["status"] == "unknown"
+    assert out.phase_diagnostics[1]["name"] == "rules"
+    assert out.slack_proven_minimal is True
 
 
 def test_same_input_same_output_with_fixed_workers() -> None:

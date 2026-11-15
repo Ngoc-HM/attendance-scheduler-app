@@ -6,13 +6,10 @@ belong to each person's role domain (see ``role_codes.codes_for``).
 
 Truly HARD (can never break, decision #2):
     #1 exactly one status per (person, day)   — here (per-role domain)
-    #5 approved leave/holidays pinned OFF     — here
+    #5 approved leave pinned OFF     — here
 
 SOFT with penalized slack (violations reported via ``SlackRegistry``):
-    #2 W: at most 5 working days per Mon–Sun week — ``constraints_weekly_rest``
-       (owner 2026-11-12: 2 rest days per calendar week, not necessarily
-       adjacent, weeks across months; replaces the rolling "any 7 days"
-       reading and, before it, the "2 X per block 1–7, 8–14, …" quota)
+    #2 exact monthly X entitlement             — ``constraints_monthly_quota``
     #3 C: max 5 consecutive working (+ §5.5)  — ``constraints_consecutive``
        (one day off resets the run, so a single X is legitimate)
     #4 fixed-group (role A) staffing per fp   — ``constraints_staffing``
@@ -29,10 +26,10 @@ from app.models.enums import AttendanceCode
 from app.scheduler import (
     constraints_comp_days,
     constraints_consecutive,
+    constraints_monthly_quota,
     constraints_off_chain,
     constraints_role_a_distribution,
     constraints_staffing,
-    constraints_weekly_rest,
 )
 from app.scheduler.domain import SolverInput
 from app.scheduler.role_codes import codes_for
@@ -47,7 +44,7 @@ def add_all(
 ) -> None:
     one_status_per_day(model, x, inp)
     respect_approved_off(model, x, inp)
-    constraints_weekly_rest.add(model, x, inp, registry)
+    constraints_monthly_quota.add(model, x, inp, registry)
     constraints_consecutive.add(model, x, inp, registry)
     constraints_off_chain.add(model, x, inp, registry)
     constraints_staffing.add(model, x, inp, registry)

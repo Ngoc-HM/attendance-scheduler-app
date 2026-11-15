@@ -45,18 +45,21 @@ MESSAGES: dict[str, dict[str, str]] = {
         # dates are YYYY-MM-DD like the other catalog messages.
         "schedule.violation.person": "{code} ({name})",
         "schedule.violation.person_unknown": "User #{id}",
-        "schedule.violation.shift_A": "ARR",
-        "schedule.violation.shift_D": "DEP",
+        "schedule.violation.shift_A": "A",
+        "schedule.violation.shift_D": "D",
         "schedule.violation.flight_staffing": (
             "{day}: {amount} short on the {shift} shift (need at least {need}); "
             "automatic scheduling does not assign an A/D double shift."
         ),
         "schedule.violation.flight_staffing_no_role_a": (
             "{day}: no group-A staff to cover the flights (need at least "
-            "{need_a} on ARR and {need_d} on DEP)."
+            "{need_a} on A and {need_d} on D)."
         ),
-        "schedule.violation.weekly_max_five_working": (
-            "{person}: more than 5 working days in the week starting {start}."
+        "schedule.violation.monthly_off_shortfall": (
+            "{person}: {amount} ordinary X day(s) short of this month's entitlement ({target})."
+        ),
+        "schedule.violation.monthly_off_excess": (
+            "{person}: {amount} ordinary X day(s) above this month's entitlement ({target})."
         ),
         "schedule.violation.max_consecutive_working": (
             "{person}: more than 5 working days in a row from {start}."
@@ -70,7 +73,7 @@ MESSAGES: dict[str, dict[str, str]] = {
             "long must be registered as annual leave."
         ),
         "schedule.violation.role_a_minimum_a_days": (
-            "{person}: fewer than {minimum} ARR shifts this month."
+            "{person}: fewer than {minimum} A shifts this month."
         ),
         "schedule.violation.comp_day_shortfall": (
             "{person}: {amount} of the {owed} owed comp day(s) not scheduled "
@@ -137,7 +140,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         # month's roster exists → per short shift; no roster yet → head count.
         "leave.staffing_short_shift": "{day}: {amount} short on the {shift} shift",
         "leave.staffing_headcount": (
-            "{day}: {remaining} group-A staff left, {need_a} ARR + {need_d} DEP needed"
+            "{day}: {remaining} group-A staff left, {need_a} A + {need_d} D needed"
         ),
         "leave.balance_exceeded": "Approving exceeds this person's annual leave quota.",
         # --- Shift changes (decision #8) ---
@@ -211,18 +214,21 @@ MESSAGES: dict[str, dict[str, str]] = {
         # Vi phạm quy tắc xếp lịch (bộ giải + kiểm tra lại).
         "schedule.violation.person": "{code} ({name})",
         "schedule.violation.person_unknown": "Người dùng #{id}",
-        "schedule.violation.shift_A": "ARR",
-        "schedule.violation.shift_D": "DEP",
+        "schedule.violation.shift_A": "A",
+        "schedule.violation.shift_D": "D",
         "schedule.violation.flight_staffing": (
             "{day}: thiếu {amount} người ca {shift} (cần ít nhất {need}); "
             "lịch tự động không xếp ca kép A/D."
         ),
         "schedule.violation.flight_staffing_no_role_a": (
             "{day}: không có nhân sự nhóm A để phủ chuyến bay (cần ít nhất "
-            "{need_a} người ca ARR và {need_d} người ca DEP)."
+            "{need_a} người ca A và {need_d} người ca D)."
         ),
-        "schedule.violation.weekly_max_five_working": (
-            "{person}: làm quá 5 ngày trong tuần bắt đầu {start}."
+        "schedule.violation.monthly_off_shortfall": (
+            "{person}: thiếu {amount} ngày nghỉ X so với định mức tháng ({target})."
+        ),
+        "schedule.violation.monthly_off_excess": (
+            "{person}: thừa {amount} ngày nghỉ X so với định mức tháng ({target})."
         ),
         "schedule.violation.max_consecutive_working": (
             "{person}: làm quá 5 ngày liên tiếp từ {start}."
@@ -236,7 +242,7 @@ MESSAGES: dict[str, dict[str, str]] = {
             "phải đăng ký nghỉ phép năm."
         ),
         "schedule.violation.role_a_minimum_a_days": (
-            "{person}: ít hơn {minimum} ca ARR trong tháng."
+            "{person}: ít hơn {minimum} ca A trong tháng."
         ),
         "schedule.violation.comp_day_shortfall": (
             "{person}: chưa xếp được {amount} trong số {owed} ngày nghỉ bù còn nợ."
@@ -299,7 +305,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "leave.revoke_only_approved": "Chỉ hủy được đơn nghỉ đã duyệt.",
         "leave.staffing_short_shift": "{day}: thiếu {amount} người ca {shift}",
         "leave.staffing_headcount": (
-            "{day}: còn {remaining} người nhóm A, cần {need_a} ca ARR + {need_d} ca DEP"
+            "{day}: còn {remaining} người nhóm A, cần {need_a} ca A + {need_d} ca D"
         ),
         "leave.balance_exceeded": "Duyệt đơn này vượt định mức phép năm của nhân sự.",
         # --- Shift changes (decision #8) ---

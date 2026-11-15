@@ -39,9 +39,7 @@ from app.services.schedule_violation_checker import recheck
 from app.services.schedule_violation_text import render_all
 
 
-def mask_sick_for_viewer(
-    schedule: MonthlyScheduleRead, viewer_id: int
-) -> MonthlyScheduleRead:
+def mask_sick_for_viewer(schedule: MonthlyScheduleRead, viewer_id: int) -> MonthlyScheduleRead:
     """§9.1 — hide other people's sickness from a non-admin viewer.
 
     Any ``S`` cell that does not belong to ``viewer_id`` is returned as ``X``
@@ -91,9 +89,7 @@ def generate(db: Session, year: int, month: int, force: bool = False) -> Schedul
     )
     if existing is not None and not force:
         if existing.status is ScheduleStatus.published:
-            raise HTTPException(
-                status.HTTP_409_CONFLICT, detail=t("schedule.published_locked")
-            )
+            raise HTTPException(status.HTTP_409_CONFLICT, detail=t("schedule.published_locked"))
         # Query, not ``existing.assignments``: loading the collection here would
         # leave stale cells in the session ahead of the delete/re-insert below.
         has_overrides = (
@@ -106,14 +102,18 @@ def generate(db: Session, year: int, month: int, force: bool = False) -> Schedul
             is not None
         )
         if has_overrides:
-            raise HTTPException(
-                status.HTTP_409_CONFLICT, detail=t("schedule.has_overrides")
-            )
+            raise HTTPException(status.HTTP_409_CONFLICT, detail=t("schedule.has_overrides"))
 
     inp = schedule_input_builder.build(db, year, month)
     out = SchedulerEngine().solve(inp)
     if not out.feasible:  # only contradictory pins / timeout (§5.6 #12)
-        return ScheduleResult(feasible=False, violations=_violations(db, out.violations))
+        return ScheduleResult(
+            feasible=False,
+            violations=_violations(db, out.violations),
+            solver_status=out.status,
+            slack_proven_minimal=out.slack_proven_minimal,
+            phase_diagnostics=out.phase_diagnostics,
+        )
     following = _following_schedule(db, year, month)
     before_following = _violation_keys(db, following)
 
@@ -131,9 +131,9 @@ def generate(db: Session, year: int, month: int, force: bool = False) -> Schedul
     # collection's id-based delete proved unreliable on regenerate (DELETE
     # matched 0 rows, then the re-insert collided on uq_assignment_cell).
     # Deleting by schedule_id + expiring the stale collection avoids the race.
-    db.query(ShiftAssignment).filter(
-        ShiftAssignment.schedule_id == existing.id
-    ).delete(synchronize_session=False)
+    db.query(ShiftAssignment).filter(ShiftAssignment.schedule_id == existing.id).delete(
+        synchronize_session=False
+    )
     db.flush()
     db.expire(existing, ["assignments"])
 
@@ -143,9 +143,7 @@ def generate(db: Session, year: int, month: int, force: bool = False) -> Schedul
         # leave as X in the decision layer (§5.3 #5) — write the real AL/CD.
         code = inp.approved_off.get(a.user_id, {}).get(a.day, a.code)
         plan[(a.user_id, a.day)] = code
-        existing.assignments.append(
-            ShiftAssignment(user_id=a.user_id, work_date=a.day, code=code)
-        )
+        existing.assignments.append(ShiftAssignment(user_id=a.user_id, work_date=a.day, code=code))
     if had_schedule:
         _resync_seeded_actuals(db, year, month, plan)
     db.commit()
@@ -155,6 +153,9 @@ def generate(db: Session, year: int, month: int, force: bool = False) -> Schedul
         schedule=MonthlyScheduleRead.model_validate(existing),
         violations=_violations(db, out.violations),
         next_month_warnings=_new_following_warnings(db, following, before_following),
+        solver_status=out.status,
+        slack_proven_minimal=out.slack_proven_minimal,
+        phase_diagnostics=out.phase_diagnostics,
     )
 
 
@@ -173,9 +174,7 @@ def _violation_keys(
 ) -> set[tuple[str, date | None, int | None, str]]:
     if schedule is None:
         return set()
-    return {
-        (v.rule, v.day, v.user_id, v.message) for v in _recheck_violations(db, schedule)
-    }
+    return {(v.rule, v.day, v.user_id, v.message) for v in _recheck_violations(db, schedule)}
 
 
 def _new_following_warnings(
@@ -207,10 +206,7 @@ def manual_override(
     actual is seeded too). A missing cell of a pending/disabled user is 404.
     """
     schedule = _get_by_id(db, schedule_id)
-    if (
-        payload.work_date.year != schedule.year
-        or payload.work_date.month != schedule.month
-    ):
+    if payload.work_date.year != schedule.year or payload.work_date.month != schedule.month:
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=t("schedule.override_date_out_of_month"),
@@ -220,6 +216,8 @@ def manual_override(
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=t("user.not_found"))
     # Planned grid: S is never allowed here (§9.1 — sickness lives in actuals).
     role_code_validation.validate_planned(user.role, payload.code)
+    following = _following_schedule(db, schedule.year, schedule.month)
+    before_following = _violation_keys(db, following)
     cell = next(
         (
             a
@@ -231,9 +229,7 @@ def manual_override(
     created = cell is None
     if cell is None:
         if user.status is not UserStatus.active:
-            raise HTTPException(
-                status.HTTP_404_NOT_FOUND, detail=t("schedule.cell_not_found")
-            )
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail=t("schedule.cell_not_found"))
         cell = ShiftAssignment(user_id=payload.user_id, work_date=payload.work_date)
         schedule.assignments.append(cell)
     cell.code = payload.code
@@ -252,6 +248,7 @@ def manual_override(
         feasible=True,
         schedule=MonthlyScheduleRead.model_validate(schedule),
         violations=_recheck_violations(db, schedule),
+        next_month_warnings=_new_following_warnings(db, following, before_following),
     )
 
 
@@ -295,10 +292,11 @@ def apply_shift_change(db: Session, req: ShiftChangeRequest) -> list[str]:
     if schedule is None:
         raise HTTPException(status.HTTP_409_CONFLICT, detail=t("swap.no_schedule"))
 
+    following = _following_schedule(db, schedule.year, schedule.month)
+    before_following = _violation_keys(db, following)
+
     cells = {
-        (a.user_id, a.work_date): a
-        for a in schedule.assignments
-        if a.work_date == req.work_date
+        (a.user_id, a.work_date): a for a in schedule.assignments if a.work_date == req.work_date
     }
     mine = cells.get((req.requester_id, req.work_date))
     if mine is None:
@@ -320,9 +318,7 @@ def apply_shift_change(db: Session, req: ShiftChangeRequest) -> list[str]:
         # an admin code since the request was filed — those are not re-coded
         # by request (the AL would still count against the quota).
         if mine.code not in role_code_validation.requestable_codes(requester.role):
-            raise HTTPException(
-                status.HTTP_422_UNPROCESSABLE_CONTENT, detail=t("swap.cell_locked")
-            )
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=t("swap.cell_locked"))
         mine.code = req.requested_code
         mine.is_manual_override = True
     else:  # swap_with — exchange the two users' codes for that date
@@ -356,7 +352,9 @@ def apply_shift_change(db: Session, req: ShiftChangeRequest) -> list[str]:
     # status (one transaction under the request's row lock).
     db.flush()
     # Rendered text only (the rule id is not for people to read).
-    return [v.message for v in _recheck_violations(db, schedule)]
+    return [v.message for v in _recheck_violations(db, schedule)] + _new_following_warnings(
+        db, following, before_following
+    )
 
 
 def apply_leave_span(
@@ -386,6 +384,7 @@ def apply_leave_span(
     span = [start + timedelta(days=i) for i in range((end - start).days + 1)]
     days = set(span)
     updated: list[MonthlySchedule] = []
+    following_checks = []
     not_generated: list[str] = []
     for year, month in sorted({(d.year, d.month) for d in span}):
         schedule = (
@@ -406,6 +405,9 @@ def apply_leave_span(
             and (only_if is None or cell.code is only_if)
             and (skip is None or cell.code is not skip)
         ]
+        if changed:
+            following = _following_schedule(db, year, month)
+            following_checks.append((following, _violation_keys(db, following)))
         for cell in changed:
             cell.code = code
             attendance_service.sync_planned_cell(db, user_id, cell.work_date, code)
@@ -420,10 +422,13 @@ def apply_leave_span(
             f"{schedule.year}-{schedule.month:02d}: {v.message}"
             for v in _recheck_violations(db, schedule)
         ]
-    return warnings
+    for following, before in following_checks:
+        warnings.extend(_new_following_warnings(db, following, before))
+    return list(dict.fromkeys(warnings))
 
 
 # --- internals -------------------------------------------------------------
+
 
 def _get_by_id(db: Session, schedule_id: int) -> MonthlySchedule:
     schedule = db.get(MonthlySchedule, schedule_id)
@@ -494,18 +499,15 @@ def _recheck_violations(db: Session, schedule: MonthlySchedule) -> list[Constrai
         for a in sorted(schedule.assignments, key=lambda a: (a.work_date, a.user_id))
         if a.user_id in inactive_ids and a.work_date >= today and a.code.is_working
     ]
-    boundary = schedule_history.build_boundary_states(
-        db, active, schedule.year, schedule.month
-    )
+    boundary = schedule_history.build_boundary_states(db, active, schedule.year, schedule.month)
     warnings = recheck(
         grid=grid,
         roles={u.id: u.role for u in active},
         carry_streaks={uid: state.carry_streak for uid, state in boundary.items()},
         days=days,
         flight_pairs=flight_service.flight_pairs_map(db, days),
-        previous_working={
-            user_id: state.previous_working for user_id, state in boundary.items()
-        },
+        approved_off=leave_service.approved_off_map(db, schedule.year, schedule.month),
+        previous_working={user_id: state.previous_working for user_id, state in boundary.items()},
         carry_comps={uid: state.carry_comp for uid, state in boundary.items()},
         annual_off=leave_service.annual_off_dates(db, schedule.year, schedule.month),
         prev_codes={uid: state.prev_codes for uid, state in boundary.items()},

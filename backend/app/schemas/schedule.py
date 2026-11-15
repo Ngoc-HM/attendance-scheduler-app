@@ -62,3 +62,7 @@ class ScheduleResult(BaseModel):
     # month when that month already has a schedule ("YYYY-MM: message") —
     # weeks and runs cross the month boundary (owner 2026-11-13).
     next_month_warnings: list[str] = []
+    # Present for generated schedules; manual edits do not run the solver.
+    solver_status: str | None = None
+    slack_proven_minimal: bool = False
+    phase_diagnostics: list[dict[str, object]] = Field(default_factory=list)

@@ -252,3 +252,14 @@ tables that exist (DuplicateTable).
 - Whether M/T appear in the A/D balance objective (currently role A only).
 - Real "WR JUN26" Excel layout for the importer.
 - Final `DATA_RETENTION_MONTHS` figure (shipped 36; legal floor 24).
+
+
+## 2026-11-15 monthly scheduling amendment
+
+Owner confirmation supersedes decision #64's weekly work cap, weighted pair
+points, and weekly-rest-debt lookahead. Standard workdays are calendar days minus
+Sat/Sun (February may have 20). Weeks may have one/three days off; work runs stay
+at most five days. Monthly individual A/D gaps are balanced worst-first. Rest
+turns rotate independently by kind and chronological count/last award, across
+months. Approved leave/CD and explicit violation reporting remain. Implementation
+spec: `superpowers/specs/2026-11-15-monthly-shift-fairness.md`.

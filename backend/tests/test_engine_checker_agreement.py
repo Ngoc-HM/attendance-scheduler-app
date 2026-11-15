@@ -29,7 +29,8 @@ from app.services.schedule_violation_checker import recheck
 AL = AttendanceCode.AL
 
 ENGINE_RULES = {
-    "weekly_max_five_working": "weekly",
+    "monthly_off_shortfall": "monthly_shortfall",
+    "monthly_off_excess": "monthly_excess",
     "max_consecutive_working": "consecutive",
     "max_consecutive_working_carry": "consecutive",
     "max_consecutive_off": "off_chain",
@@ -169,6 +170,7 @@ def _checker_warnings(
         previous_working=inp.previous_working,
         carry_comps={p.user_id: p.carry_comp for p in inp.people},
         annual_off=inp.long_leave_off,
+        approved_off=inp.approved_off,
         prev_codes={p.user_id: p.prev_codes for p in inp.people},
     )
 

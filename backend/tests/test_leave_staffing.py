@@ -114,7 +114,7 @@ def _risk(db: Session, req: LeaveRequest) -> list[str]:
 
 
 def test_no_schedule_reports_head_count(db: Session) -> None:
-    """3 role-A people; one other on approved leave → 1 left for 1 ARR + 2 DEP."""
+    """3 role-A people; one other on approved leave → 1 left for 1 A + 2 D."""
     a1, _a2, a3 = (_user(db, c) for c in ("A1", "A2", "A3"))
     _user(db, "T1", Role.T)  # never counted
     _user(db, "A9", active=False)  # disabled: not counted
@@ -124,13 +124,13 @@ def test_no_schedule_reports_head_count(db: Session) -> None:
     req = _leave(db, a1, d1, d3)
 
     assert _risk(db, req) == [
-        "2041-06-10: 1 group-A staff left, 1 ARR + 2 DEP needed",
-        # 06-11: a2 + a3 remain for 1 ARR + 1 DEP → covered; 06-12 no flights
+        "2041-06-10: 1 group-A staff left, 1 A + 2 D needed",
+        # 06-11: a2 + a3 remain for 1 A + 1 D → covered; 06-12 no flights
     ]
 
     set_request_language("vi")
     assert _risk(db, req) == [
-        "2041-06-10: còn 1 người nhóm A, cần 1 ca ARR + 2 ca DEP"
+        "2041-06-10: còn 1 người nhóm A, cần 1 ca A + 2 ca D"
     ]
 
 
@@ -139,7 +139,7 @@ def test_approved_request_counts_the_requester_away_too(db: Session) -> None:
     day = date(2041, 7, 3)
     _flights(db, {day: 1})
     req = _leave(db, a1, day, day, LeaveStatus.approved)
-    assert _risk(db, req) == ["2041-07-03: 1 group-A staff left, 1 ARR + 1 DEP needed"]
+    assert _risk(db, req) == ["2041-07-03: 1 group-A staff left, 1 A + 1 D needed"]
 
 
 # --- month with a schedule: the roster ----------------------------------------
@@ -150,27 +150,27 @@ def test_schedule_reports_short_shifts_only_where_the_leave_matters(db: Session)
     d1, d2, d3, d4 = (date(2041, 8, d) for d in (4, 5, 6, 7))
     _flights(db, {d1: 2, d2: 1, d3: 2, d4: 1})
     _roster(db, 2041, 8, {
-        # d1: requester AL; others give 1 ARR (A/D) + 1 DEP (A/D) → 1 DEP short
+        # d1: requester AL; others give 1 A (A/D) + 1 D (A/D) → 1 D short
         (a1, d1): AL, (a2, d1): AD, (a3, d1): X,
         # d2: requester was X anyway → skipped although nobody else works
         (a1, d2): X, (a2, d2): X, (a3, d2): CD,
         # d3: requester AL; nobody else on duty → both shifts short
         (a1, d3): AL, (a2, d3): X, (a3, d3): X,
-        # d4: requester AL; others cover 1 ARR + 1 DEP → nothing
+        # d4: requester AL; others cover 1 A + 1 D → nothing
         (a1, d4): AL, (a2, d4): A, (a3, d4): D,
     })
     req = _leave(db, a1, d1, d4, LeaveStatus.approved)
 
     assert _risk(db, req) == [
-        "2041-08-04: 1 short on the DEP shift",
-        "2041-08-06: 1 short on the ARR shift",
-        "2041-08-06: 2 short on the DEP shift",
+        "2041-08-04: 1 short on the D shift",
+        "2041-08-06: 1 short on the A shift",
+        "2041-08-06: 2 short on the D shift",
     ]
     set_request_language("vi")
     assert _risk(db, req) == [
-        "2041-08-04: thiếu 1 người ca DEP",
-        "2041-08-06: thiếu 1 người ca ARR",
-        "2041-08-06: thiếu 2 người ca DEP",
+        "2041-08-04: thiếu 1 người ca D",
+        "2041-08-06: thiếu 1 người ca A",
+        "2041-08-06: thiếu 2 người ca D",
     ]
 
 
@@ -181,7 +181,7 @@ def test_pending_request_reports_the_risk_if_approved(db: Session) -> None:
     _flights(db, {d1: 1, d2: 1})
     _roster(db, 2041, 9, {(a1, d1): A, (a2, d1): D, (a1, d2): X, (a2, d2): X})
     req = _leave(db, a1, d1, d2)
-    assert _risk(db, req) == ["2041-09-01: 1 short on the ARR shift"]
+    assert _risk(db, req) == ["2041-09-01: 1 short on the A shift"]
 
 
 def test_span_across_generated_and_missing_month(db: Session) -> None:
@@ -191,9 +191,9 @@ def test_span_across_generated_and_missing_month(db: Session) -> None:
     _roster(db, 2041, 10, {(a1, d1): A})
     req = _leave(db, a1, d1, d2)
     assert _risk(db, req) == [
-        "2041-10-31: 1 short on the ARR shift",
-        "2041-10-31: 1 short on the DEP shift",
-        "2041-11-01: 1 group-A staff left, 1 ARR + 2 DEP needed",
+        "2041-10-31: 1 short on the A shift",
+        "2041-10-31: 1 short on the D shift",
+        "2041-11-01: 1 group-A staff left, 1 A + 2 D needed",
     ]
 
 
@@ -246,8 +246,8 @@ def test_approve_returns_the_row_lines(db: Session) -> None:
     db.commit()
     before = _risk(db, req)
     assert before == [
-        "2042-03-02: 1 short on the ARR shift",
-        "2042-03-03: 2 short on the DEP shift",
+        "2042-03-02: 1 short on the A shift",
+        "2042-03-03: 2 short on the D shift",
     ]
 
     decided, warnings = leave_service.decide(db, req.id, LeaveStatus.approved, admin_id=1)
@@ -264,7 +264,7 @@ def test_approve_without_schedule_returns_the_row_lines(db: Session) -> None:
     req = _leave(db, a1, day, day)
     db.commit()
     _, warnings = leave_service.decide(db, req.id, LeaveStatus.approved, admin_id=1)
-    line = "2042-04-07: 1 group-A staff left, 1 ARR + 2 DEP needed"
+    line = "2042-04-07: 1 group-A staff left, 1 A + 2 D needed"
     assert line in warnings
     assert _risk(db, req) == [line]
 
@@ -288,7 +288,7 @@ def test_admin_lists_carry_the_risk_employee_list_does_not(client: TestClient) -
     uid = res.json()["id"]
     day = date(2047, 5, 14)
     # Hand-made 2047-05 roster with only this person's cell: nobody else is on
-    # ARR/DEP that day, whoever else exists in the shared database.
+    # A/D that day, whoever else exists in the shared database.
     db = SessionLocal()
     try:
         _flights(db, {day: 1})
@@ -306,10 +306,10 @@ def test_admin_lists_carry_the_risk_employee_list_does_not(client: TestClient) -
     assert res.json()["staffing_warnings"] == []
 
     expected_en = [
-        "2047-05-14: 1 short on the ARR shift",
-        "2047-05-14: 1 short on the DEP shift",
+        "2047-05-14: 1 short on the A shift",
+        "2047-05-14: 1 short on the D shift",
     ]
-    expected_vi = ["2047-05-14: thiếu 1 người ca ARR", "2047-05-14: thiếu 1 người ca DEP"]
+    expected_vi = ["2047-05-14: thiếu 1 người ca A", "2047-05-14: thiếu 1 người ca D"]
 
     def row(path: str, headers: dict[str, str], lang: str = "en") -> dict:
         res = client.get(f"{V}{path}", headers={**headers, "Accept-Language": lang})
