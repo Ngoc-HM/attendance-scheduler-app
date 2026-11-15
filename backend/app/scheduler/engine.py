@@ -2,8 +2,8 @@
 
 ``SchedulerEngine.solve`` builds the model (decision variables → hard
 constraints §5.3 → soft objectives §5.4 → slack penalties), runs OR-Tools in
-two phases (slack only, then the soft objectives at that slack) within the
-time limit and returns a ``SolverOutput`` with the solver status.
+ordered stages (rules, individual A/D fairness, rest turns, preferences)
+within one time limit and returns a ``SolverOutput`` with the solver status.
 
 Always-feasible architecture (locked decision #2): staffing and rest rules
 carry penalized slack, so a solution is returned even when rules cannot all
@@ -14,7 +14,7 @@ Role-aware model (owner decision 2026-06-26):
     Role.A (fixed group): {A, D, X, CD}  — full flight rules + comp days.
     Role.T (flexible):    {AD, X, CD}     — full-day duty, no shift split.
     Role.M (admin):       {O/D, X, CD}    — office duty.
-    Role.F (split of T):  {AD, X, CD}     — T-like: the weekly rest and
+    Role.F (split of T):  {AD, X, CD}     — T-like: monthly rest and
                                             max-5-consecutive-working rules
                                             apply (owner 2026-07-22).
 
@@ -25,13 +25,12 @@ it is no longer used as the per-person var domain inside the engine.
 Flight-staffing demand and A-versus-D balance are scoped to role-A people
 only. Emergency A/D is outside the automatic solver domain. Comp days (CD
 granted against carried debt — holiday work earns it for every role, owner D1
-2026-11-06), weekly rest (Mon–Sun, owner 2026-11-12), consecutive-working
+2026-11-06), monthly rest entitlement, consecutive-working
 and off-chain rules apply to ALL roles, using each role's own working-code set.
 """
 
 from __future__ import annotations
 
-import math
 import time
 from datetime import date
 
@@ -41,6 +40,7 @@ from app.core.config import settings
 from app.models.enums import AttendanceCode
 from app.scheduler import constraints, objectives
 from app.scheduler.domain import AssignmentResult, SolverInput, SolverOutput, Violation
+from app.scheduler.optimization import solve_ordered
 from app.scheduler.role_codes import codes_for
 from app.scheduler.slack_registry import SlackRegistry
 
@@ -53,8 +53,8 @@ ASSIGNABLE_CODES: tuple[AttendanceCode, ...] = (
     AttendanceCode.CD,
 )
 
-# Share of ``max_solve_seconds`` for phase 1 (slack only); phase 2 gets the
-# rest, including whatever phase 1 did not use.
+# Initial share of the remaining deadline for rule slack; later stages
+# divide the remainder and preserve every achieved higher-stage value.
 PHASE1_TIME_SHARE = 0.4
 
 
@@ -71,107 +71,42 @@ class SchedulerEngine:
         self.num_workers = num_workers
 
     def solve(self, inp: SolverInput) -> SolverOutput:
-        """Solve in two phases (lexicographic: slack first, then soft terms).
+        """Optimize named priorities under one wall-clock deadline.
 
-        Phase 1 minimises the weighted slack alone — the cheap question "which
-        rules must break?" — with ``PHASE1_TIME_SHARE`` of the time limit.
-        Phase 2 keeps the slack total within phase 1's result (and at or above
-        its proven bound), starts from phase 1's plan as a hint and minimises
-        the soft objectives with the remaining time. One combined objective
-        used to stop at the time limit on a 1-CPU machine with invented slack
-        although a clean plan existed (review C1). If phase 1 finds no plan in
-        its share, the single combined solve runs with the time that is left.
+        Model construction uses the same budget. Achieved higher objectives
+        are frozen before lower preferences, and a later timeout returns the
+        most recent incumbent with its original rule violations.
         """
+        deadline = time.monotonic() + max(0.0, inp.max_solve_seconds)
         model = cp_model.CpModel()
         x = self._build_vars(model, inp)
         registry = SlackRegistry()
-
         constraints.add_all(model, x, inp, registry)
-        soft_terms = objectives.add_all(model, x, inp)
-        slack = sum(registry.penalty_terms())
-
-        started = time.monotonic()
-        model.minimize(slack)
-        phase1 = self._solver(inp.max_solve_seconds * PHASE1_TIME_SHARE)
-        status1 = phase1.solve(model)
-        if status1 == cp_model.UNKNOWN:
-            # Phase 1 ran out of its share without any plan: fall back to the
-            # single combined solve with the time that is left.
-            return self._combined_solve(
-                model, x, registry, slack + sum(soft_terms), inp, started
+        stages: list[tuple[str, cp_model.LinearExprT]] = [
+            ("rules", sum(registry.penalty_terms()))
+        ]
+        result = solve_ordered(
+            model,
+            stages,
+            deadline=deadline,
+            solver_factory=self._solver,
+            first_time_share=PHASE1_TIME_SHARE,
+            remaining_stages_builder=lambda: objectives.ordered_terms(model, x, inp),
+        )
+        if result.solver is None:
+            out = self._no_schedule(
+                cp_model.INFEASIBLE if result.status == "infeasible" else cp_model.UNKNOWN
             )
-        if status1 not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
-            return self._no_schedule(status1)
-
-        slack_found = round(phase1.objective_value)
-        # Proven lower bound on the slack (equals slack_found when OPTIMAL).
-        slack_floor = math.ceil(phase1.best_objective_bound - 1e-6)
-        fallback = SolverOutput(
-            feasible=True,
-            assignments=self._extract(phase1, x),
-            # Slack > 0 → rule could not hold; admin resolves (§5.6).
-            violations=registry.violations(phase1),
-            status="feasible",
-            slack_proven_minimal=slack_found <= slack_floor,
-        )
-
-        # Complete hint: every model variable (decision vars, slack and the
-        # objective helpers) takes its phase-1 value, so phase 2 starts from a
-        # full feasible solution.
-        for i in range(len(model.proto.variables)):
-            var = model.get_int_var_from_proto_index(i)
-            model.add_hint(var, phase1.value(var))
-        model.add(slack <= slack_found)
-        if slack_floor > 0:
-            model.add(slack >= slack_floor)
-        # The slack stays in the objective, but phase 2 can never exceed phase
-        # 1's slack; it is fixed exactly when phase 1 is optimal (bound ==
-        # found), otherwise phase 2 may still lower it towards the bound.
-        model.minimize(slack + sum(soft_terms))
-        phase2 = self._solver(self._remaining(inp, started))
-        status2 = phase2.solve(model)
-        if status2 not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
-            # Out of time before improving on the hint: keep phase 1's plan.
-            return fallback
-
-        both_optimal = status1 == cp_model.OPTIMAL and status2 == cp_model.OPTIMAL
+            out.phase_diagnostics = result.diagnostics
+            return out
         return SolverOutput(
             feasible=True,
-            assignments=self._extract(phase2, x),
-            violations=registry.violations(phase2),
-            status="optimal" if both_optimal else "feasible",
-            slack_proven_minimal=phase2.value(slack) <= slack_floor,
+            assignments=self._extract(result.solver, x),
+            violations=registry.violations(result.solver),
+            status=result.status,
+            slack_proven_minimal=result.first_stage_proven,
+            phase_diagnostics=result.diagnostics,
         )
-
-    def _combined_solve(
-        self,
-        model: cp_model.CpModel,
-        x: dict[tuple[int, date, AttendanceCode], cp_model.IntVar],
-        registry: SlackRegistry,
-        objective: cp_model.LinearExprT,
-        inp: SolverInput,
-        started: float,
-    ) -> SolverOutput:
-        """Old single-objective solve, used only when phase 1 found nothing.
-
-        Makes no proof claim: the slack is not separately minimised here.
-        """
-        model.minimize(objective)
-        solver = self._solver(self._remaining(inp, started))
-        status = solver.solve(model)
-        if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
-            return self._no_schedule(status)
-        return SolverOutput(
-            feasible=True,
-            assignments=self._extract(solver, x),
-            violations=registry.violations(solver),
-            status="feasible",
-            slack_proven_minimal=False,
-        )
-
-    @staticmethod
-    def _remaining(inp: SolverInput, started: float) -> float:
-        return max(inp.max_solve_seconds - (time.monotonic() - started), 0.0)
 
     def _solver(self, max_seconds: float) -> cp_model.CpSolver:
         solver = cp_model.CpSolver()

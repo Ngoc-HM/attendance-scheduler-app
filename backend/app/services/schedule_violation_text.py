@@ -10,7 +10,7 @@ person is named here, by roster code and name.
 
 Formatting: dates are ``YYYY-MM-DD`` (the other catalog messages, e.g. the
 flight-plan and leave warnings, use the same); ``{person}`` is
-``schedule.violation.person``; ``{shift}`` "A"/"D" is the app's ARR/DEP.
+``schedule.violation.person``; ``{shift}`` identifies ordinary shift A or D.
 An unknown rule, or params that do not fill its template, give the generic
 ``schedule.violation.unknown`` — never the engine's English line.
 """

@@ -232,8 +232,9 @@ def test_off_chain_crosses_month_boundary() -> None:
             max_solve_seconds=10,
         )
 
-    # X on 1 Aug, then a clean 5-on / 2-off rhythm.
-    grid = {(1, d): X if (d.day - 1) % 7 in (0, 6) else AD for d in days}
+    # X on 1 Aug, then short work runs; 31 Aug supplies the tenth ordinary
+    # X owed in this month, keeping the test focused on the boundary off-run.
+    grid = {(1, d): X if (d.day - 1) % 7 in (0, 6) or d.day == 31 else AD for d in days}
 
     engine = _fixed_grid_violations(inp_for(prev), grid)
     assert [(v.rule, v.day) for v in engine] == [

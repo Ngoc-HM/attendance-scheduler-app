@@ -44,11 +44,12 @@ def _at_work(grid, d: date) -> int:
     return sum(1 for u in GROUP_A if grid[(u, d)].is_working)
 
 
-def test_three_at_work_on_flight_days_when_the_target_fits() -> None:
-    """Flights on weekdays only (one pair, two on Wednesdays): 32 X fit on
-    the 8 weekend days and a few weekdays, so every flight day — Fridays
-    included, the favourite day off — keeps 3 of the 4 at work, and the
-    two-pair floor (1A + 2D) holds."""
+def test_reserve_yields_to_chronological_turns_without_costing_entitlements() -> None:
+    """Preferred turns precede reserve, while demand and each 8-X quota hold.
+
+    Two people can receive a Friday+Saturday turn together, leaving exactly
+    the required A+D on that Friday instead of a third reserve worker.
+    """
     fp = {
         d: (0 if d.weekday() >= 5 else 2 if d.weekday() == WED else 1)
         for d in FEB_2027
@@ -57,10 +58,11 @@ def test_three_at_work_on_flight_days_when_the_target_fits() -> None:
     assert out.violations == []
     for d, pairs in fp.items():
         if pairs:
-            assert _at_work(grid, d) >= 3, d
+            assert _at_work(grid, d) >= (3 if pairs == 2 else 2), d
         if pairs == 2:
             codes = [grid[(u, d)] for u in GROUP_A]
             assert codes.count(A) >= 1 and codes.count(D) >= 2, d
+    assert any(_at_work(grid, d) == 2 for d in FEB_2027 if d.weekday() == 4)
 
 
 def test_the_target_wins_over_the_reserve_and_nothing_is_reported() -> None:

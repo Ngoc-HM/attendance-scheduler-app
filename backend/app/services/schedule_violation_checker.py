@@ -9,9 +9,7 @@ just broke.
 Rules mirrored (engine module in brackets):
 
 * max 5 consecutive working days, carry included   [constraints_consecutive]
-* max 5 working days per Mon–Sun week, history     [constraints_weekly_rest]
-  (owner 2026-11-12; replaces the rolling 7-day reading and the old
-  "2 X per 7-day block" quota)
+* exact monthly ordinary-X entitlement           [constraints_monthly_quota]
 * flight staffing floor for role A                 [constraints_staffing]
 * >= 2 pure A days per role-A person / full month  [constraints_role_a_distribution]
 * owed comp days (CD) granted, none unearned       [constraints_comp_days]
@@ -32,8 +30,8 @@ from app.scheduler.constraints_role_a_distribution import (
     MIN_A_DAYS,
     MIN_FULL_MONTH_DAYS,
 )
-from app.scheduler.constraints_weekly_rest import MAX_WORKING, weeks
 from app.scheduler.domain import Violation
+from app.scheduler.objective_monthly_off_target import entitlement
 
 # Demand table per flight_pairs (§5.3 #4) — kept in sync with the engine.
 DEMAND: dict[int, tuple[int, int]] = {0: (0, 0), 1: (1, 1), 2: (1, 2)}
@@ -56,6 +54,7 @@ def recheck(
     annual_off: dict[int, set[date]] | None = None,
     prev_codes: dict[int, tuple[AttendanceCode, ...]] | None = None,
     cover_roles: dict[int, Role] | None = None,
+    approved_off: dict[int, dict[date, AttendanceCode]] | None = None,
 ) -> list[Violation]:
     """Run every mirrored rule over the grid; return one Violation per breach.
 
@@ -67,7 +66,7 @@ def recheck(
     """
     warnings: list[Violation] = []
     warnings += check_consecutive(grid, roles, carry_streaks, days)
-    warnings += check_weekly_rest(grid, roles, days, previous_working or {})
+    warnings += check_monthly_quota(grid, roles, days, approved_off)
     warnings += check_staffing(grid, {**(cover_roles or {}), **roles}, days, flight_pairs)
     warnings += check_min_a_days(grid, roles, days)
     warnings += check_comp_days(grid, roles, days, carry_comps or {})
@@ -79,35 +78,46 @@ def _days(days: list[date]) -> list[date]:
     return sorted(set(days))
 
 
-def check_weekly_rest(grid, roles, days, previous_working) -> list[Violation]:
-    """Rule W — at most 5 working days per Mon–Sun week (owner 2026-11-12).
+def check_monthly_quota(grid, roles, days, approved_off=None) -> list[Violation]:
+    """Mirror ordinary-X quota; explicit approved leave also handles pinned CD.
 
-    The week that started last month reads ``previous_working`` (no history =
-    not worked); the week ending next month counts this month's days only.
+    Without approval metadata, AL/S cells provide a backwards-compatible
+    fallback. An ordinary generated CD never reduces the X entitlement.
     """
+    days = _days(days)
     warnings: list[Violation] = []
     for uid in roles:
-        history = previous_working.get(uid, {})
-        for monday, before, inside in weeks(_days(days)):
-            worked = sum(1 for d in before if history.get(d, False)) + sum(
-                1
-                for d in inside
-                if (code := grid.get((uid, d))) is not None and code.is_working
+        # Approval of an existing roster intentionally preserves ordinary X.
+        # Only persisted leave codes consume leave entitlement, even when the
+        # approved request's full span includes an already-resting X cell.
+        pinned = {
+            d: grid[(uid, d)]
+            for d in days
+            if grid.get((uid, d)) in (AttendanceCode.AL, AttendanceCode.S)
+            or (
+                grid.get((uid, d)) is AttendanceCode.CD
+                and d in (approved_off or {}).get(uid, {})
             )
-            if worked > MAX_WORKING:
-                warnings.append(
-                    Violation(
-                        rule="weekly_max_five_working",
-                        message=(
-                            f"User {uid}: more than 5 working days in the week "
-                            f"starting {monday}"
-                        ),
-                        day=monday,
-                        user_id=uid,
-                        params={"start": monday},
-                    )
-                )
+        }
+        expected = entitlement(days, pinned)
+        chosen = sum(grid.get((uid, d)) is AttendanceCode.X for d in days if d not in pinned)
+        if chosen == expected:
+            continue
+        direction = "shortfall" if chosen < expected else "excess"
+        warnings.append(
+            Violation(
+                rule=f"monthly_off_{direction}",
+                user_id=uid,
+                message=f"User {uid}: monthly ordinary X {direction} (target {expected})",
+                params={"target": expected, "amount": abs(chosen - expected)},
+            )
+        )
     return warnings
+
+
+def check_weekly_rest(grid, roles, days, previous_working) -> list[Violation]:
+    """Compatibility entry point: weekly work quotas were removed."""
+    return []
 
 
 def check_consecutive(grid, roles, carry_streaks, days) -> list[Violation]:

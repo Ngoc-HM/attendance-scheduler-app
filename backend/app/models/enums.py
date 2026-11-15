@@ -46,9 +46,9 @@ class AttendanceCode(enum.StrEnum):
     schedule (``ShiftAssignment``) and in the actual record (``AttendanceRecord``).
     """
 
-    A = "A"      # ARR duty — working day
-    D = "D"      # DEP duty — working day
-    A_D = "A/D"  # ARR+DEP in one day — counts as 2 working days, earns 1 comp day
+    A = "A"      # Earlier-starting regular shift — working day
+    D = "D"      # Later-starting regular shift — working day
+    A_D = "A/D"  # Both shifts in one day — counts as 2 working days, earns 1 comp day
     AD = "AD"    # Two shifts, but NO comp day (differs from A/D)
     X = "X"      # OFF day (includes public holidays)
     CD = "CD"    # Compensation day off

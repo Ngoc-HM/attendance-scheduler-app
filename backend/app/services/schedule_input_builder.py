@@ -25,14 +25,10 @@ from app.services import flight_service, holiday_service, leave_service, schedul
 
 def build(db: Session, year: int, month: int) -> SolverInput:
     """Assemble the full ``SolverInput`` for one month."""
-    users = (
-        db.query(User)
-        .filter(User.status == UserStatus.active)
-        .order_by(User.id)
-        .all()
-    )
+    users = db.query(User).filter(User.status == UserStatus.active).order_by(User.id).all()
     boundary = schedule_history.build_boundary_states(db, users, year, month)
     pair_points = schedule_history.carry_pair_points(db, {u.id for u in users}, year, month)
+    turns = schedule_history.rest_turn_history(db, {u.id for u in users}, year, month)
     people = [
         PersonInput(
             user_id=u.id,
@@ -42,13 +38,14 @@ def build(db: Session, year: int, month: int) -> SolverInput:
             carry_premium_off=boundary[u.id].carry_premium_off,
             prev_codes=boundary[u.id].prev_codes,
             carry_pair_points=pair_points[u.id],
+            rest_turns=turns[u.id],
         )
         for u in users
     ]
 
     days = month_days(year, month)
-    # Next month's days up to the Sunday closing this month's last week.
-    next_days = [days[-1] + timedelta(days=n) for n in range(1, 7 - days[-1].weekday())]
+    # Five days cover every work-run window crossing the month boundary.
+    next_days = [days[-1] + timedelta(days=n) for n in range(1, 6)]
     return SolverInput(
         year=year,
         month=month,
@@ -59,8 +56,6 @@ def build(db: Session, year: int, month: int) -> SolverInput:
         holidays=holiday_service.holiday_dates(db, year, month),
         long_leave_off=leave_service.annual_off_dates(db, year, month),
         next_flight_pairs=flight_service.known_flight_pairs(db, next_days),
-        previous_working={
-            u.id: boundary[u.id].previous_working for u in users
-        },
+        previous_working={u.id: boundary[u.id].previous_working for u in users},
         max_solve_seconds=settings.SOLVER_MAX_TIME_SECONDS,
     )

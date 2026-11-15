@@ -13,6 +13,7 @@ from __future__ import annotations
 import calendar
 from dataclasses import dataclass
 from datetime import date, timedelta
+from typing import TYPE_CHECKING
 
 from sqlalchemy import ColumnElement, and_, case, exists, extract, false, func, or_, select, true
 from sqlalchemy.orm import InstrumentedAttribute, Session
@@ -28,6 +29,9 @@ from app.services.carry_over_math import comp_balance_from_counts, pair_points
 # Days read back from the cutoff for the streak, the weekly-rest flags and
 # the off-chain codes. Every rule that crosses the month boundary looks at
 # most six days back, so a longer working run is reported as 6 ("6 or more").
+if TYPE_CHECKING:
+    from app.scheduler.domain import RestTurnHistory
+
 BOUNDARY_DAYS = 6
 
 _WORKING_CODES = [c for c in AttendanceCode if c.is_working]
@@ -122,13 +126,24 @@ def _history_counts(db: Session, user_ids: set[int], cutoff: date) -> dict[int, 
     counts: dict[int, _Counts] = {}
     AR, SA = AttendanceRecord, ShiftAssignment
     _aggregate(
-        db, counts, AR.user_id, AR.work_date, AR.code,
-        AR.user_id.in_(user_ids), AR.work_date <= cutoff,
+        db,
+        counts,
+        AR.user_id,
+        AR.work_date,
+        AR.code,
+        AR.user_id.in_(user_ids),
+        AR.work_date <= cutoff,
     )
     has_actual = exists().where(AR.user_id == SA.user_id, AR.work_date == SA.work_date)
     _aggregate(
-        db, counts, SA.user_id, SA.work_date, SA.code,
-        SA.user_id.in_(user_ids), SA.work_date <= cutoff, ~has_actual,
+        db,
+        counts,
+        SA.user_id,
+        SA.work_date,
+        SA.code,
+        SA.user_id.in_(user_ids),
+        SA.work_date <= cutoff,
+        ~has_actual,
     )
     return counts
 
@@ -171,18 +186,79 @@ def carry_pair_points(
     AR, SA = AttendanceRecord, ShiftAssignment
     has_actual = exists().where(AR.user_id == SA.user_id, AR.work_date == SA.work_date)
     actual = select(AR.user_id, AR.work_date).where(
-        AR.user_id.in_(user_ids), AR.work_date >= first, AR.work_date <= cutoff,
+        AR.user_id.in_(user_ids),
+        AR.work_date >= first,
+        AR.work_date <= cutoff,
         AR.code == AttendanceCode.X,
     )
     planned = select(SA.user_id, SA.work_date).where(
-        SA.user_id.in_(user_ids), SA.work_date >= first, SA.work_date <= cutoff,
-        SA.code == AttendanceCode.X, ~has_actual,
+        SA.user_id.in_(user_ids),
+        SA.work_date >= first,
+        SA.work_date <= cutoff,
+        SA.code == AttendanceCode.X,
+        ~has_actual,
     )
     offs: dict[int, set[date]] = {}
     for stmt in (actual, planned):
         for uid, day in db.execute(stmt):
             offs.setdefault(uid, set()).add(day)
     return {uid: pair_points(offs.get(uid, ())) for uid in user_ids}
+
+
+def rest_turn_history(
+    db: Session, user_ids: set[int], year: int, month: int
+) -> dict[int, dict[int, RestTurnHistory]]:
+    """Genuine X+X turns completed during the preceding twelve months.
+
+    Pair ownership and ``last_date`` use the SECOND day, when the award is
+    completed. Reading one additional left-edge day includes a pair crossing
+    into the window; the target month's first day is excluded, so its boundary
+    pair is counted only by the target solve, then by subsequent history.
+    Actual attendance overrides planned cells, including non-X overrides.
+    Two SELECTs serve every user, with empty histories supplied explicitly.
+    """
+    from app.scheduler.domain import RestTurnHistory
+
+    if not user_ids:
+        return {}
+    first = date(year - 1, month, 1)
+    cutoff = date(year, month, 1) - timedelta(days=1)
+    start = first - timedelta(days=1)
+    AR, SA = AttendanceRecord, ShiftAssignment
+    has_actual = exists().where(AR.user_id == SA.user_id, AR.work_date == SA.work_date)
+    actual = select(AR.user_id, AR.work_date).where(
+        AR.user_id.in_(user_ids),
+        AR.work_date >= start,
+        AR.work_date <= cutoff,
+        AR.code == AttendanceCode.X,
+    )
+    planned = select(SA.user_id, SA.work_date).where(
+        SA.user_id.in_(user_ids),
+        SA.work_date >= start,
+        SA.work_date <= cutoff,
+        SA.code == AttendanceCode.X,
+        ~has_actual,
+    )
+    offs: dict[int, set[date]] = {}
+    for statement in (actual, planned):
+        for uid, day in db.execute(statement):
+            offs.setdefault(uid, set()).add(day)
+    result: dict[int, dict[int, RestTurnHistory]] = {}
+    for uid in user_ids:
+        own = offs.get(uid, set())
+        result[uid] = {}
+        for kind in (4, 5, 6):
+            starts = [
+                d
+                for d in own
+                if d.weekday() == kind
+                and d + timedelta(days=1) in own
+                and first <= d + timedelta(days=1) <= cutoff
+            ]
+            result[uid][kind] = RestTurnHistory(
+                len(starts), max((d + timedelta(days=1) for d in starts), default=None)
+            )
+    return result
 
 
 def build_boundary_states(

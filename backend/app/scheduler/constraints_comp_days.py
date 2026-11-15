@@ -44,15 +44,19 @@ def add(
     days = sorted(inp.days)
     # CD is in every role's domain (role_codes), so the rule covers everyone.
     for p in inp.people:
-        cd_sum = sum(x[(p.user_id, d, AttendanceCode.CD)] for d in days)
+        pinned = inp.approved_off.get(p.user_id, {})
+        pinned_cd = sum(pinned.get(d) is AttendanceCode.CD for d in days)
+        cd_sum = pinned_cd + sum(
+            x[(p.user_id, d, AttendanceCode.CD)] for d in days if d not in pinned
+        )
         owed = p.carry_comp
 
-        if owed <= 0:
+        if owed <= 0 and pinned_cd == 0:
             # No comp debt → never auto-assign CD (CD comes only from debt).
             model.add(cd_sum == 0)
             continue
 
-        under = model.new_int_var(0, owed, f"comp_under_{p.user_id}")
+        under = model.new_int_var(0, max(0, owed), f"comp_under_{p.user_id}")
         over = model.new_int_var(0, len(days), f"comp_over_{p.user_id}")
         model.add(cd_sum + under - over == owed)
 

@@ -30,7 +30,8 @@ from tests.rest_invariants import assert_rest_rules
 X = AttendanceCode.X
 FRI, SAT, SUN = 4, 5, 6
 REST_RULES = {
-    "weekly_max_five_working",
+    "monthly_off_shortfall",
+    "monthly_off_excess",
     "max_consecutive_working",
     "max_consecutive_working_carry",
 }

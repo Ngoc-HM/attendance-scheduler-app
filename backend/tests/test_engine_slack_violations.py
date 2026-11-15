@@ -42,30 +42,20 @@ def test_zero_slack_when_fully_staffed() -> None:
     assert out.feasible and out.violations == []
 
 
-def test_violations_carry_rule_day_and_user_metadata() -> None:
-    # November 2026 starts on a Sunday: Mon 26 – Sat 31 Oct worked (history)
-    # already make 6 working days in the week of 26 Oct, whatever day 1
-    # holds (rule W, owner 2026-11-12).
-    # (A full week of approved leave no longer does: ruling R1 exempts it.)
+def test_carried_run_rests_immediately_without_weekly_violation() -> None:
+    # Historical overwork is not a weekly debt: rest immediately on day one.
     days = month_days(2026, 11)[:7]
     worked = {days[0] - timedelta(days=n): True for n in range(1, 7)}
     out = SchedulerEngine().solve(
         SolverInput(
-            year=2026,
-            month=11,
+            year=2026, month=11,
             people=[PersonInput(1, Role.T, carry_streak=6)],
-            days=days,
-            flight_pairs={d: 0 for d in days},
-            previous_working={1: worked},
-            max_solve_seconds=15.0,
+            days=days, flight_pairs={d: 0 for d in days},
+            previous_working={1: worked}, max_solve_seconds=15.0,
         )
     )
-
-    assert out.feasible and out.violations
-    v = out.violations[0]
-    assert v.rule and v.message
-    assert v.user_id == 1
-    assert v.day is not None
+    assert out.feasible and not out.violations
+    assert not next(a for a in out.assignments if a.day == days[0]).code.is_working
 
 
 def test_full_grid_returned_even_when_rules_break() -> None:
@@ -78,3 +68,5 @@ def test_full_grid_returned_even_when_rules_break() -> None:
     cells = {(a.user_id, a.day) for a in out.assignments}
     assert cells == {(p.user_id, d) for p in people for d in days}
     assert out.violations  # 2 people cannot cover demand of 3
+    staffing = [v for v in out.violations if v.rule == "flight_staffing"]
+    assert staffing and all(v.day is not None and v.message for v in staffing)

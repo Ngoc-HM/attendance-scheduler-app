@@ -78,8 +78,8 @@ class AppLocalizations {
       'publishSchedule': 'Publish schedule',
       'generateSchedule': 'Generate schedule',
       'employees': 'Employees',
-      'arrDuties': 'ARR duties',
-      'depDuties': 'DEP duties',
+      'arrDuties': 'A shifts',
+      'depDuties': 'D shifts',
       'doubleDuties': 'A/D duties',
       'readyForReview': 'Ready for review',
       'scheduleReviewMessage':
@@ -512,8 +512,8 @@ class AppLocalizations {
       'publishSchedule': 'Công bố lịch',
       'generateSchedule': 'Tạo lịch tự động',
       'employees': 'Nhân sự',
-      'arrDuties': 'Ca ARR',
-      'depDuties': 'Ca DEP',
+      'arrDuties': 'Ca A',
+      'depDuties': 'Ca D',
       'doubleDuties': 'Ca A/D',
       'readyForReview': 'Sẵn sàng rà soát',
       'scheduleReviewMessage':

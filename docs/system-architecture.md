@@ -149,3 +149,16 @@ the server's text), other errors → the backend's translated `detail`.
 EU/Frankfurt region; sick `S` is special-category (admin-written into actual attendance only, never in the planned schedule, no
 medical detail, audited); RBAC; fail-loud audit log on admin actions; rule-based engine
 (no AI staff evaluation, §9.6). Final legal sign-off: customer DPO.
+
+
+### Scheduling revision (2026-11-15)
+
+Monthly standard duties equal calendar days minus Saturdays and Sundays. Ordinary
+X entitlement is checked explicitly, preserving approved AL/CD accounting. No
+Mon–Sun or rolling-seven quota applies; max-five consecutive work days spans
+month boundaries. Named CP-SAT stages freeze higher-priority results before
+individual A/D gap ranks, per-kind chronological rest turns, and preferences.
+Effective turn history is derived per kind from actual attendance over planned
+cells; earlier awards in the current month participate in turn priority.
+Generation responses expose phase diagnostics and truthful proof flags.
+See `superpowers/specs/2026-11-15-monthly-shift-fairness.md` for the current policy.
