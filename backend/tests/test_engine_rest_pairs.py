@@ -111,8 +111,10 @@ def f_and_m():
 
 
 def test_days_off_come_in_pairs() -> None:
-    """Acceptance 2: no isolated single X without staffing pressure (one
-    person per role, so no group cover either)."""
+    """Without staffing pressure rest comes in pairs (one person per role, so
+    no group cover either). Owner rule 2026-11-15: three days only when they
+    are required, and a single day may shift the rhythm. November 2026 owes 9
+    X: an odd count, so exactly one single day and no three-day rest."""
     days = month_days(2026, 11)
     people = [PersonInput(1, Role.T), PersonInput(2, Role.F), PersonInput(3, Role.M)]
     out = _solve(people, days)
@@ -124,7 +126,12 @@ def test_days_off_come_in_pairs() -> None:
             d for d in sorted(offs)
             if d - timedelta(days=1) not in offs and d + timedelta(days=1) not in offs
         ]
-        assert lonely == [], (p.user_id, lonely)
+        triples = [
+            d for d in sorted(offs)
+            if d + timedelta(days=1) in offs and d + timedelta(days=2) in offs
+        ]
+        assert len(lonely) == len(offs) % 2, (p.user_id, lonely)
+        assert triples == [], (p.user_id, triples)
 
 
 def test_role_group_is_never_all_off(f_and_m) -> None:
