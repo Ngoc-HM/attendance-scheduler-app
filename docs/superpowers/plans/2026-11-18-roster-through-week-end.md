@@ -45,10 +45,13 @@ Owner rule, confirmed 2026-11-18 ("Đúng, làm đi").
   code is pinned as a working day. The stored cell is never overwritten.
 - Month-counted rules apply per calendar month inside the window:
   - ordinary X entitlement (groups A, T, M): M's days get M's target as
-    today (carried X count); the M+1 days get as many X as they contain
-    Saturdays and Sundays (same formula on that sub-list, same leave
-    adjustment). December then counts its carried days as facts and its
-    own target comes out right.
+    today (carried X count); the M+1 days get NO minimum of ordinary X and
+    at most as many X per person as they contain Saturdays and Sundays
+    (soft, with slack, same leave adjustment, mirrored in the re-check).
+    December then counts its carried days as facts and makes up the rest
+    over its own remaining days. (Corrected 2026-11-18: an exact count on
+    the sub-list forced every tail of one to five days below the flights'
+    cover with four group-A people.)
   - comp days owed (CD): granted inside M only; no CD on the M+1 days.
   - at least two pure A days (group A): counted over M.
 - Rules that run along the calendar need no change, they just see more

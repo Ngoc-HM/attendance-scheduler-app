@@ -347,8 +347,8 @@ def test_generate_and_violations_follow_accept_language(
 
     real_build = schedule_input_builder.build
 
-    def only_this_user(db, y, m):
-        inp = real_build(db, y, m)
+    def only_this_user(db, y, m, **kwargs):
+        inp = real_build(db, y, m, **kwargs)
         return dataclasses.replace(
             inp,
             people=[p for p in inp.people if p.user_id == user["id"]],

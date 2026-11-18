@@ -49,7 +49,11 @@ class SolverInput:
     year: int
     month: int
     people: list[PersonInput]
-    days: list[date]                       # every day of the month (§5.1)
+    # The generation window (§5.1): every day of the month, then the next
+    # month's days up to the Sunday ending its last week (carry days, owner
+    # 2026-11-18). The calendar month of the first day is the window's OWN
+    # month; month-counted rules count over it (``carried.own_days``).
+    days: list[date]
     flight_pairs: dict[date, int]          # flightPairs[d] ∈ {0,1,2} (§5.3 #4)
     # Pre-pinned off cells: approved leave (AL/CD) (§5.3 #5). Holidays are NOT
     # pinned off — they are normal working days (decision #5).
@@ -71,6 +75,12 @@ class SolverInput:
     # group F's turns continue through a week that started last month
     # (``role_f.rotation_duty``).
     prev_flight_pairs: dict[date, int] = field(default_factory=dict)
+    # Cells already decided: the own month's carried cells, planned by the
+    # previous month's run (owner 2026-11-18). Never re-planned: a code of
+    # the person's domain is pinned; a working code outside it pins a
+    # working day counted the way the re-check counts that code. A leave
+    # code (AL, S) belongs in ``approved_off`` instead (``carried.split``).
+    fixed: dict[int, dict[date, AttendanceCode]] = field(default_factory=dict)
     max_solve_seconds: float = 30.0
 
 

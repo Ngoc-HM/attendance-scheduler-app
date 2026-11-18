@@ -237,8 +237,8 @@ def test_autorun_lost_race_logs_info_not_error(
 
     real_build = schedule_input_builder.build
 
-    def build_then_lose_race(db, year, month):  # noqa: ANN001, ANN202
-        inp = real_build(db, year, month)
+    def build_then_lose_race(db, year, month, **kwargs):  # noqa: ANN001, ANN003, ANN202
+        inp = real_build(db, year, month, **kwargs)
         other = SessionLocal()
         try:
             other.add(MonthlySchedule(year=year, month=month))

@@ -231,15 +231,17 @@ class ScheduleController extends StateNotifier<ScheduleState> {
   }
 
   /// Admin cell edit (F-09). Returns the recheck warnings (empty = clean);
-  /// null when the call failed (error is set on the state) or the loaded
-  /// schedule is not [workDate]'s month. A response that arrives after the
-  /// admin moved to another month is not written into that month's state.
+  /// null when the call failed (error is set on the state) or [workDate] is
+  /// not a row of the loaded month (its own days and the carried days after
+  /// them — the backend saves a carried day in the next month's schedule).
+  /// A response that arrives after the admin moved to another month is not
+  /// written into that month's state.
   Future<List<String>?> overrideCell({
     required int userId,
     required DateTime workDate,
     required String code,
   }) async {
-    if (!state.holds(workDate.year, workDate.month)) return null;
+    if (!(state.schedule?.shows(workDate) ?? false)) return null;
     final scheduleId = state.schedule!.id;
     state = state.copyWith(isMutating: true, clearError: true);
     try {

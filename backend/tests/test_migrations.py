@@ -225,3 +225,59 @@ def test_0014_seeds_the_shift_frames_and_downgrades(
         assert not inspect(engine).has_table("shift_times")
     finally:
         engine.dispose()
+
+
+def test_0015_marks_existing_cells_not_carried_and_downgrades(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """0015: ``shift_assignments.carried`` (roster through the week's end,
+    owner 2026-11-18) is false for every existing cell; downgrading drops it."""
+    url = f"sqlite:///{tmp_path / 'carried.db'}"
+    cfg = _point_alembic_at(monkeypatch, url)
+    command.upgrade(cfg, "0014")
+
+    engine = create_engine(url)
+    try:
+        with Session(engine) as db:
+            db.add(User(
+                id=1, username="u1", code="A1", full_name="U1", hashed_password="x",
+                role=Role.A, status=UserStatus.active,
+            ))
+            db.commit()
+        with engine.begin() as conn:
+            stamp = "'2026-01-01 00:00:00'"
+            conn.execute(text(
+                "INSERT INTO monthly_schedules (id, year, month, status, created_at, "
+                f"updated_at) VALUES (1, 2026, 11, 'draft', {stamp}, {stamp})"
+            ))
+            conn.execute(text(
+                "INSERT INTO shift_assignments (id, schedule_id, user_id, work_date, code, "
+                "is_manual_override, created_at, updated_at) VALUES "
+                f"(1, 1, 1, '2026-11-02', 'A', 0, {stamp}, {stamp})"
+            ))
+    finally:
+        engine.dispose()
+
+    command.upgrade(cfg, "0015")
+    engine = create_engine(url)
+    try:
+        with engine.begin() as conn:
+            assert conn.execute(text("SELECT carried FROM shift_assignments")).scalar() == 0
+            conn.execute(text(
+                "INSERT INTO shift_assignments (id, schedule_id, user_id, work_date, code, "
+                "is_manual_override, created_at, updated_at) VALUES "
+                "(2, 1, 1, '2026-11-03', 'X', 0, '2026-01-01', '2026-01-01')"
+            ))
+            assert conn.execute(text(
+                "SELECT carried FROM shift_assignments WHERE id = 2"
+            )).scalar() == 0
+    finally:
+        engine.dispose()
+
+    command.downgrade(cfg, "0014")
+    engine = create_engine(url)
+    try:
+        columns = {c["name"] for c in inspect(engine).get_columns("shift_assignments")}
+        assert "carried" not in columns and "is_manual_override" in columns
+    finally:
+        engine.dispose()

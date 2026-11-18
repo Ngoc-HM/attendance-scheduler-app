@@ -61,6 +61,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "schedule.violation.monthly_off_excess": (
             "{person}: {amount} ordinary X day(s) above this month's entitlement ({target})."
         ),
+        "schedule.violation.monthly_off_excess_carry": (
+            "{person}: {amount} ordinary X day(s) above the {target} allowed on the "
+            "next month's days from {day}."
+        ),
         "schedule.violation.role_f_staffing": (
             "{day}: {amount} short in group F (need {need})."
         ),
@@ -252,6 +256,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         ),
         "schedule.violation.monthly_off_excess": (
             "{person}: thừa {amount} ngày nghỉ X so với định mức tháng ({target})."
+        ),
+        "schedule.violation.monthly_off_excess_carry": (
+            "{person}: thừa {amount} ngày nghỉ X so với mức tối đa {target} trên các "
+            "ngày của tháng sau từ {day}."
         ),
         "schedule.violation.role_f_staffing": (
             "{day}: thiếu {amount} người nhóm F (cần {need})."

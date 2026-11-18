@@ -18,6 +18,9 @@ Per person (every role) with ``carry_comp = c``:
 
 ``under`` = owed comp days the schedule could not grant (the meaningful
 shortfall); ``over`` guards against the solver handing out unearned CD rest.
+
+The sums run over the window's OWN month: no CD is granted on the next
+month's carry days (owner 2026-11-18), which belong to that month's count.
 """
 
 from __future__ import annotations
@@ -27,6 +30,7 @@ from datetime import date
 from ortools.sat.python import cp_model
 
 from app.models.enums import AttendanceCode
+from app.scheduler.carried import ahead_days, own_days
 from app.scheduler.domain import SolverInput
 from app.scheduler.slack_registry import SlackRegistry
 
@@ -41,10 +45,14 @@ def add(
     inp: SolverInput,
     registry: SlackRegistry,
 ) -> None:
-    days = sorted(inp.days)
+    days = own_days(inp)
+    ahead = ahead_days(inp)
     # CD is in every role's domain (role_codes), so the rule covers everyone.
     for p in inp.people:
         pinned = inp.approved_off.get(p.user_id, {})
+        for d in ahead:
+            if d not in pinned:
+                model.add(x[(p.user_id, d, AttendanceCode.CD)] == 0)
         pinned_cd = sum(pinned.get(d) is AttendanceCode.CD for d in days)
         cd_sum = pinned_cd + sum(
             x[(p.user_id, d, AttendanceCode.CD)] for d in days if d not in pinned

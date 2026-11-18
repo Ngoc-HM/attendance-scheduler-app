@@ -18,6 +18,9 @@ The shortfall of a shift is bounded by its demand, not by the role-A head
 count: with the only role-A person on leave on a 2-pair day the D shortfall is
 2. With no role-A people at all, every flight day is one fixed shortfall,
 reported once per day like ``schedule_violation_checker.check_staffing``.
+
+A carried cell with a code outside group A's domain counts as the re-check
+counts it (``carried.cover``: A/D covers one A and one D, others nothing).
 """
 
 from __future__ import annotations
@@ -27,6 +30,7 @@ from datetime import date
 from ortools.sat.python import cp_model
 
 from app.models.enums import AttendanceCode, Role
+from app.scheduler.carried import cover, foreign_work
 from app.scheduler.domain import SolverInput
 from app.scheduler.slack_registry import SlackRegistry
 
@@ -42,6 +46,7 @@ def add(
 ) -> None:
     # Only role-A people have A / D vars.
     role_a = [p for p in inp.people if p.role is Role.A]
+    foreign = foreign_work(inp)
 
     for d in sorted(inp.days):
         pairs = inp.flight_pairs.get(d, 0)
@@ -65,8 +70,14 @@ def add(
             continue
 
         # Count A and D across role-A people only.
-        sum_a = sum(x[(p.user_id, d, AttendanceCode.A)] for p in role_a)
-        sum_d = sum(x[(p.user_id, d, AttendanceCode.D)] for p in role_a)
+        planned = [p for p in role_a if (p.user_id, d) not in foreign]
+        held = [cover(foreign[(p.user_id, d)]) for p in role_a if (p.user_id, d) in foreign]
+        sum_a = sum(x[(p.user_id, d, AttendanceCode.A)] for p in planned) + sum(
+            a for a, _ in held
+        )
+        sum_d = sum(x[(p.user_id, d, AttendanceCode.D)] for p in planned) + sum(
+            dd for _, dd in held
+        )
 
         for shift, total, demand in (("A", sum_a, demand_a), ("D", sum_d, demand_d)):
             label = f"staff_{shift}_{d.isoformat()}"

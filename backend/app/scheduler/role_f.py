@@ -32,6 +32,7 @@ from datetime import date, timedelta
 from ortools.sat.python import cp_model
 
 from app.models.enums import AttendanceCode, Role
+from app.scheduler.carried import foreign_work
 from app.scheduler.domain import SolverInput
 from app.scheduler.slack_registry import SLACK_WEIGHT, SlackRegistry
 
@@ -160,12 +161,17 @@ def add(
     """Duty floor per day and the two-rest-days week, both with slack."""
     members = _members(inp)
     days = sorted(inp.days)
+    # A carried cell with another group's working code is no F duty.
+    foreign = foreign_work(inp)
     for d in days:
         due = need(d, inp.flight_pairs.get(d, 0), len(members))
         if due == 0:
             continue
         short = model.new_int_var(0, due, f"role_f_short_{d.isoformat()}")
-        model.add(sum(x[(uid, d, AttendanceCode.AD)] for uid in members) + short >= due)
+        on_duty = sum(
+            x[(uid, d, AttendanceCode.AD)] for uid in members if (uid, d) not in foreign
+        )
+        model.add(on_duty + short >= due)
         registry.register(
             short,
             rule="role_f_staffing",

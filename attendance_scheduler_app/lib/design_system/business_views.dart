@@ -231,9 +231,12 @@ class DsScheduleView extends StatelessWidget {
   });
 
   final DateTime month;
+
+  /// Rows by date ([DsRosterRowData.shifts]): the month's days, then the
+  /// next month's carried days up to the Sunday that ends its last week.
   final List<DsRosterRowData> rows;
   final Map<int, String>
-  flightLabels; // day-of-month → FLT codes for the roster
+  flightLabels; // roster row (1 = the 1st, then the carried days) → FLT codes
   final VoidCallback onPreviousMonth;
   final VoidCallback onNextMonth;
 
@@ -241,7 +244,7 @@ class DsScheduleView extends StatelessWidget {
   final VoidCallback? onGenerate;
   final VoidCallback? onPublish;
 
-  /// Cell tap: (person row, 0-based day index) — admin edit (F-09) or an
+  /// Cell tap: (person row, 0-based roster row) — admin edit (F-09) or an
   /// employee's own shift-change request. Null → read-only roster.
   final void Function(DsRosterRowData row, int dayIndex)? onCellTap;
 
@@ -377,7 +380,7 @@ class _DsRosterTable extends StatelessWidget {
   final DateTime month;
   final List<DsRosterRowData> rows;
   final int days;
-  final Map<int, String> flightLabels; // day-of-month → FLT codes
+  final Map<int, String> flightLabels; // roster row (1-based) → FLT codes
   final void Function(DsRosterRowData row, int dayIndex)? onCellTap;
   final bool Function(DsRosterRowData row)? isRowTappable;
 
@@ -478,7 +481,10 @@ class _DsRosterTable extends StatelessWidget {
   );
 
   Widget _dayRow(AppLocalizations l, int i, double personW) {
+    // Rows past the month's last day are the next month's carried days,
+    // dated day/month (owner 2026-11-18).
     final date = DateTime(month.year, month.month, i + 1);
+    final carried = date.month != month.month;
     final weekend =
         date.weekday == DateTime.saturday || date.weekday == DateTime.sunday;
     final dayColor = weekend ? DsColors.primary : DsColors.textPrimary;
@@ -494,15 +500,29 @@ class _DsRosterTable extends StatelessWidget {
         children: [
           SizedBox(
             width: _dayColW,
-            child: Text(
-              '${i + 1}',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: DsFontSize.footnote,
-                fontWeight: FontWeight.w600,
-                color: dayColor,
-              ),
-            ),
+            child: carried
+                // day/month never wraps: the row keeps the day rows' height.
+                ? FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      '${date.day}/${date.month}',
+                      maxLines: 1,
+                      style: TextStyle(
+                        fontSize: DsFontSize.footnote,
+                        fontWeight: FontWeight.w600,
+                        color: dayColor,
+                      ),
+                    ),
+                  )
+                : Text(
+                    '${i + 1}',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: DsFontSize.footnote,
+                      fontWeight: FontWeight.w600,
+                      color: dayColor,
+                    ),
+                  ),
           ),
           SizedBox(
             width: _wdColW,
@@ -534,14 +554,14 @@ class _DsRosterTable extends StatelessWidget {
               child: InkWell(
                 onTap:
                     onCellTap != null &&
-                        i < row.shifts.length &&
+                        _shift(row, i) != null &&
                         (isRowTappable?.call(row) ?? true)
                     ? () => onCellTap!(row, i)
                     : null,
                 borderRadius: BorderRadius.circular(6),
                 child: Center(
-                  child: i < row.shifts.length
-                      ? DsShiftBadge(code: row.shifts[i], compact: true)
+                  child: _shift(row, i) != null
+                      ? DsShiftBadge(code: _shift(row, i)!, compact: true)
                       : const Text(
                           '—',
                           style: TextStyle(color: DsColors.textMuted),
@@ -553,6 +573,10 @@ class _DsRosterTable extends StatelessWidget {
       ),
     );
   }
+
+  /// The person's code on roster row [i]; null when there is no cell.
+  static ShiftCode? _shift(DsRosterRowData row, int i) =>
+      i < row.shifts.length ? row.shifts[i] : null;
 
   Widget _summaryRow(
     String label,

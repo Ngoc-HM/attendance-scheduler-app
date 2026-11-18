@@ -51,6 +51,7 @@ class RosterSheet:
     month: int
     people: list[RosterPerson]
     days: list[RosterDay]
+    # Includes the carry days' cells (keys dated in the next month).
     grid: dict[tuple[int, date], AttendanceCode]
     comp: dict[int, CompRow]
     # "Compensation Days from <previous month> as follows:" lines.
@@ -60,3 +61,6 @@ class RosterSheet:
     # Second sheet: approved leave days per person and month of the year.
     leave_days: dict[int, dict[int, int]] = field(default_factory=dict)
     leave_quota: dict[int, int] = field(default_factory=dict)
+    # The next month's days up to the Sunday ending this month's last week
+    # (owner 2026-11-18), printed after the last day; not in any count.
+    carry_days: list[RosterDay] = field(default_factory=list)

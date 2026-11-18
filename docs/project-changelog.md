@@ -1,5 +1,22 @@
 # Project Changelog
 
+## 2026-11-18 — A month's roster runs to the end of its last week
+
+- **Roster through the week's end** (decision #72): generating a month also
+  plans the next month's days up to the Sunday that ends the month's last
+  week (November 2026 → 6 December). Those days keep their flights by
+  weekday until the next month's flight plan is entered.
+- Generating the next month keeps those days exactly as they are and plans
+  the rest. Rules counted per month stay per calendar month; the carried
+  days get no minimum of X and at most as many X as they hold Saturdays and
+  Sundays, and never a comp day.
+- Publishing a month publishes its carried days: staff see them at once, in
+  the month's grid as extra rows dated day/month and in the next month's
+  grid; the check-in page and the attendance grid read them too. The
+  roster download prints them after the last day.
+- The roster grid now places every cell by its date (a person with cells on
+  some days only was drawn shifted to the top).
+
 ## 2026-11-18 — Roster download in the customer's layout, shift times
 
 - **Roster (WR layout)** (decision #70): Reports has a third type that

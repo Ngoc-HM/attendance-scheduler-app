@@ -24,6 +24,7 @@ from app.schemas.dashboard import (
 from app.services import (
     leave_balance,
     pending_counts_service,
+    schedule_carry,
     schedule_service,
     time_clock_service,
 )
@@ -35,7 +36,8 @@ def _schedule(db: Session, year: int, month: int) -> DashboardSchedule:
         .filter(MonthlySchedule.year == year, MonthlySchedule.month == month)
         .one_or_none()
     )
-    if schedule is None:
+    # Only the carried days of the previous month's run: not created yet.
+    if schedule is None or not schedule_carry.is_generated(db, schedule):
         return DashboardSchedule(year=year, month=month, status=None)
     return DashboardSchedule(
         year=year,

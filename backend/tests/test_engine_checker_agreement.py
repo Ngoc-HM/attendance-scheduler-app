@@ -8,6 +8,13 @@ verdicts are compared per (rule, user):
 * the checker reports nothing the solved engine did not report;
 * on the solved grid and on randomly edited copies of it, the engine's own
   constraints evaluated on that fixed grid flag exactly what the checker flags.
+
+Window instances (owner 2026-11-18): a full month plus the next month's days
+up to the Sunday ending its last week, with the month's first days already
+decided (carried cells, a foreign working code and a leave among them). The
+checker reads the window as the persisted months do: the month's own days,
+then the carry days as a carry-only month (``carry_only``), each with the
+history before it.
 """
 
 from __future__ import annotations
@@ -19,8 +26,8 @@ import pytest
 from ortools.sat.python import cp_model
 
 from app.models.enums import AttendanceCode, Role
-from app.scheduler import PersonInput, SchedulerEngine, SolverInput, constraints
-from app.scheduler.calendar_utils import month_days, trailing_work_streak
+from app.scheduler import PersonInput, SchedulerEngine, SolverInput, carried, constraints
+from app.scheduler.calendar_utils import month_days, trailing_work_streak, window_days
 from app.scheduler.domain import Violation
 from app.scheduler.role_codes import codes_for
 from app.scheduler.slack_registry import SlackRegistry
@@ -190,6 +197,8 @@ def _edited(
     people = {p.user_id: p for p in inp.people}
     days = sorted(inp.days)
 
+    ahead = set(carried.ahead_days(inp))
+
     def choices(uid: int, *, working: bool | None = None) -> list[AttendanceCode]:
         person = people[uid]
         return [
@@ -200,7 +209,10 @@ def _edited(
         ]
 
     def set_cell(uid: int, day: date, code: AttendanceCode) -> None:
-        if day not in inp.approved_off.get(uid, {}):
+        # Carried cells are facts; no CD on the carry days (a hard rule).
+        if code is AttendanceCode.CD and day in ahead:
+            return
+        if day not in inp.approved_off.get(uid, {}) and day not in inp.fixed.get(uid, {}):
             out[(uid, day)] = code
 
     for uid, day in rng.sample(sorted(out), k=8):
@@ -217,7 +229,7 @@ def _edited(
         uid = rng.choice(role_a)
         for day in days:
             if out[(uid, day)] is AttendanceCode.A:
-                out[(uid, day)] = AttendanceCode.D
+                set_cell(uid, day, AttendanceCode.D)
     return out
 
 
@@ -242,4 +254,128 @@ def test_engine_clean_grid_passes_checker(seed: int, full_month: bool) -> None:
         edited = _edited(inp, grid, rng)
         assert _engine_keys(_fixed_grid_violations(inp, edited)) == _checker_keys(
             _checker_warnings(inp, edited)
+        )
+
+
+# --- window instances (owner 2026-11-18) ------------------------------------
+
+
+def _window_instance(seed: int) -> SolverInput:
+    """A full month and its carry days; the month's first three days are
+    carried cells (one person holds A/D, one T, one AL among them)."""
+    base = _instance(seed, full_month=True)
+    days = window_days(base.year, base.month)
+    rng = random.Random(seed)
+    roles = {p.user_id: p.role for p in base.people}
+    stored: dict[int, dict[date, AttendanceCode]] = {}
+    for uid, role in roles.items():
+        work = next(c for c in codes_for(role) if c.is_working)
+        stored[uid] = {d: rng.choice([work, work, AttendanceCode.X]) for d in days[:3]}
+    role_a = sorted(uid for uid, role in roles.items() if role is Role.A)
+    stored[role_a[0]][days[0]] = AttendanceCode.A_D
+    stored[role_a[1]][days[1]] = AttendanceCode.T
+    flexible = next(uid for uid, role in roles.items() if role is Role.T)
+    stored[flexible][days[2]] = AL
+    fixed, leave = carried.split(stored, roles)
+    approved = {uid: dict(by_day) for uid, by_day in base.approved_off.items()}
+    for uid, by_day in stored.items():
+        for d in by_day:
+            approved.get(uid, {}).pop(d, None)
+    for uid, by_day in leave.items():
+        approved.setdefault(uid, {}).update(by_day)
+    for d in days[len(base.days) :]:
+        base.flight_pairs[d] = rng.choice([1, 2])
+    return SolverInput(
+        year=base.year,
+        month=base.month,
+        people=base.people,
+        days=days,
+        flight_pairs=base.flight_pairs,
+        approved_off=approved,
+        holidays=base.holidays,
+        long_leave_off=base.long_leave_off,
+        previous_working=base.previous_working,
+        fixed=fixed,
+        max_solve_seconds=5,
+    )
+
+
+def _persisted(
+    inp: SolverInput, grid: dict[tuple[int, date], AttendanceCode]
+) -> dict[tuple[int, date], AttendanceCode]:
+    """Stored codes: leave as AL, a carried cell as it was stored."""
+    return {
+        (uid, day): inp.approved_off.get(uid, {}).get(day)
+        or inp.fixed.get(uid, {}).get(day)
+        or code
+        for (uid, day), code in grid.items()
+    }
+
+
+def _window_checker_warnings(
+    inp: SolverInput, grid: dict[tuple[int, date], AttendanceCode]
+) -> list[Violation]:
+    """The month re-checked as persisted, then its carry days as the
+    carry-only next month, whose history is the month's last days."""
+    stored = _persisted(inp, grid)
+    own, ahead = carried.own_days(inp), carried.ahead_days(inp)
+    roles = {p.user_id: p.role for p in inp.people}
+    month = recheck(
+        grid={k: v for k, v in stored.items() if k[1] in set(own)},
+        roles=roles,
+        carry_streaks={p.user_id: p.carry_streak for p in inp.people},
+        days=own,
+        flight_pairs=inp.flight_pairs,
+        carry_comps={p.user_id: p.carry_comp for p in inp.people},
+        annual_off=inp.long_leave_off,
+        approved_off=inp.approved_off,
+        prev_codes={p.user_id: p.prev_codes for p in inp.people},
+    )
+    tail_prev = {uid: tuple(stored[(uid, d)] for d in own[-6:]) for uid in roles}
+    tail = recheck(
+        grid={k: v for k, v in stored.items() if k[1] in set(ahead)},
+        roles=roles,
+        carry_streaks={
+            uid: trailing_work_streak([stored[(uid, d)].is_working for d in own])
+            for uid in roles
+        },
+        days=ahead,
+        flight_pairs=inp.flight_pairs,
+        annual_off=inp.long_leave_off,
+        approved_off=inp.approved_off,
+        prev_codes=tail_prev,
+        carry_only=True,
+    )
+    return month + tail
+
+
+@pytest.mark.parametrize("seed", [50, 51, 52])
+def test_engine_and_checker_agree_over_the_window(seed: int) -> None:
+    inp = _window_instance(seed)
+    assert carried.ahead_days(inp), "the instance must reach into the next month"
+    out = SchedulerEngine(num_workers=1).solve(inp)
+    assert out.feasible
+    grid = {(a.user_id, a.day): a.code for a in out.assignments}
+    # Carried cells are kept: in-domain codes as stored, foreign work as work.
+    for uid, by_day in inp.fixed.items():
+        for day, code in by_day.items():
+            assert grid[(uid, day)].is_working == code.is_working
+            if code in codes_for(next(p.role for p in inp.people if p.user_id == uid)):
+                assert grid[(uid, day)] is code
+    # No CD on the carry days.
+    assert not any(
+        code is AttendanceCode.CD and day in set(carried.ahead_days(inp))
+        and day not in inp.approved_off.get(uid, {})
+        for (uid, day), code in grid.items()
+    )
+
+    checker = _checker_keys(_window_checker_warnings(inp, grid))
+    assert checker <= _engine_keys(out.violations)
+    assert _engine_keys(_fixed_grid_violations(inp, grid)) == checker
+
+    rng = random.Random(seed)
+    for _ in range(6):
+        edited = _edited(inp, grid, rng)
+        assert _engine_keys(_fixed_grid_violations(inp, edited)) == _checker_keys(
+            _window_checker_warnings(inp, edited)
         )

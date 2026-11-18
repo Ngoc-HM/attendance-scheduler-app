@@ -35,7 +35,7 @@ from app.core.business_time import business_today
 from app.core.config import settings
 from app.core.database import SessionLocal
 from app.models.flight import FlightDay
-from app.models.schedule import MonthlySchedule
+from app.services import schedule_carry
 
 logger = logging.getLogger(__name__)
 
@@ -152,12 +152,9 @@ def _draft_if_missing(year: int, month: int) -> bool:
 
 
 def _schedule_exists(db: Session, year: int, month: int) -> bool:
-    return (
-        db.query(MonthlySchedule.id)
-        .filter(MonthlySchedule.year == year, MonthlySchedule.month == month)
-        .first()
-        is not None
-    )
+    """A roster exists. A schedule holding only the carried days the previous
+    month planned (owner 2026-11-18) is still missing."""
+    return schedule_carry.is_generated(db, schedule_carry.find(db, year, month))
 
 
 def _run_autorun_job() -> None:

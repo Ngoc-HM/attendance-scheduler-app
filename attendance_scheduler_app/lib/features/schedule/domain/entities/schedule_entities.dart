@@ -11,6 +11,7 @@ class ShiftAssignment extends Equatable {
     required this.workDate,
     required this.code,
     required this.isManualOverride,
+    this.carried = false,
   });
 
   final int id;
@@ -19,8 +20,19 @@ class ShiftAssignment extends Equatable {
   final String code; // raw backend code, e.g. "A", "D", "A/D", "X"
   final bool isManualOverride;
 
+  /// Planned by the previous month's generation: a month's roster runs to
+  /// the Sunday that ends its last week (owner 2026-11-18).
+  final bool carried;
+
   @override
-  List<Object?> get props => [id, userId, workDate, code, isManualOverride];
+  List<Object?> get props => [
+    id,
+    userId,
+    workDate,
+    code,
+    isManualOverride,
+    carried,
+  ];
 }
 
 /// The full monthly schedule with all assignments.
@@ -31,6 +43,7 @@ class MonthlySchedule extends Equatable {
     required this.month,
     required this.status,
     required this.assignments,
+    this.carryAssignments = const [],
     this.generatedAt,
     this.note,
   });
@@ -40,13 +53,46 @@ class MonthlySchedule extends Equatable {
   final int month;
   final ScheduleStatus status;
   final List<ShiftAssignment> assignments;
+
+  /// The next month's carried cells this month's generation planned (its
+  /// days up to the Sunday that ends this month's last week).
+  final List<ShiftAssignment> carryAssignments;
   final DateTime? generatedAt;
   final String? note;
 
   bool get isPublished => status == ScheduleStatus.published;
 
+  /// Only the carried days of the previous month's run: not generated yet.
+  bool get isCarryOnly =>
+      assignments.isNotEmpty && assignments.every((a) => a.carried);
+
+  /// The next month's days shown after this month's last day.
+  List<DateTime> get carryDays {
+    final days = {
+      for (final a in carryAssignments)
+        if (a.workDate.year != year || a.workDate.month != month)
+          DateTime(a.workDate.year, a.workDate.month, a.workDate.day),
+    }.toList()..sort();
+    return days;
+  }
+
+  /// True when [day] is a row of this month's roster: one of its own days or
+  /// a carried day after it.
+  bool shows(DateTime day) =>
+      (day.year == year && day.month == month) ||
+      carryDays.any(
+        (d) => d.year == day.year && d.month == day.month && d.day == day.day,
+      );
+
   @override
-  List<Object?> get props => [id, year, month, status, assignments];
+  List<Object?> get props => [
+    id,
+    year,
+    month,
+    status,
+    assignments,
+    carryAssignments,
+  ];
 }
 
 /// A hard-constraint violation reported by the solver.

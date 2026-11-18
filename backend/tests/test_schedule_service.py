@@ -281,9 +281,16 @@ def test_autorun_uses_business_timezone_date(client: TestClient, monkeypatch) ->
     admin = _admin_headers(client)
 
     assert business_time.business_today() == date(2026, 12, 21)
-    assert client.get("/api/v1/schedules/2027/1", headers=admin).status_code == 404
+    # December's run may have planned 1–3 Jan already (carried cells only):
+    # January is still not generated (owner 2026-11-18).
+    before = client.get("/api/v1/schedules/2027/1", headers=admin)
+    assert before.status_code == 404 or all(
+        a["carried"] for a in before.json()["assignments"]
+    )
     assert maybe_run_autorun() is True  # no injected date → business date
-    assert client.get("/api/v1/schedules/2027/1", headers=admin).status_code == 200
+    after = client.get("/api/v1/schedules/2027/1", headers=admin)
+    assert after.status_code == 200
+    assert not all(a["carried"] for a in after.json()["assignments"])
 
 
 # --- Task 7: schedule lifecycle (violations, force-regenerate, roster changes) --

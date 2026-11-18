@@ -114,7 +114,9 @@ class _Writer:
 
     def day_block(self) -> int:
         ws, d, row = self.ws, self.data, 3
-        for day in d.days:
+        # The carry days follow the last day, dated day/month (owner
+        # 2026-11-18); they stay out of every count below.
+        for day in [*d.days, *d.carry_days]:
             flights: list[RosterFlightRow | None] = list(day.flights) or [None]
             span = len(flights)
             weekend = day.day.weekday() >= 5
@@ -124,7 +126,12 @@ class _Writer:
                 style(ws.cell(r, 4, flight.times if flight else None), box=border())
                 ws.row_dimensions[r].height = H_ROW
             bg = WEEKEND if weekend else None
-            style(ws.cell(row, 1, str(day.day.day)), bg=bg, box=border())
+            label = (
+                str(day.day.day)
+                if day.day.month == d.month
+                else f"{day.day.day}/{day.day.month}"
+            )
+            style(ws.cell(row, 1, label), bg=bg, box=border())
             style(ws.cell(row, 2, WEEKDAYS[day.day.weekday()]), bg=bg, box=border())
             style(ws.cell(row, 5), box=border(),
                   align=Alignment(horizontal="center", vertical="center", wrap_text=True))

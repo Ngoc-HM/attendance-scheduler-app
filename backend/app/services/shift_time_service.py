@@ -17,10 +17,10 @@ from sqlalchemy.orm import Session
 from app.core.business_time import business_today
 from app.core.i18n import t
 from app.models.attendance import AttendanceRecord
-from app.models.enums import AttendanceCode, ScheduleStatus
-from app.models.schedule import MonthlySchedule, ShiftAssignment
+from app.models.enums import AttendanceCode
 from app.models.shift_time import ShiftTime
 from app.schemas.shift_time import ShiftTimeRead, ShiftTimesUpdate, ShiftToday
+from app.services import schedule_carry
 
 # The owner's defaults; also seeded by migration 0014. A database built by
 # create_all (dev, tests) has no rows and reads these.
@@ -104,16 +104,10 @@ def _today_code(db: Session, user_id: int) -> AttendanceCode | None:
     )
     if actual is not None:
         return actual
-    return (
-        db.query(ShiftAssignment.code)
-        .join(MonthlySchedule, ShiftAssignment.schedule_id == MonthlySchedule.id)
-        .filter(
-            MonthlySchedule.status == ScheduleStatus.published,
-            ShiftAssignment.user_id == user_id,
-            ShiftAssignment.work_date == day,
-        )
-        .scalar()
-    )
+    # A carried cell counts as published once the month that planned it is
+    # (owner 2026-11-18), like the roster employees see.
+    cell = schedule_carry.published_cell(db, user_id, day)
+    return cell.code if cell is not None else None
 
 
 def today_for_user(db: Session, user_id: int) -> ShiftToday:

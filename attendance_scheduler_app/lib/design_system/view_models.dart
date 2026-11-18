@@ -17,7 +17,10 @@ class DsRosterRowData {
 
   final String name;
   final String role;
-  final List<ShiftCode> shifts;
+
+  /// One entry per roster row, by date: index 0 = the 1st, then the carried
+  /// days after the month's last day; null = no cell that day.
+  final List<ShiftCode?> shifts;
   final int arrivals;
   final int departures;
   final int offDays;

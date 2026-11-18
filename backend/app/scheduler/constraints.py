@@ -7,6 +7,7 @@ belong to each person's role domain (see ``role_codes.codes_for``).
 Truly HARD (can never break, decision #2):
     #1 exactly one status per (person, day)   — here (per-role domain)
     #5 approved leave pinned OFF     — here
+       carried cells of the own month pinned — ``carried``
 
 SOFT with penalized slack (violations reported via ``SlackRegistry``):
     #2 exact monthly X entitlement             — ``constraints_monthly_quota``
@@ -25,6 +26,7 @@ from ortools.sat.python import cp_model
 
 from app.models.enums import AttendanceCode
 from app.scheduler import (
+    carried,
     constraints_comp_days,
     constraints_consecutive,
     constraints_monthly_quota,
@@ -46,6 +48,7 @@ def add_all(
 ) -> None:
     one_status_per_day(model, x, inp)
     respect_approved_off(model, x, inp)
+    carried.add(model, x, inp)
     constraints_monthly_quota.add(model, x, inp, registry)
     constraints_consecutive.add(model, x, inp, registry)
     constraints_off_chain.add(model, x, inp, registry)

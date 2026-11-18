@@ -13,6 +13,7 @@ from datetime import date
 from ortools.sat.python import cp_model
 
 from app.models.enums import AttendanceCode
+from app.scheduler.carried import own_days
 from app.scheduler.domain import SolverInput
 
 WEEKEND = (5, 6)  # date.weekday(): Saturday, Sunday
@@ -29,8 +30,9 @@ def entitlement(days: list[date], pinned: dict[date, AttendanceCode]) -> int:
 
 
 def target(inp: SolverInput, user_id: int) -> int:
-    """The person's X target for the month (see the module docstring)."""
-    return entitlement(inp.days, inp.approved_off.get(user_id, {}))
+    """The person's X target for the window's own month (see the module
+    docstring); the carry days after it have their own bound."""
+    return entitlement(own_days(inp), inp.approved_off.get(user_id, {}))
 
 
 def terms(
@@ -39,11 +41,12 @@ def terms(
     inp: SolverInput,
     weight: int,
 ) -> list[cp_model.LinearExpr]:
-    n_days = len(inp.days)
+    days = own_days(inp)
+    n_days = len(days)
     penalties: list[cp_model.LinearExpr] = []
     for p in inp.people:
         pinned = inp.approved_off.get(p.user_id, {})
-        chosen = sum(x[(p.user_id, d, AttendanceCode.X)] for d in inp.days if d not in pinned)
+        chosen = sum(x[(p.user_id, d, AttendanceCode.X)] for d in days if d not in pinned)
         gap = model.new_int_var(0, n_days, f"off_target_gap_{p.user_id}")
         model.add_abs_equality(gap, chosen - target(inp, p.user_id))
         penalties.append(weight * gap)

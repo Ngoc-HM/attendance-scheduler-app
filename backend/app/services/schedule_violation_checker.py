@@ -10,6 +10,7 @@ Rules mirrored (engine module in brackets):
 
 * max 5 consecutive working days, carry included   [constraints_consecutive]
 * exact monthly ordinary-X entitlement           [constraints_monthly_quota]
+  (carry days only: at most their Saturdays and Sundays)
 * flight staffing floor for role A                 [constraints_staffing]
 * >= 2 pure A days per role-A person / full month  [constraints_role_a_distribution]
 * owed comp days (CD) granted, none unearned       [constraints_comp_days]
@@ -28,6 +29,7 @@ from datetime import date, timedelta
 
 from app.models.enums import AttendanceCode, Role
 from app.scheduler import role_f
+from app.scheduler.constraints_monthly_quota import CARRY_KEY
 from app.scheduler.constraints_off_chain import MAX_CONSECUTIVE_OFF
 from app.scheduler.constraints_role_a_distribution import (
     MIN_A_DAYS,
@@ -55,8 +57,14 @@ def recheck(
     prev_codes: dict[int, tuple[AttendanceCode, ...]] | None = None,
     cover_roles: dict[int, Role] | None = None,
     approved_off: dict[int, dict[date, AttendanceCode]] | None = None,
+    carry_only: bool = False,
 ) -> list[Violation]:
     """Run every mirrored rule over the grid; return one Violation per breach.
+
+    ``carry_only``: ``days`` are only the carry days a previous month's
+    generation planned into this month (owner 2026-11-18) — the ordinary-X
+    count then has no minimum and the Saturdays and Sundays as its maximum,
+    as the generator counted them.
 
     ``prev_codes`` holds each user's previous-month codes, oldest first
     (``BoundaryState.prev_codes``), for off-runs crossing the month start.
@@ -66,7 +74,7 @@ def recheck(
     """
     warnings: list[Violation] = []
     warnings += check_consecutive(grid, roles, carry_streaks, days)
-    warnings += check_monthly_quota(grid, roles, days, approved_off)
+    warnings += check_monthly_quota(grid, roles, days, approved_off, carry_only=carry_only)
     warnings += check_staffing(grid, {**(cover_roles or {}), **roles}, days, flight_pairs)
     warnings += check_min_a_days(grid, roles, days)
     warnings += check_comp_days(grid, roles, days, carry_comps or {})
@@ -148,11 +156,15 @@ def check_role_f_weekly_rest(grid, roles, days, prev_codes, approved_off=None) -
     return warnings
 
 
-def check_monthly_quota(grid, roles, days, approved_off=None) -> list[Violation]:
+def check_monthly_quota(
+    grid, roles, days, approved_off=None, *, carry_only: bool = False
+) -> list[Violation]:
     """Mirror ordinary-X quota; explicit approved leave also handles pinned CD.
 
     Without approval metadata, AL/S cells provide a backwards-compatible
     fallback. An ordinary generated CD never reduces the X entitlement.
+    ``carry_only``: the carry days' bound (excess only, reported on their
+    first day), like ``constraints_monthly_quota``.
     """
     days = _days(days)
     warnings: list[Violation] = []
@@ -165,6 +177,22 @@ def check_monthly_quota(grid, roles, days, approved_off=None) -> list[Violation]
         pinned = _leave_cells(grid, uid, days, approved_off)
         expected = entitlement(days, pinned)
         chosen = sum(grid.get((uid, d)) is AttendanceCode.X for d in days if d not in pinned)
+        if carry_only:
+            if chosen > expected:
+                warnings.append(
+                    Violation(
+                        rule="monthly_off_excess",
+                        user_id=uid,
+                        day=days[0],
+                        key=CARRY_KEY,
+                        message=(
+                            f"User {uid}: ordinary X excess on the carry days "
+                            f"(at most {expected})"
+                        ),
+                        params={"target": expected, "amount": chosen - expected},
+                    )
+                )
+            continue
         if chosen == expected:
             continue
         direction = "shortfall" if chosen < expected else "excess"

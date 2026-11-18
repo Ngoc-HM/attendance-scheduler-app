@@ -35,6 +35,10 @@ def get_schedule(db: DbSession, year: YearPath, month: MonthPath, current_user: 
 
     Non-admin visibility window (owner 2026-07-09): any past month, the current
     month, and at most 2 months ahead — published months only, as before.
+    A published month also returns the next month's carried cells it planned
+    (``carry_assignments``, its days to the Sunday ending its last week); a
+    draft month shows a non-admin only those carried cells, once the month
+    before it is published (owner 2026-11-18).
 
     §9.1 — a non-admin never sees a colleague's sickness: the planned grid
     rejects S on write, and any legacy S cell of ANOTHER user is masked as X
@@ -47,9 +51,7 @@ def get_schedule(db: DbSession, year: YearPath, month: MonthPath, current_user: 
             raise HTTPException(
                 status.HTTP_403_FORBIDDEN, detail=t("schedule.month_out_of_range")
             )
-    schedule = MonthlyScheduleRead.model_validate(
-        schedule_service.get(db, year, month, include_draft=is_admin)
-    )
+    schedule = schedule_service.view(db, year, month, is_admin)
     if not is_admin:
         schedule = schedule_service.mask_sick_for_viewer(schedule, current_user.id)
     return schedule

@@ -23,7 +23,7 @@ from app.models.enums import AttendanceCode, Role, ScheduleStatus, UserStatus
 from app.models.schedule import MonthlySchedule
 from app.models.time_clock import TimeClockEntry
 from app.models.user import User
-from app.services import attendance_service
+from app.services import attendance_service, schedule_carry
 
 
 def _today() -> date:
@@ -202,7 +202,8 @@ def board(db: Session, year: int, month: int) -> list[dict]:
     or an actual the admin recorded differently from the roster (S, AL…);
     ``missing`` (light red) — a past day due at work by the published roster
     with no check-in or no check-out, and not adjusted. A month that is not
-    published paints nothing. The admin account is left out.
+    published paints nothing, except its carried days once the previous
+    month is published. The admin account is left out.
     """
     today = _today()
     schedule = (
@@ -213,11 +214,12 @@ def board(db: Session, year: int, month: int) -> list[dict]:
     published = (
         schedule is not None and schedule.status is ScheduleStatus.published
     )
-    plan = (
-        {(a.user_id, a.work_date): a for a in schedule.assignments}
-        if published and schedule is not None
-        else {}
-    )
+    # A carried cell counts once the month that planned it is published,
+    # while its own month is still a draft (owner 2026-11-18).
+    plan = {
+        (a.user_id, a.work_date): a
+        for a in schedule_carry.published_cells(db, schedule)
+    }
     actuals = {
         (r.user_id, r.work_date): r
         for r in attendance_service.list_month(db, year, month)
@@ -267,7 +269,7 @@ def board(db: Session, year: int, month: int) -> list[dict]:
         tint = None
         if adjusted(key):
             tint = "adjusted"
-        elif published and status_ in ("absent", "missed_out"):
+        elif (published or key in plan) and status_ in ("absent", "missed_out"):
             tint = "missing"
         if entry is None and status_ is None and tint is None:
             continue

@@ -1,7 +1,9 @@
 """Assemble the month's roster for the customer's workbook layout (#70).
 
 Content is the planned roster of the month (``ShiftAssignment``, including
-the admin's manual edits), not the recorded attendance. Comp figures and the
+the admin's manual edits), not the recorded attendance, followed by the
+carried days this month's generation planned into the next month (owner
+2026-11-18). Comp figures and the
 notes below the table come from the history the scheduler already reads
 (actual attendance over the plan).
 """
@@ -22,7 +24,7 @@ from app.models.leave import LeaveRequest
 from app.models.schedule import MonthlySchedule, ShiftAssignment
 from app.models.user import User
 from app.scheduler.calendar_utils import month_days
-from app.services import flight_service, holiday_service, schedule_history
+from app.services import flight_service, holiday_service, schedule_carry, schedule_history
 from app.services.flight_pair_derivation import ARRIVAL_TO_DEPARTURE
 from app.services.roster_sheet import CompRow, RosterDay, RosterFlightRow, RosterPerson, RosterSheet
 
@@ -163,13 +165,19 @@ def build(db: Session, year: int, month: int, admin: User) -> RosterSheet:
     if schedule is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=t("report.roster_no_schedule"))
     grid = {(a.user_id, a.work_date): a.code for a in schedule.assignments}
-    pairs = _people(db, {uid for uid, _ in grid})
+    # The carried days this month's run planned into the next month.
+    following = schedule_carry.find(db, *schedule_carry.following_month(year, month))
+    carried = schedule_carry.carried_cells(db, following.id) if following else []
+    carry = sorted({a.work_date for a in carried})
+    pairs = _people(db, {uid for uid, _ in grid} | {a.user_id for a in carried})
     people = [p for p, _ in pairs]
     heading, notes = _comp_notes(db, year, month, people)
     return RosterSheet(
         year=year, month=month, people=people,
-        days=_days(db, month_days(year, month)), grid=grid,
+        days=_days(db, month_days(year, month)),
+        grid={**grid, **{(a.user_id, a.work_date): a.code for a in carried}},
         comp=_comp_rows(db, year, month, pairs, grid),
+        carry_days=_days(db, carry),
         comp_heading=heading, comp_notes=notes, checked_by=admin.code or "",
         leave_days=_leave(db, year, {p.user_id for p in people}),
         leave_quota={u.id: u.annual_leave_quota for _, u in pairs},

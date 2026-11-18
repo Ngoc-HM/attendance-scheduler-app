@@ -9,7 +9,7 @@ See ``flight_excel_parser.py`` for the expected Excel column layout.
 from __future__ import annotations
 
 import logging
-from datetime import date
+from datetime import date, timedelta
 
 from fastapi import HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
@@ -168,6 +168,37 @@ def known_flight_pairs(db: Session, days: list[date]) -> dict[date, int]:
         return {}
     rows = db.query(FlightDay).filter(FlightDay.day.in_(days)).all()
     return {row.day: row.flight_pairs for row in rows}
+
+
+# Weeks a carry day without flight data looks back for its weekday's count.
+CARRY_LOOKBACK_WEEKS = 5
+
+
+def carry_flight_pairs(db: Session, days: list[date]) -> dict[date, int]:
+    """Flight pairs of the next month's carry days (owner 2026-11-18).
+
+    A day's own ``FlightDay`` row wins. A day without one takes the count of
+    the most recent earlier day of the same weekday that has one, looking
+    back up to ``CARRY_LOOKBACK_WEEKS`` weeks (the flight plan repeats by
+    weekday); none → 0.
+    """
+    if not days:
+        return {}
+    candidates = {
+        d - timedelta(weeks=w) for d in days for w in range(CARRY_LOOKBACK_WEEKS + 1)
+    }
+    known = known_flight_pairs(db, sorted(candidates))
+    result: dict[date, int] = {}
+    for d in days:
+        result[d] = next(
+            (
+                known[d - timedelta(weeks=w)]
+                for w in range(CARRY_LOOKBACK_WEEKS + 1)
+                if d - timedelta(weeks=w) in known
+            ),
+            0,
+        )
+    return result
 
 
 def import_excel(db: Session, file: UploadFile) -> list[Flight]:

@@ -23,6 +23,8 @@ class ShiftAssignmentRead(ORMModel):
     work_date: date
     code: AttendanceCode
     is_manual_override: bool
+    # Planned by the previous month's generation (owner 2026-11-18).
+    carried: bool = False
 
 
 class ManualOverrideRequest(BaseModel):
@@ -50,6 +52,9 @@ class MonthlyScheduleRead(ORMModel):
     generated_at: datetime | None
     note: str | None
     assignments: list[ShiftAssignmentRead] = []
+    # The next month's carried cells this month's generation planned (its
+    # days up to the Sunday ending this month's last week).
+    carry_assignments: list[ShiftAssignmentRead] = []
 
 
 class ScheduleResult(BaseModel):

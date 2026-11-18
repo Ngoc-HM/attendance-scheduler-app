@@ -9,7 +9,16 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import (
+    Boolean,
+    Date,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    UniqueConstraint,
+    false,
+)
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -55,5 +64,9 @@ class ShiftAssignment(Base, TimestampMixin):
     )
     # True when an admin edited this cell after auto-generation (F-09).
     is_manual_override: Mapped[bool] = mapped_column(Boolean, default=False)
+    # True for a day the PREVIOUS month's generation planned into this month
+    # (its roster runs to the Sunday ending its last week, owner
+    # 2026-11-18). Generating this month keeps such a cell as it is.
+    carried: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
 
     schedule: Mapped[MonthlySchedule] = relationship(back_populates="assignments")

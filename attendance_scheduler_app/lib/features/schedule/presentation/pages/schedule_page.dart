@@ -32,7 +32,8 @@ class SchedulePage extends ConsumerStatefulWidget {
 class _SchedulePageState extends ConsumerState<SchedulePage> {
   late DateTime _month;
   bool _showShiftChanges = false;
-  Map<int, String> _flightLabels = const {}; // day-of-month → FLT codes
+  // Roster row (1 = the 1st, then the next month's carried days) → FLT codes.
+  Map<int, String> _flightLabels = const {};
 
   @override
   void initState() {
@@ -55,14 +56,29 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
     _loadFlights();
   }
 
-  /// Load the month's flight codes (FLT #) per day for the roster's flight column.
+  /// Load the flight codes (FLT #) per day for the roster's flight column:
+  /// the month's days, then the next month's (its first days follow the
+  /// month's last day as carried rows).
   Future<void> _loadFlights() async {
+    final month = _month;
+    final source = ref.read(flightsDataSourceProvider);
+    final next = DateTime(month.year, month.month + 1);
+    final length = DateTime(month.year, month.month + 1, 0).day;
     try {
-      final days = await ref
-          .read(flightsDataSourceProvider)
-          .listDays(_month.year, _month.month);
-      if (!mounted) return;
-      setState(() => _flightLabels = _buildFlightLabels(days));
+      final days = await source.listDays(month.year, month.month);
+      // The next month only labels the carried rows: its failure leaves
+      // them blank.
+      final following = await source
+          .listDays(next.year, next.month)
+          .catchError((Object _) => <FlightDayModel>[]);
+      if (!mounted || month != _month) return;
+      setState(
+        () => _flightLabels = {
+          ..._buildFlightLabels(days),
+          for (final e in _buildFlightLabels(following).entries)
+            if (e.key <= 7) length + e.key: e.value,
+        },
+      );
     } catch (_) {
       if (mounted) setState(() => _flightLabels = const {});
     }
@@ -141,7 +157,10 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
             onPreviousMonth: _prevMonth,
             onNextMonth: _nextMonth,
             onGenerate: isAdmin ? () => _onGenerate(context, l) : null,
-            onPublish: isAdmin && onScreen
+            // A month holding only the carried days of the previous month's
+            // run is not generated yet: nothing to publish.
+            onPublish:
+                isAdmin && onScreen && !scheduleState.schedule!.isCarryOnly
                 ? () => _onPublish(context, l)
                 : null,
             emptyMessage: _emptyMessage(l, scheduleState, isAdmin),
@@ -264,32 +283,47 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
     // employees from the name-free /users/directory.
     final userMap = <int, String>{for (final p in state.people) p.id: p.code};
 
-    // Group assignments by user_id.
-    final byUser = <int, List<ShiftAssignment>>{};
-    for (final a in schedule.assignments) {
-      byUser.putIfAbsent(a.userId, () => []).add(a);
+    // Rows by DATE (a person may hold cells on some days only): the
+    // month's days, then the next month's carried days after its last day
+    // (owner 2026-11-18). The summaries count the month's own days.
+    final length = DateTime(schedule.year, schedule.month + 1, 0).day;
+    final carryDays = schedule.carryDays;
+    int? rowOf(DateTime d) {
+      if (d.year == schedule.year && d.month == schedule.month) {
+        return d.day - 1;
+      }
+      final k = carryDays.indexWhere(
+        (c) => c.year == d.year && c.month == d.month && c.day == d.day,
+      );
+      return k < 0 ? null : length + k;
     }
 
-    // Sort each user's assignments by work_date.
-    for (final list in byUser.values) {
-      list.sort((a, b) => a.workDate.compareTo(b.workDate));
+    final byUser = <int, List<ShiftCode?>>{};
+    for (final a in [...schedule.assignments, ...schedule.carryAssignments]) {
+      final i = rowOf(a.workDate);
+      if (i == null) continue;
+      final shifts = byUser.putIfAbsent(
+        a.userId,
+        () => List<ShiftCode?>.filled(length + carryDays.length, null),
+      );
+      shifts[i] = _codeToShiftCode(a.code);
     }
 
     final rows = byUser.entries.map((entry) {
       final userId = entry.key;
-      final assignments = entry.value;
-      final shifts = assignments.map((a) => _codeToShiftCode(a.code)).toList();
+      final shifts = entry.value;
+      final own = shifts.take(length);
       // Same anonymous fallback as the leaves list when the code is unknown.
       final name = userMap[userId] ?? 'ID $userId';
       final role = _roleLabel(userId, state);
 
-      final arrivals = shifts
+      final arrivals = own
           .where((s) => s == ShiftCode.a || s == ShiftCode.aD)
           .length;
-      final departures = shifts
+      final departures = own
           .where((s) => s == ShiftCode.d || s == ShiftCode.aD)
           .length;
-      final offDays = shifts.where((s) => s == ShiftCode.x).length;
+      final offDays = own.where((s) => s == ShiftCode.x).length;
 
       return DsRosterRowData(
         id: userId,
@@ -541,8 +575,10 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
   ) async {
     final userId = row.id;
     if (userId == null) return;
+    // Past the month's last day: a carried day of the next month.
     final workDate = DateTime(_month.year, _month.month, dayIndex + 1);
     final current = row.shifts[dayIndex];
+    if (current == null) return;
     final allowed = ShiftCodeX.plannedCodesFor(UserRoleX.fromApi(row.role));
     // A current code outside the role's set (legacy data) shows as the hint
     // until the admin picks an allowed one.

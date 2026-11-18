@@ -8,6 +8,7 @@ class ShiftAssignmentModel extends ShiftAssignment {
     required super.workDate,
     required super.code,
     required super.isManualOverride,
+    super.carried,
   });
 
   factory ShiftAssignmentModel.fromJson(Map<String, dynamic> json) =>
@@ -17,6 +18,7 @@ class ShiftAssignmentModel extends ShiftAssignment {
         workDate: DateTime.parse(json['work_date'] as String),
         code: json['code'] as String,
         isManualOverride: json['is_manual_override'] as bool? ?? false,
+        carried: json['carried'] as bool? ?? false,
       );
 }
 
@@ -27,6 +29,7 @@ class MonthlyScheduleModel extends MonthlySchedule {
     required super.month,
     required super.status,
     required super.assignments,
+    super.carryAssignments,
     super.generatedAt,
     super.note,
   });
@@ -42,6 +45,11 @@ class MonthlyScheduleModel extends MonthlySchedule {
         .map((e) => ShiftAssignmentModel.fromJson(e as Map<String, dynamic>))
         .toList();
 
+    final rawCarry = json['carry_assignments'] as List<dynamic>? ?? [];
+    final carryAssignments = rawCarry
+        .map((e) => ShiftAssignmentModel.fromJson(e as Map<String, dynamic>))
+        .toList();
+
     final generatedAtStr = json['generated_at'] as String?;
 
     return MonthlyScheduleModel(
@@ -50,6 +58,7 @@ class MonthlyScheduleModel extends MonthlySchedule {
       month: json['month'] as int,
       status: status,
       assignments: assignments,
+      carryAssignments: carryAssignments,
       generatedAt: generatedAtStr != null ? DateTime.parse(generatedAtStr) : null,
       note: json['note'] as String?,
     );
