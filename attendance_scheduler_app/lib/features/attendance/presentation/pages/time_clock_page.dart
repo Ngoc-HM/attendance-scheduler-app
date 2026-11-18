@@ -58,6 +58,7 @@ class _OwnClockPageState extends ConsumerState<_OwnClockPage> {
     final l = AppLocalizations.of(context);
     final state = ref.watch(timeClockControllerProvider);
     final today = state.today;
+    final shift = ref.watch(shiftTodayProvider).valueOrNull;
 
     // Same frame as the other screens: title, the one action that applies
     // now at the top right, today's numbers, then the month's table.
@@ -100,6 +101,18 @@ class _OwnClockPageState extends ConsumerState<_OwnClockPage> {
               ),
             ],
           ),
+          // Today's code with its shift frame: A, D, or the double
+          // shift's frame for A/D and AD; nothing for other codes.
+          if (shift?.start != null) ...[
+            const SizedBox(height: DsSpacing.x3),
+            Text(
+              '${l.text('clockTodayShift')}: '
+              '${shift!.code} ${shift.start}–${shift.end}',
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: DsColors.textMuted),
+            ),
+          ],
           const SizedBox(height: DsSpacing.x6),
           if (state.isLoading)
             const Center(child: CircularProgressIndicator())

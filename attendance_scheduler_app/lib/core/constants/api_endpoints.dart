@@ -83,4 +83,11 @@ class ApiEndpoints {
       '/reports/monthly/$year/$month';
   static String yearlyReport(int year) => '/reports/yearly/$year';
   static String leaveReport(int year) => '/reports/leave-balance/$year';
+  // The month's roster in the customer's workbook layout (always .xlsx).
+  static String rosterReport(int year, int month) =>
+      '/reports/roster/$year/$month';
+
+  // Shift time frames (decision #71): GET for all, PUT admin only.
+  static const String shiftTimes = '/shift-times';
+  static const String shiftToday = '/shift-times/today';
 }

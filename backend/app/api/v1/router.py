@@ -18,6 +18,7 @@ from app.api.v1.endpoints import (
     reports,
     schedules,
     shift_changes,
+    shift_times,
     time_clock,
     users,
 )
@@ -39,6 +40,7 @@ api_router.include_router(
 )
 api_router.include_router(reports.router, prefix="/reports", tags=["reports"])
 api_router.include_router(shift_changes.router, prefix="/shift-changes", tags=["shift-changes"])
+api_router.include_router(shift_times.router, prefix="/shift-times", tags=["shift-times"])
 api_router.include_router(compliance.router, prefix="/compliance", tags=["compliance"])
 api_router.include_router(
     pending_counts.router, prefix="/pending-counts", tags=["pending-counts"]

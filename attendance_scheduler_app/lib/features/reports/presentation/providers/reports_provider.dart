@@ -52,8 +52,10 @@ class ReportsState {
   final int? selectedMonth;
   final String selectedFormat; // 'csv' | 'xlsx'
 
-  /// 'attendance' (month or year) or 'leave' (everyone's annual leave of
-  /// the selected year: quota, approved, pending, left, comp days).
+  /// 'attendance' (month or year), 'leave' (everyone's annual leave of
+  /// the selected year: quota, approved, pending, left, comp days) or
+  /// 'roster' (the month's roster in the customer's workbook layout:
+  /// a month is required, always .xlsx).
   final String selectedKind;
 
   ReportsState copyWith({
@@ -98,13 +100,20 @@ class ReportsController extends StateNotifier<ReportsState> {
       ? state.copyWith(fullYear: true)
       : state.copyWith(selectedMonth: month);
   void selectFormat(String fmt) => state = state.copyWith(selectedFormat: fmt);
-  void selectKind(String kind) => state = state.copyWith(selectedKind: kind);
+  /// The roster needs a month: coming from "Full year", pick this month.
+  void selectKind(String kind) => state = state.copyWith(
+    selectedKind: kind,
+    selectedMonth: kind == 'roster' && state.selectedMonth == null
+        ? DateTime.now().month
+        : null,
+  );
 
   /// Export the selected period: the month's report, or the yearly report
   /// when the full year is selected. Null when an export is already running
   /// (the click is ignored).
   Future<ExportResult?> export() {
     if (state.selectedKind == 'leave') return exportLeave();
+    if (state.selectedKind == 'roster') return exportRoster();
     return state.selectedMonth == null ? exportYearly() : exportMonthly();
   }
 
@@ -115,6 +124,16 @@ class ReportsController extends StateNotifier<ReportsState> {
       return const ExportFailure.localized('selectYearFirst');
     }
     return _export(() => _ds.leaveBalance(year, state.selectedFormat));
+  }
+
+  /// Download the selected month's roster in the customer's workbook layout.
+  Future<ExportResult?> exportRoster() async {
+    final year = state.selectedYear;
+    final month = state.selectedMonth;
+    if (year == null || month == null) {
+      return const ExportFailure.localized('selectYearMonthFirst');
+    }
+    return _export(() => _ds.roster(year, month));
   }
 
   /// Download monthly report, save to downloads directory, surface path.

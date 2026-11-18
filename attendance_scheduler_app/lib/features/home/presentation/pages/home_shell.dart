@@ -106,6 +106,11 @@ class _HomeShellState extends ConsumerState<HomeShell> {
           icon: Icons.celebration_outlined,
         ),
         DsNavigationDestination(
+          path: AppRoute.shiftTimes,
+          label: l.text('navShiftTimes'),
+          icon: Icons.schedule_outlined,
+        ),
+        DsNavigationDestination(
           path: AppRoute.reports,
           label: l.navReports,
           icon: Icons.bar_chart_outlined,

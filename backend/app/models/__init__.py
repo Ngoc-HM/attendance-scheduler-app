@@ -13,6 +13,7 @@ from app.models.role_code_counter import RoleCodeCounter
 from app.models.schedule import MonthlySchedule, ShiftAssignment
 from app.models.self_arrange_request import SelfArrangeRequest
 from app.models.shift_change_request import ShiftChangeRequest
+from app.models.shift_time import ShiftTime
 from app.models.time_clock import TimeClockEntry
 from app.models.user import User
 
@@ -29,6 +30,7 @@ __all__ = [
     "SelfArrangeRequest",
     "ShiftAssignment",
     "ShiftChangeRequest",
+    "ShiftTime",
     "TimeClockEntry",
     "User",
 ]

@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../data/datasources/shift_times_remote_datasource.dart';
 import '../../data/datasources/time_clock_remote_datasource.dart';
 
 class TimeClockState {
@@ -94,4 +95,10 @@ class TimeClockController extends StateNotifier<TimeClockState> {
 final timeClockControllerProvider =
     StateNotifierProvider<TimeClockController, TimeClockState>(
   (ref) => TimeClockController(ref.watch(timeClockRemoteDataSourceProvider)),
+);
+
+/// The signed-in person's code today with its shift frame (decision #71),
+/// shown as one line on the check-in/out page.
+final shiftTodayProvider = FutureProvider.autoDispose<ShiftToday>(
+  (ref) => ref.watch(shiftTimesRemoteDataSourceProvider).today(),
 );

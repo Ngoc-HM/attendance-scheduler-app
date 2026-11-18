@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../features/attendance/presentation/pages/attendance_page.dart';
 import '../../features/attendance/presentation/pages/holidays_page.dart';
+import '../../features/attendance/presentation/pages/shift_times_page.dart';
 import '../../features/attendance/presentation/pages/time_clock_page.dart';
 import '../../features/auth/presentation/pages/login_page.dart';
 import '../../features/auth/presentation/pages/register_page.dart';
@@ -25,6 +26,7 @@ const _adminOnlyPaths = {
   AppRoute.reports,
   AppRoute.users,
   AppRoute.holidays,
+  AppRoute.shiftTimes,
 };
 
 /// Routes reachable without a session.
@@ -125,6 +127,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 const NoTransitionPage(child: HolidaysPage()),
           ),
           GoRoute(
+            path: AppRoute.shiftTimes,
+            pageBuilder: (context, state) =>
+                const NoTransitionPage(child: ShiftTimesPage()),
+          ),
+          GoRoute(
             path: AppRoute.clock,
             pageBuilder: (context, state) =>
                 const NoTransitionPage(child: TimeClockPage()),
@@ -155,4 +162,5 @@ class AppRoute {
   static const String users = '/users';
   static const String clock = '/clock';
   static const String holidays = '/holidays';
+  static const String shiftTimes = '/shift-times';
 }

@@ -45,6 +45,10 @@ class ReportsPage extends ConsumerWidget {
               value: 'leave',
               child: Text(l.text('reportLeave')),
             ),
+            DropdownMenuItem(
+              value: 'roster',
+              child: Text(l.text('reportRoster')),
+            ),
           ],
           onChanged: (v) {
             if (v != null) ctrl.selectKind(v);
@@ -67,10 +71,12 @@ class ReportsPage extends ConsumerWidget {
             label: l.text('month'),
             value: state.selectedMonth,
             items: [
-              DropdownMenuItem<int?>(
-                value: null,
-                child: Text(l.text('allYear')),
-              ),
+              // The roster is one month: no "Full year".
+              if (state.selectedKind != 'roster')
+                DropdownMenuItem<int?>(
+                  value: null,
+                  child: Text(l.text('allYear')),
+                ),
               for (var m = 1; m <= 12; m++)
                 DropdownMenuItem<int?>(
                   value: m,
@@ -79,17 +85,19 @@ class ReportsPage extends ConsumerWidget {
             ],
             onChanged: ctrl.selectMonth,
           ),
-        DsSelectField<String>(
-          label: l.text('format'),
-          value: state.selectedFormat,
-          items: const [
-            DropdownMenuItem(value: 'csv', child: Text('CSV')),
-            DropdownMenuItem(value: 'xlsx', child: Text('XLSX')),
-          ],
-          onChanged: (v) {
-            if (v != null) ctrl.selectFormat(v);
-          },
-        ),
+        // The roster is always .xlsx: no format to pick.
+        if (state.selectedKind != 'roster')
+          DsSelectField<String>(
+            label: l.text('format'),
+            value: state.selectedFormat,
+            items: const [
+              DropdownMenuItem(value: 'csv', child: Text('CSV')),
+              DropdownMenuItem(value: 'xlsx', child: Text('XLSX')),
+            ],
+            onChanged: (v) {
+              if (v != null) ctrl.selectFormat(v);
+            },
+          ),
       ],
     );
   }

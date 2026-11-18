@@ -34,6 +34,14 @@ class _RecordingReports extends ReportsRemoteDataSource {
     yearlyCalls.add((year, format));
     return const ReportDownload(bytes: [1], filename: 'y.csv');
   }
+
+  final rosterCalls = <(int, int)>[];
+
+  @override
+  Future<ReportDownload> roster(int year, int month) async {
+    rosterCalls.add((year, month));
+    return const ReportDownload(bytes: [1], filename: 'WR NOV26.xlsx');
+  }
 }
 
 /// Every download fails with 409 and a JSON detail in the (bytes) body.
@@ -128,6 +136,25 @@ void main() {
     expect(find.text('Report saved to /downloads/y.csv'), findsOneWidget);
     // Let the toast's auto-dismiss timer run out.
     await tester.pump(const Duration(seconds: 10));
+  });
+
+  test('the roster needs a month and downloads the WR workbook', () async {
+    final reports = _RecordingReports();
+    final ctrl = ReportsController(
+      reports,
+      saveFile: (bytes, name) async => '/downloads/$name',
+    )..selectMonth(null);
+
+    // Coming from "Full year", the roster picks a month.
+    ctrl.selectKind('roster');
+    expect(ctrl.state.selectedMonth, isNotNull);
+    ctrl.selectMonth(11);
+
+    final result = await ctrl.export();
+
+    expect(reports.rosterCalls, [(ctrl.state.selectedYear!, 11)]);
+    expect(reports.monthlyCalls, isEmpty);
+    expect((result as ExportSuccess).path, '/downloads/WR NOV26.xlsx');
   });
 
   test('a failed download surfaces the backend detail', () async {

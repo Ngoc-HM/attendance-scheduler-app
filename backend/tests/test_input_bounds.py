@@ -29,6 +29,7 @@ MONTH_ENDPOINTS: list[tuple[str, str, str]] = [
     ("GET", "/schedules/{y}/{m}", "employee"),
     ("GET", "/schedules/{y}/{m}", "admin"),
     ("GET", "/reports/monthly/{y}/{m}", "admin"),
+    ("GET", "/reports/roster/{y}/{m}", "admin"),
     ("POST", "/calculations/{y}/{m}/close", "admin"),
 ]
 YEAR_ENDPOINTS: list[tuple[str, str, str]] = [

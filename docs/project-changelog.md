@@ -1,5 +1,18 @@
 # Project Changelog
 
+## 2026-11-18 — Roster download in the customer's layout, shift times
+
+- **Roster (WR layout)** (decision #70): Reports has a third type that
+  downloads the month's roster as the customer's workbook (`WR NOV26.xlsx`):
+  same sheets, title, columns, merged days, legend, counts, comp-day rows,
+  signature line, notes and the annual-leave sheet. Everyone appears by
+  code only. Pick a year and a month; the file is always .xlsx. A month
+  without a roster says so.
+- **Shift times** (#71): a new admin page sets when shifts A and D start and
+  end (default A 05:30–13:05, D 06:20–13:55); the A/D frame follows from
+  them. The check-in/out page shows today's shift with its times. Nothing
+  else changes: no late or early marks.
+
 ## 2026-11-18 — Customer meeting: warnings before approval, leave ceiling, dashboard, group F
 
 - **Approval warnings come first** (decision #65). Approve on a leave or a

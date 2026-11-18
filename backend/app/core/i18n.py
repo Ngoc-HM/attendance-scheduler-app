@@ -175,6 +175,11 @@ MESSAGES: dict[str, dict[str, str]] = {
         # --- Attendance / holidays (F-10..F-13) ---
         "attendance.not_found": "Attendance record not found.",
         "holiday.not_found": "Holiday not found.",
+        # --- Shift time frames (decision #71) ---
+        "shift_time.invalid_time": "Times must be written as HH:MM (00:00 to 23:59).",
+        "shift_time.start_not_before_end": "A shift must start before it ends.",
+        # --- Roster export in the customer's workbook layout (decision #70) ---
+        "report.roster_no_schedule": "There is no roster for this month yet.",
         "attendance.sick_no_cover": "No eligible colleague to cover the sick shift; resolve manually (F-09).",
         "attendance.sick_only": "This endpoint only handles sick (S) days.",
         # --- Time clock (owner 2026-07-09) ---
@@ -358,6 +363,9 @@ MESSAGES: dict[str, dict[str, str]] = {
         # --- Attendance / holidays (F-10..F-13) ---
         "attendance.not_found": "Không tìm thấy bản ghi chấm công.",
         "holiday.not_found": "Không tìm thấy ngày lễ.",
+        "shift_time.invalid_time": "Giờ phải có dạng HH:MM (00:00 đến 23:59).",
+        "shift_time.start_not_before_end": "Giờ bắt đầu ca phải trước giờ kết thúc.",
+        "report.roster_no_schedule": "Tháng này chưa có lịch làm.",
         "attendance.sick_no_cover": "Không có đồng nghiệp phù hợp để bù ca ốm; admin xử lý tay (F-09).",
         "attendance.sick_only": "Endpoint này chỉ xử lý ngày nghỉ ốm (S).",
         # --- Time clock (owner 2026-07-09) ---

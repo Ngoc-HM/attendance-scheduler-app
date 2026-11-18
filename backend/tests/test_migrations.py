@@ -196,3 +196,32 @@ def test_0013_backfills_the_colleague_answer_of_existing_swaps(
         assert all(r[2] is None for r in got)
     finally:
         engine.dispose()
+
+
+def test_0014_seeds_the_shift_frames_and_downgrades(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """0014: ``shift_times`` holds the owner's defaults for A and D; the
+    double shift is never stored. Downgrading drops the table."""
+    url = f"sqlite:///{tmp_path / 'shift_times.db'}"
+    cfg = _point_alembic_at(monkeypatch, url)
+    command.upgrade(cfg, "0014")
+
+    engine = create_engine(url)
+    try:
+        with engine.connect() as conn:
+            rows = conn.execute(text(
+                "SELECT code, start_time, end_time FROM shift_times ORDER BY code"
+            )).all()
+        assert [(r[0], str(r[1])[:5], str(r[2])[:5]) for r in rows] == [
+            ("A", "05:30", "13:05"), ("D", "06:20", "13:55"),
+        ]
+    finally:
+        engine.dispose()
+
+    command.downgrade(cfg, "0013")
+    engine = create_engine(url)
+    try:
+        assert not inspect(engine).has_table("shift_times")
+    finally:
+        engine.dispose()

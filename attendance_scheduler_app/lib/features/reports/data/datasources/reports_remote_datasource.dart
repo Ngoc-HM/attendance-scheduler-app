@@ -88,6 +88,26 @@ class ReportsRemoteDataSource {
     }
   }
 
+  /// GET /reports/roster/{year}/{month} — the month's roster in the
+  /// customer's workbook layout, always .xlsx (`WR NOV26.xlsx`).
+  Future<ReportDownload> roster(int year, int month) async {
+    try {
+      final response = await _dio.get(
+        ApiEndpoints.rosterReport(year, month),
+        options: Options(responseType: ResponseType.bytes),
+      );
+      return ReportDownload(
+        bytes: response.data as List<int>,
+        filename: filenameFromContentDisposition(
+          response,
+          'WR_${year}_${_two(month)}.xlsx',
+        ),
+      );
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e, 'Failed to download the roster');
+    }
+  }
+
   // ---------------------------------------------------------------------------
 
   static String _two(int v) => v.toString().padLeft(2, '0');
