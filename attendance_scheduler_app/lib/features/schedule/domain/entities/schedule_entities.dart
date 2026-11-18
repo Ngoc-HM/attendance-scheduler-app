@@ -108,6 +108,7 @@ class ShiftChangeRequest extends Equatable {
     this.note,
     this.decidedById,
     this.decidedAt,
+    this.counterpartStatus,
   });
 
   final int id;
@@ -123,6 +124,18 @@ class ShiftChangeRequest extends Equatable {
   final int? decidedById;
   final DateTime? decidedAt;
 
+  /// swap_with only: the colleague's own answer ("pending" | "approved" |
+  /// "rejected"); the admin decides once it is "approved". Null for a code
+  /// change.
+  final String? counterpartStatus;
+
   @override
-  List<Object?> get props => [id, requesterId, workDate, kind, status];
+  List<Object?> get props => [
+    id,
+    requesterId,
+    workDate,
+    kind,
+    status,
+    counterpartStatus,
+  ];
 }

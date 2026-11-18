@@ -143,3 +143,56 @@ def test_alembic_url_with_percent(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
     finally:
         engine.dispose()
     assert (folder / "pct.db").exists()
+
+
+def test_0013_backfills_the_colleague_answer_of_existing_swaps(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """0013: an approved swap counts as accepted by the colleague, a pending
+    one now waits for them; a rejected swap and every code change stay NULL."""
+    url = f"sqlite:///{tmp_path / 'swaps.db'}"
+    cfg = _point_alembic_at(monkeypatch, url)
+    command.upgrade(cfg, "0012")
+
+    engine = create_engine(url)
+    try:
+        with Session(engine) as db:
+            for uid, code in ((1, "A1"), (2, "A2")):
+                db.add(User(
+                    id=uid, username=f"u{uid}", code=code, full_name=f"U{uid}",
+                    hashed_password="x", role=Role.A, status=UserStatus.active,
+                ))
+            db.commit()
+        with engine.begin() as conn:
+            stamp = "'2026-01-01 00:00:00'"
+            rows = [
+                (1, "swap_with", "pending"), (2, "swap_with", "approved"),
+                (3, "swap_with", "rejected"), (4, "change_code", "pending"),
+            ]
+            for rid, kind, status in rows:
+                counterpart = "2" if kind == "swap_with" else "NULL"
+                requested = "NULL" if kind == "swap_with" else "'X'"
+                conn.execute(text(
+                    "INSERT INTO shift_change_requests (id, requester_id, work_date, "
+                    "kind, requested_code, counterpart_user_id, status, created_at, "
+                    f"updated_at) VALUES ({rid}, 1, '2026-01-0{rid}', '{kind}', "
+                    f"{requested}, {counterpart}, '{status}', {stamp}, {stamp})"
+                ))
+    finally:
+        engine.dispose()
+
+    command.upgrade(cfg, "head")
+
+    engine = create_engine(url)
+    try:
+        with engine.connect() as conn:
+            got = conn.execute(text(
+                "SELECT id, counterpart_status, counterpart_decided_at "
+                "FROM shift_change_requests ORDER BY id"
+            )).all()
+        assert [(r[0], r[1]) for r in got] == [
+            (1, "pending"), (2, "approved"), (3, None), (4, None),
+        ]
+        assert all(r[2] is None for r in got)
+    finally:
+        engine.dispose()

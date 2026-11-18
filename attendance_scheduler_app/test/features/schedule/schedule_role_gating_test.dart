@@ -111,6 +111,10 @@ class _FakeScheduleDataSource extends ScheduleRemoteDataSource {
     return List.of(_requests);
   }
 
+  /// Nobody asks the employee to swap in these tests.
+  @override
+  Future<List<ShiftChangeRequest>> fetchIncomingShiftChanges() async => [];
+
   @override
   Future<ShiftChangeRequest> createShiftChange({
     required DateTime workDate,

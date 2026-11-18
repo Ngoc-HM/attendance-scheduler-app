@@ -95,6 +95,7 @@ def overview(db: Session) -> DashboardRead:
     ]
 
     summaries = leave_balance.summaries(db, staff, today.year)
+    following = leave_balance.summaries(db, staff, today.year + 1)
     ny, nm = (today.year + 1, 1) if today.month == 12 else (today.year, today.month + 1)
     return DashboardRead(
         today=today,
@@ -112,6 +113,9 @@ def overview(db: Session) -> DashboardRead:
                 used=summaries[u.id].used,
                 pending=summaries[u.id].pending,
                 available=summaries[u.id].available,
+                next_used=following[u.id].used,
+                next_pending=following[u.id].pending,
+                next_available=following[u.id].available,
                 carry_comp=u.carry_comp,
             )
             for u in staff

@@ -105,6 +105,9 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
     final isAdmin = ref.watch(isAdminProvider);
     final me = ref.watch(authControllerProvider).user;
     final scheduleState = ref.watch(scheduleControllerProvider);
+    final hasIncoming = ref.watch(
+      shiftChangeControllerProvider.select((s) => s.incoming.isNotEmpty),
+    );
     // Publishing, regenerating or editing the roster changes which days are
     // due and which are adjusted: the Attendance grid re-reads its tints.
     ref.listen(scheduleControllerProvider.select((s) => s.schedule), (
@@ -159,6 +162,13 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
             lines: [
               for (final v in violations) _violationLine(l, v, scheduleState),
             ],
+          ),
+        ],
+        if (!isAdmin && me != null && hasIncoming) ...[
+          const Divider(height: 1),
+          IncomingSwapRequestsPanel(
+            codeById: {for (final p in scheduleState.people) p.id: p.code},
+            onAnswered: _onSwapAnswered,
           ),
         ],
         if (!isAdmin && me != null) ...[
@@ -504,6 +514,19 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
     _loadMonth();
     ref.invalidate(clockBoardProvider);
     DsFeedback.show(context, l.text('requestApproved'), tone: DsTone.success);
+  }
+
+  /// The signed-in person answered a colleague's swap request
+  /// (IncomingSwapRequestsPanel). Nothing changes on the grid until the
+  /// admin approves it.
+  void _onSwapAnswered(bool accepted) {
+    if (!mounted) return;
+    final l = AppLocalizations.of(context);
+    DsFeedback.show(
+      context,
+      accepted ? l.text('swapAccepted') : l.text('swapDeclined'),
+      tone: DsTone.success,
+    );
   }
 
   /// F-09 admin cell edit: tap a roster cell → pick a code → save. The edit

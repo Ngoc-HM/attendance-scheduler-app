@@ -99,6 +99,8 @@ class DashboardLeave {
     required this.used,
     required this.pending,
     required this.available,
+    required this.nextRegistered,
+    required this.nextAvailable,
     required this.carryComp,
   });
 
@@ -109,6 +111,8 @@ class DashboardLeave {
     used: json['used'] as int,
     pending: json['pending'] as int,
     available: json['available'] as int,
+    nextRegistered: (json['next_used'] as int) + (json['next_pending'] as int),
+    nextAvailable: json['next_available'] as int,
     carryComp: json['carry_comp'] as int,
   );
 
@@ -120,7 +124,15 @@ class DashboardLeave {
 
   /// What the person can still register: quota − approved − pending.
   final int available;
+
+  /// The same for the year after, which is the one being registered now.
+  final int nextRegistered;
+  final int nextAvailable;
   final int carryComp;
+
+  /// Days registered this year, approved or still waiting: a filed request
+  /// counts at once.
+  int get registered => used + pending;
 }
 
 /// The admin dashboard (GET /dashboard, customer 2026-11-18).

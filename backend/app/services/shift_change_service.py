@@ -3,7 +3,11 @@
 Handles create / list / approve / reject for ShiftChangeRequest.
 - create: the requester's own planned cell only; enforces kind-specific fields,
   a changeable cell (not AL/CD/S/admin codes) and a valid swap partner.
-- decide: row-locked, 409 once decided; on approval applies the change via
+- respond: the swap partner accepts or declines (customer 2026-11-18: the
+  requester files, the colleague agrees, the admin decides last). A declined
+  swap is rejected at once.
+- decide: row-locked, 409 once decided, 409 for a swap the colleague has not
+  accepted; on approval applies the change via
   schedule_service.apply_shift_change and commits cells + status together.
 - strict_review flag is derived at call-site from requester.role.is_fixed (not stored).
 """
@@ -138,6 +142,10 @@ def create_request(
         kind=payload.kind,
         requested_code=payload.requested_code,
         counterpart_user_id=payload.counterpart_user_id,
+        # A swap waits for the colleague first; a code change has nobody to ask.
+        counterpart_status=(
+            LeaveStatus.pending if payload.kind is SwapKind.swap_with else None
+        ),
         status=LeaveStatus.pending,
         note=payload.note,
     )
@@ -160,6 +168,60 @@ def list_for_user(db: Session, user_id: int) -> list[tuple[ShiftChangeRequest, b
     user = db.get(User, user_id)
     strict = user.role.is_fixed if user else False
     return [(r, strict) for r in reqs]
+
+
+def list_incoming(db: Session, user_id: int) -> list[tuple[ShiftChangeRequest, bool]]:
+    """Swaps ``user_id`` was asked into and has not answered yet (oldest
+    first)."""
+    reqs = (
+        db.query(ShiftChangeRequest)
+        .filter(
+            ShiftChangeRequest.counterpart_user_id == user_id,
+            ShiftChangeRequest.kind == SwapKind.swap_with,
+            ShiftChangeRequest.status == LeaveStatus.pending,
+            ShiftChangeRequest.counterpart_status == LeaveStatus.pending,
+        )
+        .order_by(ShiftChangeRequest.created_at)
+        .all()
+    )
+    users = {
+        u.id: u
+        for u in db.query(User).filter(User.id.in_({r.requester_id for r in reqs}))
+    }
+    return [
+        (r, users[r.requester_id].role.is_fixed if r.requester_id in users else False)
+        for r in reqs
+    ]
+
+
+def respond(db: Session, req_id: int, user_id: int, accept: bool) -> ShiftChangeRequest:
+    """The swap partner's answer. Accepting hands the request to the admin;
+    declining rejects it. Only the named colleague may answer (404 for anyone
+    else), once, while the request is still open (409 otherwise)."""
+    req = _get_locked_or_404(db, req_id)
+    if req.kind is not SwapKind.swap_with or req.counterpart_user_id != user_id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=t("swap.not_found"))
+    if req.status != LeaveStatus.pending or req.counterpart_status != LeaveStatus.pending:
+        raise HTTPException(status.HTTP_409_CONFLICT, detail=t("swap.already_decided"))
+    now = datetime.now(UTC)
+    req.counterpart_decided_at = now
+    if accept:
+        req.counterpart_status = LeaveStatus.approved
+    else:
+        req.counterpart_status = LeaveStatus.rejected
+        req.status = LeaveStatus.rejected
+        req.decided_at = now
+    db.commit()
+    db.refresh(req)
+    return req
+
+
+def _ensure_counterpart_agreed(req: ShiftChangeRequest) -> None:
+    """A swap reaches the admin only once the colleague accepted it."""
+    if req.kind is SwapKind.swap_with and req.counterpart_status != LeaveStatus.approved:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, detail=t("swap.awaiting_counterpart")
+        )
 
 
 def list_all(db: Session) -> list[tuple[ShiftChangeRequest, bool]]:
@@ -210,6 +272,7 @@ def decide(
     warnings: list[str] = []
 
     if new_status == LeaveStatus.approved:
+        _ensure_counterpart_agreed(req)
         # Approving a change that cannot be applied is an error (propagates).
         warnings.extend(schedule_service.apply_shift_change(db, req))
 
@@ -236,6 +299,7 @@ def preview_approval(db: Session, req_id: int) -> list[str]:
     req = _get_locked_or_404(db, req_id)
     if req.status != LeaveStatus.pending:
         raise HTTPException(status.HTTP_409_CONFLICT, detail=t("swap.already_decided"))
+    _ensure_counterpart_agreed(req)
     try:
         snapshot = schedule_service.snapshot_violations(
             db, [(req.work_date.year, req.work_date.month)]

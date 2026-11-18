@@ -5,6 +5,10 @@ A user asks to change the code of one of their OWN scheduled days
 (``swap_with``). Admin approves/rejects; approval applies the edit to the
 schedule with a hard-rule re-check (phase 05 ``apply_shift_change``).
 
+A swap needs both people (customer 2026-11-18): the requester files it, the
+colleague accepts or declines (``counterpart_status``), and only an accepted
+swap reaches the admin, who decides last. A declined swap is rejected.
+
 Flexible roles (M, T) request routinely; fixed roles (A1–A4) may request but
 the admin reviews strictly (§3) — the ``strict_review`` flag is derived from
 the requester's role, not stored.
@@ -38,6 +42,15 @@ class ShiftChangeRequest(Base, TimestampMixin):
     # swap_with: the colleague whose same-day code is exchanged.
     counterpart_user_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id"), nullable=True
+    )
+
+    # swap_with only: the colleague's own answer — pending until they accept
+    # (approved) or decline (rejected); NULL for a code change.
+    counterpart_status: Mapped[LeaveStatus | None] = mapped_column(
+        SAEnum(LeaveStatus, name="leave_status"), nullable=True
+    )
+    counterpart_decided_at: Mapped[datetime | None] = mapped_column(
+        DateTime, nullable=True
     )
 
     # Reuses the pending/approved/rejected lifecycle from leave requests.

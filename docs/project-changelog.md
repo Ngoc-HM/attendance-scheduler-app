@@ -19,6 +19,15 @@
   flight pairs, one otherwise and at weekends; two days off per week; the
   days off swap every week. Rosters generated before this rule show the new
   group-F lines in their violation list until they are regenerated.
+- **A swap needs the colleague first** (#69): a swap with a colleague goes
+  to that colleague, who accepts or declines it on the schedule page; only
+  an accepted swap reaches the admin, who decides last. A declined swap is
+  rejected. The requester sees where the swap stands (waiting for the
+  colleague, waiting for the admin, declined by the colleague). A code
+  change still goes straight to the admin.
+- **Dashboard leave table comes first**: one row per person, the ceiling
+  minus what is registered (approved or pending) gives the days left, for
+  this year and for next year.
 
 ## 2026-11-10 — Flight plan template and customer logo
 

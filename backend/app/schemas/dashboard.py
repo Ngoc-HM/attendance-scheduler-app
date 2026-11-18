@@ -43,11 +43,18 @@ class DashboardSchedule(BaseModel):
 
 
 class DashboardLeave(DashboardPerson):
+    """One person's annual leave: the ceiling (``quota``) minus what is
+    registered — approved or still pending — for ``leave_year`` and for the
+    year after, which is the one being registered now."""
+
     quota: int
     used: int
     pending: int
     # What the person can still register: quota - used - pending.
     available: int
+    next_used: int
+    next_pending: int
+    next_available: int
     carry_comp: int
 
 

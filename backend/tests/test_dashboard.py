@@ -78,6 +78,10 @@ def test_overview_reads_today_missing_punches_roster_and_leave(db: Session) -> N
         LeaveRequest(user_id=f1, start_date=date(today.year, 8, 3),
                      end_date=date(today.year, 8, 4), leave_type=LeaveType.monthly,
                      status=LeaveStatus.pending),
+        # Next year's leave, registered this year.
+        LeaveRequest(user_id=f1, start_date=date(today.year + 1, 2, 1),
+                     end_date=date(today.year + 1, 2, 10), leave_type=LeaveType.annual,
+                     status=LeaveStatus.pending),
     ])
     db.commit()
 
@@ -90,13 +94,16 @@ def test_overview_reads_today_missing_punches_roster_and_leave(db: Session) -> N
         assert [(m.code, m.work_date, m.status) for m in view.missing_clock] == [
             ("A1", yesterday, "absent")
         ]
-    assert view.pending.leaves == 1
+    assert view.pending.leaves == 2
     assert view.this_month.status is ScheduleStatus.published
     assert view.next_month.status is None and view.next_month.violations == []
     leave = {row.code: row for row in view.leave}
     assert set(leave) == {"A1", "F1"}  # the admin account is left out
     assert (leave["F1"].quota, leave["F1"].used, leave["F1"].pending,
             leave["F1"].available) == (20, 3, 2, 15)
+    assert (leave["F1"].next_used, leave["F1"].next_pending,
+            leave["F1"].next_available) == (0, 10, 10)
+    assert leave["A1"].next_available == 30
 
 
 def test_leave_report_lists_every_active_person(db: Session) -> None:

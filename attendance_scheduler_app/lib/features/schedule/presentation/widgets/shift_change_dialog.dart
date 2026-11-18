@@ -180,6 +180,8 @@ class _ShiftChangeRequestDialogState
 
 /// Admin panel showing pending shift-change requests with approve/reject.
 /// Each row names the requester and, for a swap, the partner by code (D3).
+/// Only what the admin can decide now is listed: code changes, and swaps the
+/// colleague already accepted (customer 2026-11-18).
 /// A successful decision is handed to [onDecided]; the panel itself only
 /// reports a failed one.
 class ShiftChangePendingPanel extends ConsumerWidget {
@@ -205,7 +207,13 @@ class ShiftChangePendingPanel extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l = AppLocalizations.of(context);
     final state = ref.watch(shiftChangeControllerProvider);
-    final pending = state.requests.where((r) => r.status == 'pending').toList();
+    final pending = state.requests
+        .where(
+          (r) =>
+              r.status == 'pending' &&
+              (r.kind != 'swap_with' || r.counterpartStatus == 'approved'),
+        )
+        .toList();
 
     if (state.isLoading) {
       return const Center(child: CircularProgressIndicator());
@@ -486,7 +494,7 @@ class MyShiftChangeRequestsPanel extends ConsumerWidget {
       ),
       Text(target, style: DsType.tableCell),
       DsBadge(
-        label: l.statusLabel(request.status),
+        label: _statusLabel(l, request),
         tone: switch (request.status) {
           'approved' => DsTone.success,
           'rejected' => DsTone.danger,
@@ -494,5 +502,139 @@ class MyShiftChangeRequestsPanel extends ConsumerWidget {
         },
       ),
     ];
+  }
+
+  /// A swap names its step: waiting for the colleague, waiting for the
+  /// admin, or declined by the colleague; otherwise the plain status.
+  String _statusLabel(AppLocalizations l, ShiftChangeRequest request) {
+    if (request.kind != 'swap_with') return l.statusLabel(request.status);
+    return switch ((request.status, request.counterpartStatus)) {
+      ('pending', 'pending') => l.text('swapAwaitingColleague'),
+      ('pending', 'approved') => l.text('swapAwaitingAdmin'),
+      ('rejected', 'rejected') => l.text('swapDeclinedByColleague'),
+      _ => l.statusLabel(request.status),
+    };
+  }
+}
+
+/// Employee panel: swaps a colleague asked the signed-in person into, each
+/// with Accept / Decline. The page shows it only while there is one; an
+/// accepted swap goes on to the admin, a declined one is rejected.
+/// A successful answer is handed to [onAnswered] (true = accepted); the
+/// panel itself only reports a failed one, since answering the last row
+/// removes the panel.
+class IncomingSwapRequestsPanel extends ConsumerWidget {
+  const IncomingSwapRequestsPanel({
+    super.key,
+    required this.codeById,
+    required this.onAnswered,
+  });
+
+  /// Person id → code, to show who asks.
+  final Map<int, String> codeById;
+
+  final ValueChanged<bool> onAnswered;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l = AppLocalizations.of(context);
+    final state = ref.watch(shiftChangeControllerProvider);
+
+    return Padding(
+      padding: const EdgeInsets.all(DsSpacing.x4),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            l.text('incomingSwapRequests'),
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: DsSpacing.x2),
+          ConstrainedBox(
+            constraints: const BoxConstraints(
+              maxHeight: MyShiftChangeRequestsPanel._maxTableHeight,
+            ),
+            child: SingleChildScrollView(
+              child: DsSurface(
+                padding: EdgeInsets.zero,
+                child: DsDataTable(
+                  columns: [
+                    DsTableColumn(header: l.text('employee'), flex: 2),
+                    DsTableColumn(header: l.text('date'), flex: 2),
+                    DsTableColumn(header: l.actions, flex: 5),
+                  ],
+                  rows: [
+                    for (final request in state.incoming)
+                      [
+                        Text(
+                          codeById[request.requesterId] ??
+                              l.userFallback(request.requesterId),
+                          style: DsType.tableCell,
+                        ),
+                        Text(
+                          _isoDate(request.workDate),
+                          style: DsType.tableCell,
+                        ),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            DsTextAction(
+                              label: l.text('swapAccept'),
+                              icon: Icons.check,
+                              tone: DsTone.success,
+                              onPressed: state.isMutating
+                                  ? null
+                                  : () =>
+                                        _answer(context, ref, request.id, true),
+                            ),
+                            DsTextAction(
+                              label: l.text('swapDecline'),
+                              icon: Icons.close,
+                              tone: DsTone.danger,
+                              onPressed: state.isMutating
+                                  ? null
+                                  : () => _answer(
+                                      context,
+                                      ref,
+                                      request.id,
+                                      false,
+                                    ),
+                            ),
+                          ],
+                        ),
+                      ],
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _answer(
+    BuildContext context,
+    WidgetRef ref,
+    int id,
+    bool accept,
+  ) async {
+    final ctrl = ref.read(shiftChangeControllerProvider.notifier);
+    if (await ctrl.respond(id, accept: accept)) {
+      onAnswered(accept);
+      return;
+    }
+    if (!context.mounted) return;
+    final l = AppLocalizations.of(context);
+    DsFeedback.show(
+      context,
+      apiErrorMessage(
+        l,
+        ref.read(shiftChangeControllerProvider).error,
+        fallbackKey: 'actionFailed',
+      ),
+      tone: DsTone.danger,
+    );
   }
 }

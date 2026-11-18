@@ -10,6 +10,8 @@ Coverage targets:
 - decide approve with no schedule for the month → 409, request stays pending.
 - re-decide → 409.
 - a swap that would hand leave (AL) to the counterpart → 422 at approval.
+- three-step swap (customer 2026-11-18): the colleague accepts or declines
+  first; the admin cannot preview or approve before that; a decline rejects.
 """
 
 from __future__ import annotations
@@ -335,6 +337,8 @@ def test_swap_that_hands_leave_to_the_counterpart_is_refused(client: TestClient)
         {"work_date": day, "kind": "swap_with", "counterpart_user_id": ids[1]},
     )
     assert req.status_code == 201, req.text
+    ok = _respond(client, "f2_swap_a2", req.json()["id"], accept=True)
+    assert ok.status_code == 200, ok.text
 
     dec = client.post(
         f"{V}/shift-changes/{req.json()['id']}/decide", headers=admin,
@@ -406,6 +410,14 @@ def _cell(user_id: int, day: date) -> str:
         return cell.code.value
     finally:
         db.close()
+
+
+def _respond(client, username, req_id, accept):
+    """The swap partner's answer (accept or decline)."""
+    return client.post(
+        f"{V}/shift-changes/{req_id}/respond",
+        headers=_bearer(_token(client, username, "secret1")), json={"accept": accept},
+    )
 
 
 def _decide(client, admin, req_id, decision="approved"):
@@ -547,6 +559,8 @@ def test_second_approve_is_409(client: TestClient):
         {"work_date": day.isoformat(), "kind": "swap_with", "counterpart_user_id": you},
     )
     assert req.status_code == 201, req.text
+    ok = _respond(client, "r2_double_a2", req.json()["id"], accept=True)
+    assert ok.status_code == 200, ok.text
 
     first = _decide(client, admin, req.json()["id"])
     assert first.status_code == 200, first.text
@@ -556,3 +570,174 @@ def test_second_approve_is_409(client: TestClient):
     assert second.json()["detail"] == "This shift-change request was already decided."
     # Swapped exactly once — a second application would swap them back.
     assert (_cell(me, day), _cell(you, day)) == ("X", "A")
+
+
+# ---------------------------------------------------------------------------
+# Three-step swap (customer 2026-11-18): requester files → the named colleague
+# accepts or declines → only an accepted swap reaches the admin.
+# Each test owns its people and a 2061-06 day of its own.
+# ---------------------------------------------------------------------------
+
+_AWAITING = "The colleague has not accepted this swap yet."
+
+
+def _swap_pair(client, admin, prefix: str, day: date) -> tuple[int, int, int]:
+    """Two A people with A / X on ``day``; the first asks the second to swap.
+    Returns (requester id, colleague id, request id)."""
+    me = _create_user(client, admin, f"{prefix}_me", role="A")["id"]
+    you = _create_user(client, admin, f"{prefix}_you", role="A")["id"]
+    _give_cell(me, day, "A")
+    _give_cell(you, day, "X")
+    req = _request(
+        client, f"{prefix}_me",
+        {"work_date": day.isoformat(), "kind": "swap_with", "counterpart_user_id": you},
+    )
+    assert req.status_code == 201, req.text
+    return me, you, req.json()["id"]
+
+
+def _incoming_ids(client, username) -> list[int]:
+    res = client.get(
+        f"{V}/shift-changes/incoming",
+        headers=_bearer(_token(client, username, "secret1")),
+    )
+    assert res.status_code == 200, res.text
+    return [r["id"] for r in res.json()]
+
+
+def _pending_shift_changes(client, admin) -> int:
+    res = client.get(f"{V}/pending-counts", headers=admin)
+    assert res.status_code == 200, res.text
+    return int(res.json()["shift_changes"])
+
+
+def test_new_swap_waits_for_the_colleague(client: TestClient):
+    admin = _bearer(_token(client, "admin", "admin123"))
+    _, _, req_id = _swap_pair(client, admin, "s3_new", date(2061, 6, 1))
+
+    mine = client.get(
+        f"{V}/shift-changes", headers=_bearer(_token(client, "s3_new_me", "secret1"))
+    ).json()
+    row = next(r for r in mine if r["id"] == req_id)
+    assert row["status"] == "pending"
+    assert row["counterpart_status"] == "pending"
+
+
+def test_admin_cannot_approve_or_preview_before_acceptance(client: TestClient):
+    admin = _bearer(_token(client, "admin", "admin123"))
+    me, you, req_id = _swap_pair(client, admin, "s3_early", date(2061, 6, 2))
+
+    dec = _decide(client, admin, req_id)
+    assert dec.status_code == 409, dec.text
+    assert dec.json()["detail"] == _AWAITING
+    preview = client.get(f"{V}/shift-changes/{req_id}/approval-preview", headers=admin)
+    assert preview.status_code == 409, preview.text
+    assert preview.json()["detail"] == _AWAITING
+    assert (_cell(me, date(2061, 6, 2)), _cell(you, date(2061, 6, 2))) == ("A", "X")
+
+
+def test_only_the_named_colleague_can_answer(client: TestClient):
+    admin = _bearer(_token(client, "admin", "admin123"))
+    _, _, req_id = _swap_pair(client, admin, "s3_other", date(2061, 6, 3))
+    _create_user(client, admin, "s3_other_third", role="A")
+
+    for who in ("s3_other_third", "s3_other_me"):
+        res = _respond(client, who, req_id, accept=True)
+        assert res.status_code == 404, (who, res.text)
+        assert res.json()["detail"] == "Shift-change request not found."
+    assert _incoming_ids(client, "s3_other_you") == [req_id]
+
+
+def test_accepted_swap_is_approved_by_the_admin(client: TestClient):
+    admin = _bearer(_token(client, "admin", "admin123"))
+    day = date(2061, 6, 4)
+    me, you, req_id = _swap_pair(client, admin, "s3_yes", day)
+
+    ok = _respond(client, "s3_yes_you", req_id, accept=True)
+    assert ok.status_code == 200, ok.text
+    assert ok.json()["counterpart_status"] == "approved"
+    assert ok.json()["status"] == "pending"  # the admin still decides
+    preview = client.get(f"{V}/shift-changes/{req_id}/approval-preview", headers=admin)
+    assert preview.status_code == 200, preview.text
+
+    dec = _decide(client, admin, req_id)
+
+    assert dec.status_code == 200, dec.text
+    assert dec.json()["status"] == "approved"
+    assert (_cell(me, day), _cell(you, day)) == ("X", "A")
+
+
+def test_declined_swap_is_rejected(client: TestClient):
+    admin = _bearer(_token(client, "admin", "admin123"))
+    day = date(2061, 6, 5)
+    me, you, req_id = _swap_pair(client, admin, "s3_no", day)
+
+    no = _respond(client, "s3_no_you", req_id, accept=False)
+
+    assert no.status_code == 200, no.text
+    assert no.json()["counterpart_status"] == "rejected"
+    assert no.json()["status"] == "rejected"
+    dec = _decide(client, admin, req_id)
+    assert dec.status_code == 409, dec.text
+    assert (_cell(me, day), _cell(you, day)) == ("A", "X")
+
+
+def test_answering_twice_is_409(client: TestClient):
+    admin = _bearer(_token(client, "admin", "admin123"))
+    _, _, req_id = _swap_pair(client, admin, "s3_twice", date(2061, 6, 6))
+    assert _respond(client, "s3_twice_you", req_id, accept=True).status_code == 200
+
+    for accept in (True, False):
+        again = _respond(client, "s3_twice_you", req_id, accept=accept)
+        assert again.status_code == 409, again.text
+        assert again.json()["detail"] == "This shift-change request was already decided."
+
+
+def test_incoming_lists_only_swaps_waiting_for_the_caller(client: TestClient):
+    admin = _bearer(_token(client, "admin", "admin123"))
+    _, _, first = _swap_pair(client, admin, "s3_in", date(2061, 6, 7))
+    _create_user(client, admin, "s3_in_third", role="A")
+
+    assert _incoming_ids(client, "s3_in_you") == [first]
+    assert _incoming_ids(client, "s3_in_me") == []  # the requester's own swap
+    assert _incoming_ids(client, "s3_in_third") == []
+
+    assert _respond(client, "s3_in_you", first, accept=True).status_code == 200
+    assert _incoming_ids(client, "s3_in_you") == []
+
+
+def test_pending_count_ignores_a_swap_not_yet_accepted(client: TestClient):
+    admin = _bearer(_token(client, "admin", "admin123"))
+    base = _pending_shift_changes(client, admin)
+
+    _, _, req_id = _swap_pair(client, admin, "s3_count", date(2061, 6, 8))
+    assert _pending_shift_changes(client, admin) == base
+
+    assert _respond(client, "s3_count_you", req_id, accept=True).status_code == 200
+    assert _pending_shift_changes(client, admin) == base + 1
+
+    assert _decide(client, admin, req_id, "rejected").status_code == 200
+    assert _pending_shift_changes(client, admin) == base
+
+
+def test_code_change_goes_straight_to_the_admin(client: TestClient):
+    admin = _bearer(_token(client, "admin", "admin123"))
+    uid = _create_user(client, admin, "s3_code", role="A")["id"]
+    day = date(2061, 6, 9)
+    _give_cell(uid, day, "A")
+    base = _pending_shift_changes(client, admin)
+
+    req = _request(
+        client, "s3_code",
+        {"work_date": day.isoformat(), "kind": "change_code", "requested_code": "X"},
+    )
+    assert req.status_code == 201, req.text
+    assert req.json()["counterpart_status"] is None
+    assert _pending_shift_changes(client, admin) == base + 1
+    # Nobody to ask: answering a code change is not possible.
+    assert _respond(client, "s3_code", req.json()["id"], accept=True).status_code == 404
+
+    dec = _decide(client, admin, req.json()["id"])
+
+    assert dec.status_code == 200, dec.text
+    assert _cell(uid, day) == "X"

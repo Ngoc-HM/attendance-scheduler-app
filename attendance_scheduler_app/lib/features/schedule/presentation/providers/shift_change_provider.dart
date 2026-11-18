@@ -7,6 +7,7 @@ import '../../domain/entities/schedule_entities.dart';
 class ShiftChangeState {
   const ShiftChangeState({
     this.requests = const [],
+    this.incoming = const [],
     this.isLoading = false,
     this.isMutating = false,
     this.error,
@@ -14,6 +15,10 @@ class ShiftChangeState {
   });
 
   final List<ShiftChangeRequest> requests;
+
+  /// Swaps a colleague asked the signed-in person into, still waiting for
+  /// their answer (employee view only).
+  final List<ShiftChangeRequest> incoming;
   final bool isLoading;
   final bool isMutating;
 
@@ -28,6 +33,7 @@ class ShiftChangeState {
 
   ShiftChangeState copyWith({
     List<ShiftChangeRequest>? requests,
+    List<ShiftChangeRequest>? incoming,
     bool? isLoading,
     bool? isMutating,
     Object? error,
@@ -35,6 +41,7 @@ class ShiftChangeState {
     bool clearError = false,
   }) => ShiftChangeState(
     requests: requests ?? this.requests,
+    incoming: incoming ?? this.incoming,
     isLoading: isLoading ?? this.isLoading,
     isMutating: isMutating ?? this.isMutating,
     error: clearError ? null : (error ?? this.error),
@@ -51,6 +58,8 @@ class ShiftChangeController extends StateNotifier<ShiftChangeState> {
   /// Runs after every successful decision (the nav badge refresh).
   final void Function()? onDecided;
 
+  /// Own requests, or every request with [all] (admin). The employee view
+  /// also loads the swaps waiting for their answer ([loadIncoming]).
   Future<void> load({bool all = false}) async {
     state = state.copyWith(
       isLoading: true,
@@ -64,6 +73,39 @@ class ShiftChangeController extends StateNotifier<ShiftChangeState> {
     } catch (e) {
       if (!mounted) return;
       state = state.copyWith(isLoading: false, loadFailed: true, error: e);
+    }
+    if (!all) await loadIncoming();
+  }
+
+  /// Swaps waiting for the signed-in person's answer. The panel shows only
+  /// when there is one, so a failed load keeps the last list silently.
+  Future<void> loadIncoming() async {
+    try {
+      final incoming = await _ds.fetchIncomingShiftChanges();
+      if (mounted) state = state.copyWith(incoming: incoming);
+    } catch (_) {}
+  }
+
+  /// The swap partner's answer to request [id]; false when the call failed
+  /// (error is set). The answered row leaves [ShiftChangeState.incoming].
+  Future<bool> respond(int id, {required bool accept}) async {
+    state = state.copyWith(isMutating: true, clearError: true);
+    try {
+      await _ds.respondToShiftChange(id: id, accept: accept);
+      if (!mounted) return true;
+      state = state.copyWith(
+        isMutating: false,
+        incoming: [
+          for (final r in state.incoming)
+            if (r.id != id) r,
+        ],
+      );
+      await loadIncoming();
+      return true;
+    } catch (e) {
+      if (!mounted) return false;
+      state = state.copyWith(isMutating: false, error: e);
+      return false;
     }
   }
 

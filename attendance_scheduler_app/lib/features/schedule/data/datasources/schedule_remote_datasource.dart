@@ -130,6 +130,41 @@ class ScheduleRemoteDataSource {
     }
   }
 
+  /// GET /shift-changes/incoming — swaps a colleague asked the signed-in
+  /// person into, still waiting for their answer.
+  Future<List<ShiftChangeRequest>> fetchIncomingShiftChanges() async {
+    try {
+      final response = await _dio.get(ApiEndpoints.shiftChangesIncoming);
+      final list = response.data as List<dynamic>;
+      return list
+          .map(
+            (e) => ShiftChangeRequestModel.fromJson(e as Map<String, dynamic>),
+          )
+          .toList();
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e, 'shift_changes_fetch_failed');
+    }
+  }
+
+  /// POST /shift-changes/{id}/respond — the swap partner accepts (the admin
+  /// decides next) or declines (the request is rejected).
+  Future<ShiftChangeRequest> respondToShiftChange({
+    required int id,
+    required bool accept,
+  }) async {
+    try {
+      final response = await _dio.post(
+        ApiEndpoints.shiftChangeRespond(id),
+        data: {'accept': accept},
+      );
+      return ShiftChangeRequestModel.fromJson(
+        response.data as Map<String, dynamic>,
+      );
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e, 'shift_change_respond_failed');
+    }
+  }
+
   /// POST /shift-changes — user submits own request.
   Future<ShiftChangeRequest> createShiftChange({
     required DateTime workDate,

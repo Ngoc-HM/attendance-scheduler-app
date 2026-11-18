@@ -2,17 +2,17 @@
 
 Feeds the numbers next to the admin's navigation tabs. COUNT queries only —
 no rows are loaded. "Waiting for the admin" is ``pending`` for every kind:
-leave requests (monthly + annual), shift-change / swap requests (there is no
-colleague acceptance step, the admin decides them directly) and
+leave requests (monthly + annual), shift-change requests the admin can decide
+now (a swap only once the colleague accepted it — customer 2026-11-18) and
 self-registered accounts.
 """
 
 from __future__ import annotations
 
-from sqlalchemy import ColumnElement, func, select
+from sqlalchemy import ColumnElement, func, or_, select
 from sqlalchemy.orm import Session
 
-from app.models.enums import LeaveStatus, UserStatus
+from app.models.enums import LeaveStatus, SwapKind, UserStatus
 from app.models.leave import LeaveRequest
 from app.models.shift_change_request import ShiftChangeRequest
 from app.models.user import User
@@ -29,7 +29,13 @@ def get_counts(db: Session) -> PendingCounts:
             db, LeaveRequest, LeaveRequest.status == LeaveStatus.pending
         ),
         shift_changes=_count(
-            db, ShiftChangeRequest, ShiftChangeRequest.status == LeaveStatus.pending
+            db,
+            ShiftChangeRequest,
+            (ShiftChangeRequest.status == LeaveStatus.pending)
+            & or_(
+                ShiftChangeRequest.kind != SwapKind.swap_with,
+                ShiftChangeRequest.counterpart_status == LeaveStatus.approved,
+            ),
         ),
         users=_count(db, User, User.status == UserStatus.pending),
     )

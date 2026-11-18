@@ -39,6 +39,8 @@ class ApiEndpoints {
   static String shiftChangeDecide(int id) => '/shift-changes/$id/decide';
   static String shiftChangeApprovalPreview(int id) =>
       '/shift-changes/$id/approval-preview';
+  static const String shiftChangesIncoming = '/shift-changes/incoming';
+  static String shiftChangeRespond(int id) => '/shift-changes/$id/respond';
 
   // Admin dashboard (customer 2026-11-18)
   static const String dashboard = '/dashboard';

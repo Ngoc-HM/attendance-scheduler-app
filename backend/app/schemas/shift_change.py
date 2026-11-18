@@ -23,6 +23,12 @@ class ShiftChangeCreate(BaseModel):
     note: str | None = Field(default=None, max_length=255)
 
 
+class ShiftChangeResponse(BaseModel):
+    """The colleague's answer to a swap they were asked into."""
+
+    accept: bool
+
+
 class ShiftChangeDecision(BaseModel):
     """Admin approve/reject payload."""
 
@@ -40,6 +46,9 @@ class ShiftChangeRead(ORMModel):
     note: str | None
     decided_by_id: int | None
     decided_at: datetime | None
+    # swap_with: the colleague's own answer (pending / approved / rejected);
+    # the admin decides only once it is approved. None for a code change.
+    counterpart_status: LeaveStatus | None = None
     # Derived at read time from requester.role.is_fixed (not stored in DB).
     strict_review: bool
     # Non-empty when an approved request's schedule application is pending.

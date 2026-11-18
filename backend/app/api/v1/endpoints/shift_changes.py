@@ -8,7 +8,12 @@ from app.api.deps import ActiveUser, AdminUser, DbSession
 from app.core.i18n import t
 from app.models.enums import LeaveStatus
 from app.schemas.common import ApprovalPreview
-from app.schemas.shift_change import ShiftChangeCreate, ShiftChangeDecision, ShiftChangeRead
+from app.schemas.shift_change import (
+    ShiftChangeCreate,
+    ShiftChangeDecision,
+    ShiftChangeRead,
+    ShiftChangeResponse,
+)
 from app.services import audit_service, shift_change_service
 
 router = APIRouter()
@@ -27,6 +32,7 @@ def _to_read(req, strict_review: bool, warnings: list[str] | None = None) -> Shi
         note=req.note,
         decided_by_id=req.decided_by_id,
         decided_at=req.decided_at,
+        counterpart_status=req.counterpart_status,
         strict_review=strict_review,
         warnings=warnings or [],
     )
@@ -59,6 +65,33 @@ def list_shift_changes(
         pairs = shift_change_service.list_for_user(db, current_user.id)
 
     return [_to_read(req, strict) for req, strict in pairs]
+
+
+# Declared before the /{req_id}/... routes.
+@router.get("/incoming", response_model=list[ShiftChangeRead])
+def incoming_shift_changes(db: DbSession, current_user: ActiveUser):
+    """Swaps a colleague asked the caller into, still waiting for an answer."""
+    return [
+        _to_read(req, strict)
+        for req, strict in shift_change_service.list_incoming(db, current_user.id)
+    ]
+
+
+@router.post("/{req_id}/respond", response_model=ShiftChangeRead)
+def respond_to_swap(
+    db: DbSession,
+    req_id: int,
+    payload: ShiftChangeResponse,
+    current_user: ActiveUser,
+):
+    """The swap partner accepts (the admin decides next) or declines."""
+    req = shift_change_service.respond(db, req_id, current_user.id, payload.accept)
+    audit_service.record(
+        db, current_user.id,
+        f"shift_change.counterpart_{'accepted' if payload.accept else 'declined'}",
+        "ShiftChangeRequest", req_id, detail=f"requester={req.requester_id}",
+    )
+    return _to_read(req, False)
 
 
 @router.get("/{req_id}/approval-preview", response_model=ApprovalPreview)

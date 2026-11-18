@@ -4,6 +4,8 @@
 // the admin shift-change panel names requester and counterpart, approving
 // shows the backend warnings and reloads the grid, and the swap picker
 // offers same-role colleagues only.
+// Three-step swap (customer 2026-11-18): the colleague answers a swap first;
+// the admin panel lists a swap only once it was accepted.
 
 import 'dart:async';
 import 'dart:core';
@@ -79,6 +81,8 @@ class _FakeScheduleDataSource extends ScheduleRemoteDataSource {
     this.julyExists = false,
     this.violations = const [],
     this.requests = const [],
+    this.incoming = const [],
+    this.respondError,
     this.previewWarnings = const [],
     this.publishError,
     this.fetchError,
@@ -90,6 +94,14 @@ class _FakeScheduleDataSource extends ScheduleRemoteDataSource {
   final bool julyExists;
   final List<ConstraintViolation> violations;
   final List<ShiftChangeRequest> requests;
+
+  /// Swaps waiting for the signed-in person's answer; an answered one
+  /// leaves the list.
+  final List<ShiftChangeRequest> incoming;
+
+  /// Thrown by [respondToShiftChange].
+  final Object? respondError;
+
   /// Returned by [shiftChangeApprovalPreview]: what approving would break.
   final List<String> previewWarnings;
   final Object? publishError;
@@ -120,6 +132,7 @@ class _FakeScheduleDataSource extends ScheduleRemoteDataSource {
   final published = <int>[];
   final violationCalls = <int>[];
   final decided = <(int, String)>[];
+  final responded = <(int, bool)>[];
 
   static int idFor(int month) => 600 + month;
 
@@ -223,10 +236,38 @@ class _FakeScheduleDataSource extends ScheduleRemoteDataSource {
               warnings: r.warnings,
               requestedCode: r.requestedCode,
               counterpartUserId: r.counterpartUserId,
+              counterpartStatus: r.counterpartStatus,
             )
           else
             r,
       ];
+
+  @core.override
+  Future<List<ShiftChangeRequest>> fetchIncomingShiftChanges() async => [
+    for (final r in incoming)
+      if (!responded.any((a) => a.$1 == r.id)) r,
+  ];
+
+  @core.override
+  Future<ShiftChangeRequest> respondToShiftChange({
+    required int id,
+    required bool accept,
+  }) async {
+    if (respondError != null) throw respondError!;
+    responded.add((id, accept));
+    final r = incoming.firstWhere((r) => r.id == id);
+    return ShiftChangeRequest(
+      id: r.id,
+      requesterId: r.requesterId,
+      workDate: r.workDate,
+      kind: r.kind,
+      status: accept ? 'pending' : 'rejected',
+      strictReview: r.strictReview,
+      warnings: const [],
+      counterpartUserId: r.counterpartUserId,
+      counterpartStatus: accept ? 'approved' : 'rejected',
+    );
+  }
 
   @core.override
   Future<List<String>> shiftChangeApprovalPreview(int id) async =>
@@ -617,6 +658,7 @@ void main() {
         strictReview: false,
         warnings: const [],
         counterpartUserId: _t2,
+        counterpartStatus: 'approved', // T2 accepted: the admin decides
       ),
       ShiftChangeRequest(
         id: 32,
@@ -717,6 +759,130 @@ void main() {
       expect(find.text('Request approved.'), findsOneWidget);
       expect(ds.fetchedMonths, [_june, _june]);
       await _drainToast(tester);
+    });
+
+    testWidgets('a swap the colleague has not accepted is not listed', (
+      tester,
+    ) async {
+      final ds = _FakeScheduleDataSource(
+        requests: [
+          for (final status in ['pending', 'rejected'])
+            ShiftChangeRequest(
+              id: status == 'pending' ? 33 : 34,
+              requesterId: 7,
+              workDate: DateTime(2026, 6, 6),
+              kind: 'swap_with',
+              status: status,
+              strictReview: false,
+              warnings: const [],
+              counterpartUserId: _t2,
+              counterpartStatus: status,
+            ),
+        ],
+      );
+      await _pump(tester, user: _admin, ds: ds);
+      await openPanel(tester);
+
+      expect(find.textContaining('2026-06-06'), findsNothing);
+      expect(find.byTooltip('Approve'), findsNothing);
+      expect(find.text('No pending shift-change requests.'), findsOneWidget);
+    });
+  });
+
+  group('incoming swap panel (employee)', () {
+    final asked = ShiftChangeRequest(
+      id: 51,
+      requesterId: _t2,
+      workDate: DateTime(2026, 6, 12),
+      kind: 'swap_with',
+      status: 'pending',
+      strictReview: false,
+      warnings: const [],
+      counterpartUserId: 7,
+      counterpartStatus: 'pending',
+    );
+
+    testWidgets('hidden when no colleague asks', (tester) async {
+      await _pump(tester, user: _employee, ds: _FakeScheduleDataSource());
+
+      expect(find.text('Colleagues asking to swap shifts'), findsNothing);
+      expect(find.text('Accept'), findsNothing);
+      expect(find.text('My shift-change requests'), findsOneWidget);
+    });
+
+    for (final (label, accept, toast) in [
+      ('Accept', true, 'Swap accepted. The admin decides next.'),
+      ('Decline', false, 'Swap declined.'),
+    ]) {
+      testWidgets('$label answers the swap and the row leaves', (tester) async {
+        final ds = _FakeScheduleDataSource(incoming: [asked]);
+        await _pump(tester, user: _employee, ds: ds);
+
+        expect(find.text('Colleagues asking to swap shifts'), findsOneWidget);
+        expect(find.text('T2'), findsWidgets);
+        expect(find.text('2026-06-12'), findsOneWidget);
+
+        await tester.tap(find.text(label));
+        await tester.pumpAndSettle();
+
+        expect(ds.responded, [(51, accept)]);
+        expect(find.text(toast), findsOneWidget);
+        expect(find.text('2026-06-12'), findsNothing);
+        expect(find.text('Colleagues asking to swap shifts'), findsNothing);
+        await _drainToast(tester);
+      });
+    }
+
+    testWidgets('a failed answer keeps the row and says why', (tester) async {
+      final ds = _FakeScheduleDataSource(
+        incoming: [asked],
+        respondError: const ApiException(
+          'This shift-change request was already decided.',
+          statusCode: 409,
+        ),
+      );
+      await _pump(tester, user: _employee, ds: ds);
+
+      await tester.tap(find.text('Accept'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('This shift-change request was already decided.'),
+        findsOneWidget,
+      );
+      expect(find.text('2026-06-12'), findsOneWidget);
+      await _drainToast(tester);
+    });
+
+    testWidgets('own swap shows which step it is waiting for', (tester) async {
+      ShiftChangeRequest mine(int id, String status, String? counterpart) =>
+          ShiftChangeRequest(
+            id: id,
+            requesterId: 7,
+            workDate: DateTime(2026, 6, id - 40),
+            kind: 'swap_with',
+            status: status,
+            strictReview: false,
+            warnings: const [],
+            counterpartUserId: _t2,
+            counterpartStatus: counterpart,
+          );
+      final ds = _FakeScheduleDataSource(
+        requests: [
+          mine(61, 'pending', 'pending'),
+          mine(62, 'pending', 'approved'),
+          mine(63, 'rejected', 'rejected'),
+          mine(64, 'approved', 'approved'),
+          mine(65, 'rejected', 'approved'),
+        ],
+      );
+      await _pump(tester, user: _employee, ds: ds);
+
+      expect(find.text('Waiting for colleague'), findsOneWidget);
+      expect(find.text('Waiting for admin'), findsOneWidget);
+      expect(find.text('Declined by colleague'), findsOneWidget);
+      expect(find.text('Approved'), findsOneWidget);
+      expect(find.text('Rejected'), findsOneWidget);
     });
   });
 

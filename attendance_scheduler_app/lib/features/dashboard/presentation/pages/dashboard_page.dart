@@ -84,6 +84,10 @@ class _DashboardBody extends StatelessWidget {
           ],
         ),
         const SizedBox(height: DsSpacing.x6),
+        // Leave first: what each person has left is what the admin asks
+        // the dashboard most (customer 2026-11-18).
+        _LeaveSection(year: data.leaveYear, rows: data.leave),
+        const SizedBox(height: DsSpacing.x6),
         // Two equal columns on a wide window, stacked below that.
         LayoutBuilder(
           builder: (context, constraints) {
@@ -114,8 +118,6 @@ class _DashboardBody extends StatelessWidget {
             );
           },
         ),
-        const SizedBox(height: DsSpacing.x6),
-        _LeaveSection(year: data.leaveYear, rows: data.leave),
       ],
     );
   }
@@ -285,19 +287,35 @@ class _LeaveSection extends StatelessWidget {
   final int year;
   final List<DashboardLeave> rows;
 
+  static Widget _left(int days) => Align(
+    alignment: Alignment.centerLeft,
+    child: DsBadge(
+      label: '$days',
+      tone: days <= 0
+          ? DsTone.danger
+          : (days <= 5 ? DsTone.warning : DsTone.success),
+    ),
+  );
+
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
+    // Ceiling − registered = left, for this year and for the next one
+    // (annual leave is registered the year before).
     return _Section(
-      title: '${l.text('dashLeave')} $year',
+      title: l.text('dashLeave'),
       empty: rows.isEmpty ? l.text('dashNoStaff') : null,
       table: DsDataTable(
         columns: [
           DsTableColumn(header: l.text('clockCode'), flex: 2),
           DsTableColumn(header: l.text('dashQuota'), flex: 2),
-          DsTableColumn(header: l.text('approved'), flex: 2),
-          DsTableColumn(header: l.text('pending'), flex: 2),
-          DsTableColumn(header: l.text('dashLeft'), flex: 2),
+          DsTableColumn(header: '${l.text('dashRegistered')} $year', flex: 3),
+          DsTableColumn(header: '${l.text('dashLeft')} $year', flex: 3),
+          DsTableColumn(
+            header: '${l.text('dashRegistered')} ${year + 1}',
+            flex: 3,
+          ),
+          DsTableColumn(header: '${l.text('dashLeft')} ${year + 1}', flex: 3),
           DsTableColumn(header: l.text('compDays'), flex: 2),
         ],
         rows: [
@@ -305,17 +323,10 @@ class _LeaveSection extends StatelessWidget {
             [
               _cell(row.code),
               _cell('${row.quota}'),
-              _cell('${row.used}'),
-              _cell('${row.pending}'),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: DsBadge(
-                  label: '${row.available}',
-                  tone: row.available <= 0
-                      ? DsTone.danger
-                      : (row.available <= 5 ? DsTone.warning : DsTone.success),
-                ),
-              ),
+              _cell('${row.registered}'),
+              _left(row.available),
+              _cell('${row.nextRegistered}'),
+              _left(row.nextAvailable),
               _cell('${row.carryComp}'),
             ],
         ],
