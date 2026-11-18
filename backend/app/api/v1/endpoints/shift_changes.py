@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException, Query, status
 from app.api.deps import ActiveUser, AdminUser, DbSession
 from app.core.i18n import t
 from app.models.enums import LeaveStatus
+from app.schemas.common import ApprovalPreview
 from app.schemas.shift_change import ShiftChangeCreate, ShiftChangeDecision, ShiftChangeRead
 from app.services import audit_service, shift_change_service
 
@@ -58,6 +59,12 @@ def list_shift_changes(
         pairs = shift_change_service.list_for_user(db, current_user.id)
 
     return [_to_read(req, strict) for req, strict in pairs]
+
+
+@router.get("/{req_id}/approval-preview", response_model=ApprovalPreview)
+def preview_shift_change_approval(db: DbSession, req_id: int, _admin: AdminUser):
+    """Admin: rule breaches approving this request would add. Nothing is saved."""
+    return ApprovalPreview(warnings=shift_change_service.preview_approval(db, req_id))
 
 
 @router.post("/{req_id}/decide", response_model=ShiftChangeRead)

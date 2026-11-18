@@ -7,6 +7,7 @@ shift-changes are saved and re-checked (warnings do not discard the edit).
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from datetime import UTC, date, datetime, timedelta
 
 from fastapi import HTTPException, status
@@ -194,6 +195,45 @@ def _new_following_warnings(
         for v in _recheck_violations(db, following)
         if (v.rule, v.day, v.user_id, v.message) not in before
     ]
+
+
+def snapshot_violations(
+    db: Session, months: Iterable[tuple[int, int]]
+) -> dict[int, set[tuple[str, date | None, int | None, str]]]:
+    """Current rule breaches of the generated ``months`` and of the month
+    after each, keyed by schedule id — the "before" of an approval preview."""
+    snapshot: dict[int, set[tuple[str, date | None, int | None, str]]] = {}
+    for year, month in sorted(set(months)):
+        schedule = (
+            db.query(MonthlySchedule)
+            .options(selectinload(MonthlySchedule.assignments))
+            .filter(MonthlySchedule.year == year, MonthlySchedule.month == month)
+            .one_or_none()
+        )
+        for item in (schedule, _following_schedule(db, year, month)):
+            if item is not None and item.id not in snapshot:
+                snapshot[item.id] = _violation_keys(db, item)
+    return snapshot
+
+
+def new_violation_lines(
+    db: Session,
+    snapshot: dict[int, set[tuple[str, date | None, int | None, str]]],
+    exclude_rules: frozenset[str] = frozenset(),
+) -> list[str]:
+    """Breaches the flushed (uncommitted) edit added to the schedules of
+    ``snapshot``: what approving would newly break, as text. Breaches the
+    months already had are left out."""
+    lines: list[str] = []
+    for schedule_id, before in snapshot.items():
+        schedule = _get_by_id(db, schedule_id)
+        lines += [
+            v.message
+            for v in _recheck_violations(db, schedule)
+            if v.rule not in exclude_rules
+            and (v.rule, v.day, v.user_id, v.message) not in before
+        ]
+    return list(dict.fromkeys(lines))
 
 
 def manual_override(

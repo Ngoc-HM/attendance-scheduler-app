@@ -50,13 +50,33 @@ class _FakeLeaves implements LeavesRemoteDataSource {
     return value;
   }
 
+  /// The balance of the year after; null → that request fails.
+  AnnualLeaveBalance? nextBalance;
+
   @override
   Future<AnnualLeaveBalance> fetchBalance({int? year}) async {
-    balanceCalls++;
-    final value = balance;
+    if (year == null) balanceCalls++;
+    final value = year == null ? balance : nextBalance;
     if (value == null) throw const ApiException('boom', statusCode: 500);
     return value;
   }
+
+  /// Returned by [approvalPreview]: what approving would break.
+  List<String> previewWarnings = const [];
+  final cancelled = <int>[];
+  final decided = <(int, String)>[];
+
+  @override
+  Future<List<String>> approvalPreview(int id) async => previewWarnings;
+
+  @override
+  Future<(LeaveModel, List<String>)> decide(int id, String status) async {
+    decided.add((id, status));
+    return (leaves.firstWhere((m) => m.id == id), const <String>[]);
+  }
+
+  @override
+  Future<void> cancel(int id) async => cancelled.add(id);
 
   @override
   Future<List<LeaveModel>> listOwn() async => leaves;
@@ -137,13 +157,15 @@ const _enSubtitle =
     'Monthly leave: register by day 18 of the previous month. '
     'Annual leave: register the year before.';
 
-/// Quota 30, 3 approved + 2 pending days → 27 left.
+/// Quota 30, 3 approved + 2 pending days → 25 left to register: a filed
+/// request counts at once (customer 2026-11-18).
 const _balance27 = AnnualLeaveBalance(
   year: 2026,
   quota: 30,
   used: 3,
   pending: 2,
   remaining: 27,
+  available: 25,
 );
 
 Future<_FakeLeaves> _pump(
@@ -322,13 +344,35 @@ void main() {
     final ds = await _pump(tester, window: _window(open: true));
 
     expect(ds.balanceCalls, 1);
-    expect(_metric(tester, 'Annual leave left'), '27');
+    expect(_metric(tester, 'Annual leave left'), '25');
+  });
+
+  testWidgets('the card shows this year and the next once both are known', (
+    tester,
+  ) async {
+    final ds = await _pump(tester, window: _window(open: true));
+    ds.nextBalance = const AnnualLeaveBalance(
+      year: 2027,
+      quota: 30,
+      used: 0,
+      pending: 3,
+      remaining: 30,
+      available: 27,
+    );
+    await tester.tap(find.text('Cancel').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(DsPrimaryButton, 'Cancel request'));
+    await tester.pumpAndSettle(); // the page reloads after the cancel
+
+    expect(_metric(tester, 'Annual leave left 2026 · 2027'), '25 · 27');
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
   });
 
   testWidgets('annual leave left is labelled in Vietnamese', (tester) async {
     await _pump(tester, window: _window(open: true), language: 'vi');
 
-    expect(_metric(tester, 'Phép năm còn lại'), '27');
+    expect(_metric(tester, 'Phép năm còn lại'), '25');
   });
 
   testWidgets('leave approved past the quota shows a negative, danger card', (
@@ -354,6 +398,65 @@ void main() {
     );
     expect(card.value, '-2');
     expect(card.tone, DsTone.danger);
+  });
+
+  // --- customer 2026-11-18: own cancel, warn before approving --------------
+
+  testWidgets('employee cancels an own pending request after confirming', (
+    tester,
+  ) async {
+    final ds = await _pump(tester, window: _window(open: true));
+
+    await tester.tap(find.text('Cancel').first);
+    await tester.pumpAndSettle();
+    expect(ds.cancelled, isEmpty, reason: 'asked first');
+    await tester.tap(find.widgetWithText(DsPrimaryButton, 'Cancel request'));
+    await tester.pumpAndSettle();
+
+    expect(ds.cancelled, [1]);
+    expect(find.text('Request cancelled.'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('admin is warned before approving and may still approve', (
+    tester,
+  ) async {
+    final ds = await _pump(
+      tester,
+      window: _window(open: true),
+      user: _admin,
+      users: [_member(1, 0)],
+    );
+    ds.previewWarnings = const ['2026-12-01: 1 short on the D shift'];
+
+    await tester.tap(find.text('Approve').first);
+    await tester.pumpAndSettle();
+    expect(ds.decided, isEmpty, reason: 'nothing approved yet');
+    expect(find.text('2026-12-01: 1 short on the D shift'), findsOneWidget);
+    await tester.tap(find.text('Approve anyway'));
+    await tester.pumpAndSettle();
+
+    expect(ds.decided, [(1, 'approved')]);
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('admin approval without problems asks nothing', (tester) async {
+    final ds = await _pump(
+      tester,
+      window: _window(open: true),
+      user: _admin,
+      users: [_member(1, 0)],
+    );
+
+    await tester.tap(find.text('Approve').first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Approve anyway'), findsNothing);
+    expect(ds.decided, [(1, 'approved')]);
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
   });
 
   testWidgets('a failed balance hides the card, not the leave list', (

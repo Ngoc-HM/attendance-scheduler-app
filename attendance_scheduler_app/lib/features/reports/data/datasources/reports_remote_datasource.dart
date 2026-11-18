@@ -33,7 +33,10 @@ class ReportsRemoteDataSource {
       );
       return ReportDownload(
         bytes: response.data as List<int>,
-        filename: filenameFromContentDisposition(response, 'attendance_${year}_${_two(month)}.$format'),
+        filename: filenameFromContentDisposition(
+          response,
+          'attendance_${year}_${_two(month)}.$format',
+        ),
       );
     } on DioException catch (e) {
       // The error body arrives as bytes (responseType.bytes); fromDio
@@ -52,12 +55,36 @@ class ReportsRemoteDataSource {
       );
       return ReportDownload(
         bytes: response.data as List<int>,
-        filename: filenameFromContentDisposition(response, 'attendance_$year.$format'),
+        filename: filenameFromContentDisposition(
+          response,
+          'attendance_$year.$format',
+        ),
       );
     } on DioException catch (e) {
       // The error body arrives as bytes (responseType.bytes); fromDio
       // decodes it so the user sees the backend's detail.
       throw ApiException.fromDio(e, 'Failed to download yearly report');
+    }
+  }
+
+  /// GET /reports/leave-balance/{year}?format=csv|xlsx — everyone's annual
+  /// leave: quota, approved, pending, left, comp days.
+  Future<ReportDownload> leaveBalance(int year, String format) async {
+    try {
+      final response = await _dio.get(
+        ApiEndpoints.leaveReport(year),
+        queryParameters: {'format': format},
+        options: Options(responseType: ResponseType.bytes),
+      );
+      return ReportDownload(
+        bytes: response.data as List<int>,
+        filename: filenameFromContentDisposition(
+          response,
+          'leave_$year.$format',
+        ),
+      );
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e, 'Failed to download leave report');
     }
   }
 

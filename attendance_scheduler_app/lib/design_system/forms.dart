@@ -353,6 +353,18 @@ ThemeData _onGlassTheme(BuildContext context) {
   );
 }
 
+/// Shows a dialog WITHOUT dimming the page, for a [DsFormDialog] placed in
+/// a corner (`alignment: Alignment.topLeft`): the person keeps reading the
+/// page while filling the form (customer 2026-11-18).
+Future<T?> showDsCornerDialog<T>({
+  required BuildContext context,
+  required WidgetBuilder builder,
+}) => showDialog<T>(
+  context: context,
+  barrierColor: Colors.transparent,
+  builder: builder,
+);
+
 class DsFormDialog extends StatelessWidget {
   const DsFormDialog({
     super.key,
@@ -360,6 +372,7 @@ class DsFormDialog extends StatelessWidget {
     required this.content,
     required this.actions,
     this.width = 480,
+    this.alignment,
   });
 
   final String title;
@@ -367,9 +380,19 @@ class DsFormDialog extends StatelessWidget {
   final List<Widget> actions;
   final double width;
 
+  /// Where the dialog sits in the window; null = centred. A dialog the
+  /// person fills in while reading the page behind it (a shift-change
+  /// request over the roster) goes to a corner, see [showDsCornerDialog].
+  final AlignmentGeometry? alignment;
+
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
+      alignment: alignment,
+      // A corner dialog hugs the corner so it covers as little as possible.
+      insetPadding: alignment == null
+          ? const EdgeInsets.symmetric(horizontal: 40, vertical: 24)
+          : const EdgeInsets.all(DsSpacing.x3),
       title: Text(title),
       content: SizedBox(width: width, child: content),
       actions: actions,

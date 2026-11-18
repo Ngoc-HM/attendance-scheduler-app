@@ -10,6 +10,7 @@ Truly HARD (can never break, decision #2):
 
 SOFT with penalized slack (violations reported via ``SlackRegistry``):
     #2 exact monthly X entitlement             — ``constraints_monthly_quota``
+       (group F: two X per week and the duty its flights ask for — ``role_f``)
     #3 C: max 5 consecutive working (+ §5.5)  — ``constraints_consecutive``
        (one day off resets the run, so a single X is legitimate)
     #4 fixed-group (role A) staffing per fp   — ``constraints_staffing``
@@ -30,6 +31,7 @@ from app.scheduler import (
     constraints_off_chain,
     constraints_role_a_distribution,
     constraints_staffing,
+    role_f,
 )
 from app.scheduler.domain import SolverInput
 from app.scheduler.role_codes import codes_for
@@ -50,6 +52,7 @@ def add_all(
     constraints_staffing.add(model, x, inp, registry)
     constraints_comp_days.add(model, x, inp, registry)
     constraints_role_a_distribution.add(model, x, inp, registry)
+    role_f.add(model, x, inp, registry)
 
 
 def one_status_per_day(

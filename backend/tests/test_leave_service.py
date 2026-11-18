@@ -873,7 +873,7 @@ def test_annual_leave_summary_counts_approved_days_in_year(client: TestClient) -
 
 
 def test_approve_beyond_annual_quota_warns(client: TestClient) -> None:
-    """Going past the quota is allowed (admin decides) but warns; reaching it does not."""
+    """Approving past the quota is allowed (admin decides) but warns; reaching it does not."""
     from app.core.database import get_db
     from app.core.i18n import t
     from app.services import leave_service
@@ -895,7 +895,16 @@ def test_approve_beyond_annual_quota_warns(client: TestClient) -> None:
         _, warnings = leave_service.decide(db, exact.id, LeaveStatus.approved, admin_id=1)
         assert exceeded not in warnings
 
-        over = _leave(db, uid, date(2040, 5, 7), date(2040, 5, 7))  # 6 of 5
+        # The ceiling refuses a 6th day at filing (customer 2026-11-18), so
+        # approving past the quota only happens when the admin lowered it
+        # after the request was filed.
+        from app.models.user import User
+
+        db.get(User, uid).annual_leave_quota = 6
+        db.commit()
+        over = _leave(db, uid, date(2040, 5, 7), date(2040, 5, 7))  # 6 of 6
+        db.get(User, uid).annual_leave_quota = 5
+        db.commit()
         decided, warnings = leave_service.decide(
             db, over.id, LeaveStatus.approved, admin_id=1
         )
@@ -918,6 +927,7 @@ def test_balance_endpoint_self_and_admin(client: TestClient) -> None:
     assert own.status_code == 200
     assert own.json() == {
         "year": 2040, "quota": 30, "used": 0, "pending": 0, "remaining": 30,
+        "available": 30,
     }
     explicit = client.get(
         f"{V}/leaves/balance", headers=me, params={"user_id": me_id, "year": 2040}

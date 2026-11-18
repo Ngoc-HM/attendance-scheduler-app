@@ -161,7 +161,7 @@ class AppLocalizations {
       'work': 'Work',
       'absent': 'Absent',
       'reportsTitle': 'Reports',
-      'reportsSubtitle': 'Attendance exports by month and year',
+      'reportsSubtitle': 'Attendance and annual leave exports',
       'reports': 'Reports',
       'formats': 'Formats',
       'retention': 'Retention',
@@ -219,6 +219,29 @@ class AppLocalizations {
       'holidayAdded': 'Holiday saved.',
       'holidayDeleted': 'Holiday deleted.',
       'navHolidays': 'Holidays',
+      'navDashboard': 'Dashboard',
+      'reportKind': 'Report',
+      'reportAttendance': 'Attendance',
+      'reportLeave': 'Annual leave',
+      'dashboardLoadFailed': 'Could not load the dashboard.',
+      'dashWorkingToday': 'On duty today',
+      'dashMissingClock': 'Missing check-in/out',
+      'dashPending': 'Waiting for a decision',
+      'dashViolations': 'Rule violations',
+      'dashToday': 'Today',
+      'dashNoRosterToday': 'This month has no schedule yet.',
+      'dashShift': 'Shift',
+      'dashRoster': 'Schedules',
+      'dashPublished': 'Published',
+      'dashDraft': 'Draft',
+      'dashNotCreated': 'Not created',
+      'dashNoMissingClock': 'Nobody missed a check-in or check-out this month.',
+      'dashNoCheckIn': 'No check-in',
+      'dashNoCheckOut': 'No check-out',
+      'dashLeave': 'Annual leave',
+      'dashNoStaff': 'No active staff.',
+      'dashQuota': 'Quota',
+      'dashLeft': 'Left',
       'previousYear': 'Previous year',
       'nextYear': 'Next year',
       'holidayName': 'Holiday name',
@@ -359,6 +382,10 @@ class AppLocalizations {
           'previous year.',
       // --- Revoke approval (owner 2026-07-17) ---
       'revokeApproval': 'Revoke approval',
+      'cancelRequest': 'Cancel request',
+      'cancelRequestConfirm':
+          'Cancel this pending request? Its days can be registered again.',
+      'requestCancelled': 'Request cancelled.',
       'revokeConfirmMessage':
           'This returns the leave days to the employee\'s balance and marks '
           'the request as rejected. If the month was already scheduled, '
@@ -440,7 +467,8 @@ class AppLocalizations {
       'rulesCheckFailed':
           'The rules could not be checked right now. Publish anyway?',
       'publishAnyway': 'Publish anyway',
-      'approvedWithWarnings': 'Request approved, with rule warnings',
+      'approveWarningsTitle': 'Approving causes these problems',
+      'approveAnyway': 'Approve anyway',
       'nextMonthBrokenTitle': 'Next month needs a look',
       'nextMonthBrokenBody':
           'The following month already has a schedule. This roster '
@@ -601,7 +629,7 @@ class AppLocalizations {
       'work': 'Đi làm',
       'absent': 'Vắng',
       'reportsTitle': 'Báo cáo',
-      'reportsSubtitle': 'Xuất chấm công theo tháng và năm',
+      'reportsSubtitle': 'Xuất báo cáo chấm công và phép năm',
       'reports': 'Báo cáo',
       'formats': 'Định dạng',
       'retention': 'Lưu trữ',
@@ -659,6 +687,29 @@ class AppLocalizations {
       'holidayAdded': 'Đã lưu ngày lễ.',
       'holidayDeleted': 'Đã xoá ngày lễ.',
       'navHolidays': 'Ngày lễ',
+      'navDashboard': 'Tổng quan',
+      'reportKind': 'Loại báo cáo',
+      'reportAttendance': 'Chấm công',
+      'reportLeave': 'Phép năm',
+      'dashboardLoadFailed': 'Không tải được trang tổng quan.',
+      'dashWorkingToday': 'Đi làm hôm nay',
+      'dashMissingClock': 'Thiếu check-in/out',
+      'dashPending': 'Đơn chờ duyệt',
+      'dashViolations': 'Vi phạm luật xếp lịch',
+      'dashToday': 'Hôm nay',
+      'dashNoRosterToday': 'Tháng này chưa có lịch.',
+      'dashShift': 'Ca',
+      'dashRoster': 'Lịch làm',
+      'dashPublished': 'Đã công bố',
+      'dashDraft': 'Bản nháp',
+      'dashNotCreated': 'Chưa tạo',
+      'dashNoMissingClock': 'Tháng này không ai thiếu check-in hay check-out.',
+      'dashNoCheckIn': 'Không check-in',
+      'dashNoCheckOut': 'Không check-out',
+      'dashLeave': 'Phép năm',
+      'dashNoStaff': 'Chưa có nhân viên đang hoạt động.',
+      'dashQuota': 'Định mức',
+      'dashLeft': 'Còn lại',
       'previousYear': 'Năm trước',
       'nextYear': 'Năm sau',
       'holidayName': 'Tên ngày lễ',
@@ -797,6 +848,10 @@ class AppLocalizations {
           'Nghỉ phép năm (trên 5 ngày) đăng ký trong năm trước.',
       // --- Revoke approval (owner 2026-07-17) ---
       'revokeApproval': 'Hủy duyệt',
+      'cancelRequest': 'Hủy phiếu',
+      'cancelRequestConfirm':
+          'Hủy phiếu đang chờ duyệt này? Số ngày sẽ được trả lại để đăng ký.',
+      'requestCancelled': 'Đã hủy phiếu.',
       'revokeConfirmMessage':
           'Thao tác này hoàn lại ngày phép cho nhân viên và chuyển đơn về '
           'Từ chối. Nếu tháng liên quan đã tạo lịch, hãy tạo lại lịch '
@@ -874,7 +929,8 @@ class AppLocalizations {
       'rulesCheckFailed':
           'Hiện không kiểm tra được quy tắc. Vẫn công bố?',
       'publishAnyway': 'Vẫn công bố',
-      'approvedWithWarnings': 'Đã duyệt yêu cầu, có cảnh báo quy tắc',
+      'approveWarningsTitle': 'Duyệt sẽ gây ra các vấn đề sau',
+      'approveAnyway': 'Vẫn duyệt',
       'nextMonthBrokenTitle': 'Tháng sau cần xem lại',
       'nextMonthBrokenBody':
           'Tháng sau đã có lịch. Lịch vừa tạo làm tháng sau vi phạm các '

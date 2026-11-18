@@ -107,7 +107,10 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
     final scheduleState = ref.watch(scheduleControllerProvider);
     // Publishing, regenerating or editing the roster changes which days are
     // due and which are adjusted: the Attendance grid re-reads its tints.
-    ref.listen(scheduleControllerProvider.select((s) => s.schedule), (prev, next) {
+    ref.listen(scheduleControllerProvider.select((s) => s.schedule), (
+      prev,
+      next,
+    ) {
       if (prev != next) ref.invalidate(clockBoardProvider);
     });
 
@@ -217,11 +220,7 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
   /// with no schedule (404) gets the admin "generate" hint (null = the
   /// view's default) or the employee "not published" note. Only a failed
   /// load counts here: a failed generate is a toast, not "could not load".
-  String? _emptyMessage(
-    AppLocalizations l,
-    ScheduleState state,
-    bool isAdmin,
-  ) {
+  String? _emptyMessage(AppLocalizations l, ScheduleState state, bool isAdmin) {
     final error = state.loadError;
     if (error != null && state.loadErrorStatus != 404) {
       return '${l.text('scheduleLoadFailed')} ${apiErrorMessage(l, error)}';
@@ -243,7 +242,7 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
       userLabel: userId == null
           ? null
           : state.people.where((p) => p.id == userId).firstOrNull?.code ??
-              l.userFallback(userId),
+                l.userFallback(userId),
     );
   }
 
@@ -402,14 +401,13 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
     BuildContext context,
     AppLocalizations l, {
     bool force = false,
-  }) =>
-      DsBusy.run(
-        context,
-        l.text('generatingSchedule'),
-        () => ref
-            .read(scheduleControllerProvider.notifier)
-            .generate(_month.year, _month.month, force: force),
-      );
+  }) => DsBusy.run(
+    context,
+    l.text('generatingSchedule'),
+    () => ref
+        .read(scheduleControllerProvider.notifier)
+        .generate(_month.year, _month.month, force: force),
+  );
 
   Future<void> _onGenerate(BuildContext context, AppLocalizations l) async {
     // Months without flight data still solve, but yield zero flight duties —
@@ -471,33 +469,32 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
     BuildContext context,
     AppLocalizations l,
     List<String> lines,
-  ) =>
-      showDialog<void>(
-        context: context,
-        builder: (context) => DsFormDialog(
-          title: l.text('nextMonthBrokenTitle'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(l.text('nextMonthBrokenBody')),
-              const SizedBox(height: DsSpacing.x2),
-              RuleWarningsList(lines: lines),
-            ],
-          ),
-          actions: [
-            DsPrimaryButton(
-              label: l.text('close'),
-              onPressed: () => Navigator.of(context).pop(),
-            ),
-          ],
+  ) => showDialog<void>(
+    context: context,
+    builder: (context) => DsFormDialog(
+      title: l.text('nextMonthBrokenTitle'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(l.text('nextMonthBrokenBody')),
+          const SizedBox(height: DsSpacing.x2),
+          RuleWarningsList(lines: lines),
+        ],
+      ),
+      actions: [
+        DsPrimaryButton(
+          label: l.text('close'),
+          onPressed: () => Navigator.of(context).pop(),
         ),
-      );
+      ],
+    ),
+  );
 
   /// A shift-change request was decided (admin panel). Approving rewrites
-  /// schedule cells, so the grid reloads at once; the backend's rule
-  /// warnings are listed in full instead of a one-line toast.
-  Future<void> _onShiftChangeDecided(ShiftChangeRequest decided) async {
+  /// schedule cells, so the grid reloads at once. What the change breaks
+  /// was shown and confirmed before the approval (ShiftChangePendingPanel).
+  void _onShiftChangeDecided(ShiftChangeRequest decided) {
     if (!mounted) return;
     final l = AppLocalizations.of(context);
     if (decided.status != 'approved') {
@@ -506,23 +503,7 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
     }
     _loadMonth();
     ref.invalidate(clockBoardProvider);
-    if (decided.warnings.isEmpty) {
-      DsFeedback.show(context, l.text('requestApproved'), tone: DsTone.success);
-      return;
-    }
-    await showDialog<void>(
-      context: context,
-      builder: (context) => DsFormDialog(
-        title: l.text('approvedWithWarnings'),
-        content: RuleWarningsList(lines: decided.warnings),
-        actions: [
-          DsPrimaryButton(
-            label: l.text('close'),
-            onPressed: () => Navigator.of(context).pop(),
-          ),
-        ],
-      ),
-    );
+    DsFeedback.show(context, l.text('requestApproved'), tone: DsTone.success);
   }
 
   /// F-09 admin cell edit: tap a roster cell → pick a code → save. The edit
@@ -617,7 +598,7 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
     User me,
     int dayIndex,
   ) async {
-    final submitted = await showDialog<bool>(
+    final submitted = await showDsCornerDialog<bool>(
       context: context,
       builder: (_) => ShiftChangeRequestDialog(
         workDate: DateTime(_month.year, _month.month, dayIndex + 1),

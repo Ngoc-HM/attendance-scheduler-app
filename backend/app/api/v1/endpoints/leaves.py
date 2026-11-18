@@ -12,6 +12,7 @@ from app.api.params import YEAR_MAX, YEAR_MIN
 from app.core.business_time import business_today
 from app.core.i18n import t
 from app.models.enums import LeaveStatus
+from app.schemas.common import ApprovalPreview
 from app.schemas.leave import (
     AnnualLeaveSummary,
     ConflictEntry,
@@ -109,6 +110,12 @@ def conflicts_for_date(
     return result
 
 
+@router.get("/{leave_id}/approval-preview", response_model=ApprovalPreview)
+def preview_leave_approval(db: DbSession, leave_id: int, _admin: AdminUser):
+    """Admin: what approving this pending leave would break. Nothing is saved."""
+    return ApprovalPreview(warnings=leave_service.preview_approval(db, leave_id))
+
+
 @router.post("/{leave_id}/decide", response_model=LeaveRead)
 def decide_leave(
     db: DbSession,
@@ -128,6 +135,14 @@ def decide_leave(
     return LeaveRead.model_validate(decided).model_copy(
         update={"warnings": warnings}
     )
+
+
+@router.post("/{leave_id}/cancel", status_code=status.HTTP_204_NO_CONTENT)
+def cancel_leave(db: DbSession, leave_id: int, current_user: ActiveUser) -> None:
+    """The owner withdraws their own pending request; its days are free again."""
+    leave_service.cancel(db, leave_id, current_user.id)
+    audit_service.record(db, current_user.id, "leave.cancelled", "LeaveRequest",
+                         leave_id, detail=f"user={current_user.id}")
 
 
 @router.post("/{leave_id}/revoke", response_model=LeaveRead)

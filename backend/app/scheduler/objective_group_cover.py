@@ -4,7 +4,8 @@ Role groups are people with the same role (``role_codes.role_groups``, 2+
 members). Per group and per day, a penalty when EVERY member is off — X or
 CD, chosen or pinned leave — so the good day-off pairs are taken in turns
 rather than by the whole group at once. Group A is mostly covered by flight
-staffing already; this matters for F, M and T, which have no staffing floor.
+staffing already, group F by its own duty (``role_f``); this matters for M
+and T, which have no staffing floor.
 """
 
 from __future__ import annotations

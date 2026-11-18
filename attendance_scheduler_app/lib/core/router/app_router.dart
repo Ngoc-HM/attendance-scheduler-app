@@ -8,6 +8,7 @@ import '../../features/attendance/presentation/pages/time_clock_page.dart';
 import '../../features/auth/presentation/pages/login_page.dart';
 import '../../features/auth/presentation/pages/register_page.dart';
 import '../../features/auth/presentation/providers/auth_provider.dart';
+import '../../features/dashboard/presentation/pages/dashboard_page.dart';
 import '../../features/flights/presentation/pages/flight_presets_page.dart';
 import '../../features/flights/presentation/pages/flights_page.dart';
 import '../../features/home/presentation/pages/home_shell.dart';
@@ -18,6 +19,7 @@ import '../../features/users/presentation/pages/users_page.dart';
 
 /// Routes only role M may open (client-side UX guard; the API re-checks).
 const _adminOnlyPaths = {
+  AppRoute.dashboard,
   AppRoute.flights,
   AppRoute.flightPresets,
   AppRoute.reports,
@@ -56,7 +58,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         return _publicPaths.contains(path) ? null : AppRoute.login;
       }
       // Signed in (login or a restored session): login/register are done.
-      if (_publicPaths.contains(path)) return AppRoute.schedule;
+      if (_publicPaths.contains(path)) return AppRoute.homeFor(user.isAdmin);
       if (user.isAdmin) return null;
       if (_adminOnlyPaths.contains(path)) return AppRoute.schedule;
       return null;
@@ -77,6 +79,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         // with zero slide/fade. go_router would otherwise apply the default
         // platform page transition (a slide on macOS) between these sub-routes.
         routes: [
+          GoRoute(
+            path: AppRoute.dashboard,
+            pageBuilder: (context, state) =>
+                const NoTransitionPage(child: DashboardPage()),
+          ),
           GoRoute(
             path: AppRoute.schedule,
             pageBuilder: (context, state) =>
@@ -134,7 +141,12 @@ class AppRoute {
 
   static const String login = '/login';
   static const String register = '/register';
+  static const String dashboard = '/dashboard';
   static const String schedule = '/schedule';
+
+  /// First page after signing in: the dashboard for the admin (customer
+  /// 2026-11-18), the roster for everyone else.
+  static String homeFor(bool isAdmin) => isAdmin ? dashboard : schedule;
   static const String flights = '/flights';
   static const String flightPresets = '/flights/presets';
   static const String leaves = '/leaves';

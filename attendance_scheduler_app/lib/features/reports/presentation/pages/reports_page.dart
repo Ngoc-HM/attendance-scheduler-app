@@ -23,10 +23,8 @@ class ReportsPage extends ConsumerWidget {
     final l = AppLocalizations.of(context);
     final thisYear = DateTime.now().year;
     final year = state.selectedYear ?? thisYear;
-    final years = {
-      for (var i = 0; i < 5; i++) thisYear - i,
-      year,
-    }.toList()..sort((a, b) => b.compareTo(a));
+    final years = {for (var i = 0; i < 5; i++) thisYear - i, year}.toList()
+      ..sort((a, b) => b.compareTo(a));
 
     return DsReportsView(
       rows: _buildRows(state, l),
@@ -35,6 +33,23 @@ class ReportsPage extends ConsumerWidget {
       // Re-download the latest export with the current selection.
       onDownload: (_) => _export(context, ctrl, l),
       filters: [
+        DsSelectField<String>(
+          label: l.text('reportKind'),
+          value: state.selectedKind,
+          items: [
+            DropdownMenuItem(
+              value: 'attendance',
+              child: Text(l.text('reportAttendance')),
+            ),
+            DropdownMenuItem(
+              value: 'leave',
+              child: Text(l.text('reportLeave')),
+            ),
+          ],
+          onChanged: (v) {
+            if (v != null) ctrl.selectKind(v);
+          },
+        ),
         DsSelectField<int>(
           label: l.text('year'),
           value: year,
@@ -46,19 +61,24 @@ class ReportsPage extends ConsumerWidget {
             if (v != null) ctrl.selectYear(v);
           },
         ),
-        DsSelectField<int?>(
-          label: l.text('month'),
-          value: state.selectedMonth,
-          items: [
-            DropdownMenuItem<int?>(value: null, child: Text(l.text('allYear'))),
-            for (var m = 1; m <= 12; m++)
+        // The leave report covers the whole year: no month to pick.
+        if (state.selectedKind != 'leave')
+          DsSelectField<int?>(
+            label: l.text('month'),
+            value: state.selectedMonth,
+            items: [
               DropdownMenuItem<int?>(
-                value: m,
-                child: Text(l.monthYear(DateTime(year, m))),
+                value: null,
+                child: Text(l.text('allYear')),
               ),
-          ],
-          onChanged: ctrl.selectMonth,
-        ),
+              for (var m = 1; m <= 12; m++)
+                DropdownMenuItem<int?>(
+                  value: m,
+                  child: Text(l.monthYear(DateTime(year, m))),
+                ),
+            ],
+            onChanged: ctrl.selectMonth,
+          ),
         DsSelectField<String>(
           label: l.text('format'),
           value: state.selectedFormat,
@@ -104,7 +124,7 @@ class ReportsPage extends ConsumerWidget {
     if (state.lastResult is! ExportSuccess) return [];
     final now = DateTime.now();
     final year = state.selectedYear ?? now.year;
-    final month = state.selectedMonth;
+    final month = state.selectedKind == 'leave' ? null : state.selectedMonth;
     return [
       DsReportRowData(
         name: l.text('latestExport'),

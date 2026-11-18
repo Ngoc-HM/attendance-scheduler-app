@@ -28,12 +28,20 @@ class ApiEndpoints {
   static const String leavesWindow = '/leaves/window';
   static const String leaveBalance = '/leaves/balance'; // ?year=&user_id=
   static String leaveDecide(int id) => '/leaves/$id/decide';
+  static String leaveApprovalPreview(int id) =>
+      '/leaves/$id/approval-preview';
   static String leaveRevoke(int id) => '/leaves/$id/revoke';
+  static String leaveCancel(int id) => '/leaves/$id/cancel';
   static const String leaveConflicts = '/leaves/conflicts'; // ?date=YYYY-MM-DD
 
   // Shift-change requests (decision #8)
   static const String shiftChanges = '/shift-changes';
   static String shiftChangeDecide(int id) => '/shift-changes/$id/decide';
+  static String shiftChangeApprovalPreview(int id) =>
+      '/shift-changes/$id/approval-preview';
+
+  // Admin dashboard (customer 2026-11-18)
+  static const String dashboard = '/dashboard';
 
   // Admin navigation badges: items waiting for a decision (owner 2026-11-10)
   static const String pendingCounts = '/pending-counts';
@@ -72,4 +80,5 @@ class ApiEndpoints {
   static String monthlyReport(int year, int month) =>
       '/reports/monthly/$year/$month';
   static String yearlyReport(int year) => '/reports/yearly/$year';
+  static String leaveReport(int year) => '/reports/leave-balance/$year';
 }

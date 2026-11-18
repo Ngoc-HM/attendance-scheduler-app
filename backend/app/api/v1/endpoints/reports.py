@@ -49,3 +49,14 @@ def yearly_report(
     audit_service.record(db, admin.id, "report.export", "Report",
                          detail=f"yearly {year} {format}")
     return _stream(table, format, f"attendance_{year}")
+
+
+@router.get("/leave-balance/{year}")
+def leave_balance_report(
+    db: DbSession, year: YearPath, admin: AdminUser, format: str = Query("csv")
+):
+    """Leave quota, approved, pending and remaining days of everyone in a year."""
+    table = report_service.leave_balance_report(db, year)
+    audit_service.record(db, admin.id, "report.export", "Report",
+                         detail=f"leave {year} {format}")
+    return _stream(table, format, f"leave_{year}")

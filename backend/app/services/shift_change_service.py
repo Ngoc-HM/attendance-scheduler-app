@@ -223,3 +223,24 @@ def decide(
     strict_review = requester.role.is_fixed if requester else False
 
     return req, strict_review, warnings
+
+
+def preview_approval(db: Session, req_id: int) -> list[str]:
+    """Rule breaches approving a pending request would add to the schedule,
+    without approving it (customer 2026-11-18: warn BEFORE the decision).
+
+    The change is applied inside the transaction and rolled back; breaches
+    the month already had are not repeated. A change that cannot be applied
+    raises exactly like ``decide`` would.
+    """
+    req = _get_locked_or_404(db, req_id)
+    if req.status != LeaveStatus.pending:
+        raise HTTPException(status.HTTP_409_CONFLICT, detail=t("swap.already_decided"))
+    try:
+        snapshot = schedule_service.snapshot_violations(
+            db, [(req.work_date.year, req.work_date.month)]
+        )
+        schedule_service.apply_shift_change(db, req)
+        return schedule_service.new_violation_lines(db, snapshot)
+    finally:
+        db.rollback()

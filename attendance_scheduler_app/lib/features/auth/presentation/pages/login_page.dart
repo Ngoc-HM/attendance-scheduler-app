@@ -38,7 +38,9 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     final ok = await ref
         .read(authControllerProvider.notifier)
         .login(_username.text.trim(), _password.text);
-    if (ok && mounted) context.go(AppRoute.schedule);
+    if (!ok || !mounted) return;
+    final isAdmin = ref.read(authControllerProvider).user?.isAdmin ?? false;
+    context.go(AppRoute.homeFor(isAdmin));
   }
 
   @override

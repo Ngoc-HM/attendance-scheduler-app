@@ -79,7 +79,7 @@ class _FakeScheduleDataSource extends ScheduleRemoteDataSource {
     this.julyExists = false,
     this.violations = const [],
     this.requests = const [],
-    this.decideWarnings = const [],
+    this.previewWarnings = const [],
     this.publishError,
     this.fetchError,
     this.violationsError,
@@ -90,7 +90,8 @@ class _FakeScheduleDataSource extends ScheduleRemoteDataSource {
   final bool julyExists;
   final List<ConstraintViolation> violations;
   final List<ShiftChangeRequest> requests;
-  final List<String> decideWarnings;
+  /// Returned by [shiftChangeApprovalPreview]: what approving would break.
+  final List<String> previewWarnings;
   final Object? publishError;
 
   /// Thrown by [fetchViolations] (endpoint missing, 5xx, network).
@@ -228,6 +229,10 @@ class _FakeScheduleDataSource extends ScheduleRemoteDataSource {
       ];
 
   @core.override
+  Future<List<String>> shiftChangeApprovalPreview(int id) async =>
+      previewWarnings;
+
+  @core.override
   Future<ShiftChangeRequest> decideShiftChange({
     required int id,
     required String status,
@@ -243,7 +248,7 @@ class _FakeScheduleDataSource extends ScheduleRemoteDataSource {
       kind: r.kind,
       status: status,
       strictReview: r.strictReview,
-      warnings: decideWarnings,
+      warnings: const [],
       requestedCode: r.requestedCode,
       counterpartUserId: r.counterpartUserId,
     );
@@ -647,10 +652,13 @@ void main() {
       expect(find.textContaining('swap_with'), findsNothing);
     });
 
-    testWidgets('approve_shows_warnings_and_reloads_grid', (tester) async {
+    // Customer 2026-11-18: the admin is warned BEFORE the approval.
+    testWidgets('approve_warns_first_then_approves_and_reloads_grid', (
+      tester,
+    ) async {
       final ds = _FakeScheduleDataSource(
         requests: requests,
-        decideWarnings: const ['2026-06-05: arrival cover below minimum'],
+        previewWarnings: const ['2026-06-05: arrival cover below minimum'],
       );
       await _pump(tester, user: _admin, ds: ds);
       await openPanel(tester);
@@ -659,18 +667,40 @@ void main() {
       await tester.tap(find.byTooltip('Approve').first);
       await tester.pumpAndSettle();
 
-      expect(ds.decided, [(31, 'approved')]);
+      expect(ds.decided, isEmpty, reason: 'nothing approved yet');
       expect(find.byType(AlertDialog), findsOneWidget);
       expect(
         find.text('2026-06-05: arrival cover below minimum'),
         findsOneWidget,
       );
 
-      await tester.tap(find.text('Close'));
+      await tester.tap(find.text('Approve anyway'));
       await tester.pumpAndSettle();
 
+      expect(ds.decided, [(31, 'approved')]);
       expect(ds.fetchedMonths, [_june, _june], reason: 'grid reloaded');
-      expect(find.text('A1'), findsWidgets);
+      expect(find.text('Request approved.'), findsOneWidget);
+      await _drainToast(tester);
+    });
+
+    testWidgets('approve_warning_cancelled_leaves_the_request_pending', (
+      tester,
+    ) async {
+      final ds = _FakeScheduleDataSource(
+        requests: requests,
+        previewWarnings: const ['2026-06-05: arrival cover below minimum'],
+      );
+      await _pump(tester, user: _admin, ds: ds);
+      await openPanel(tester);
+
+      await tester.tap(find.byTooltip('Approve').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+
+      expect(ds.decided, isEmpty);
+      expect(ds.fetchedMonths, [_june], reason: 'no cell changed');
+      expect(find.byTooltip('Approve'), findsNWidgets(2));
     });
 
     testWidgets('approve_without_warnings_toasts_and_reloads_grid', (
@@ -957,28 +987,6 @@ void main() {
       expect(find.text('Request rejected.'), findsOneWidget);
       expect(ds.fetchedMonths, [_june], reason: 'a rejection changes no cell');
       await _drainToast(tester);
-    });
-
-    testWidgets('approving the only shift change with warnings shows them', (
-      tester,
-    ) async {
-      final ds = _FakeScheduleDataSource(
-        requests: [only],
-        decideWarnings: const ['2026-06-09: departure cover below minimum'],
-      );
-      await _pump(tester, user: _admin, ds: ds);
-      await openPanel(tester);
-
-      await decide(tester, ds, 'Approve');
-
-      expect(find.byType(AlertDialog), findsOneWidget);
-      expect(
-        find.text('2026-06-09: departure cover below minimum'),
-        findsOneWidget,
-      );
-      await tester.tap(find.text('Close'));
-      await tester.pumpAndSettle();
-      expect(ds.fetchedMonths, [_june, _june], reason: 'grid reloaded once');
     });
 
     // The row's context is gone before the answer arrives: the feedback and

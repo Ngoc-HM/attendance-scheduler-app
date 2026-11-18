@@ -73,6 +73,11 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     if (user == null || user.isAdmin) {
       return [
         DsNavigationDestination(
+          path: AppRoute.dashboard,
+          label: l.text('navDashboard'),
+          icon: Icons.dashboard_outlined,
+        ),
+        DsNavigationDestination(
           path: AppRoute.schedule,
           label: l.navSchedule,
           icon: Icons.calendar_today_outlined,

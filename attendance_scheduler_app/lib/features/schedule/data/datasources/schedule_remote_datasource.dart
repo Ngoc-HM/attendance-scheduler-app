@@ -7,8 +7,7 @@ import '../../../../core/network/api_exception.dart';
 import '../models/schedule_model.dart';
 import '../../domain/entities/schedule_entities.dart';
 
-final scheduleRemoteDataSourceProvider =
-    Provider<ScheduleRemoteDataSource>(
+final scheduleRemoteDataSourceProvider = Provider<ScheduleRemoteDataSource>(
   (ref) => ScheduleRemoteDataSource(ref.watch(dioProvider)),
 );
 
@@ -23,7 +22,8 @@ class ScheduleRemoteDataSource {
     try {
       final response = await _dio.get(ApiEndpoints.schedule(year, month));
       return MonthlyScheduleModel.fromJson(
-          response.data as Map<String, dynamic>);
+        response.data as Map<String, dynamic>,
+      );
     } on DioException catch (e) {
       throw ApiException.fromDio(e, 'fetch_failed');
     }
@@ -46,7 +46,8 @@ class ScheduleRemoteDataSource {
         options: Options(receiveTimeout: const Duration(minutes: 3)),
       );
       return ScheduleResultModel.fromJson(
-          response.data as Map<String, dynamic>);
+        response.data as Map<String, dynamic>,
+      );
     } on DioException catch (e) {
       throw ApiException.fromDio(e, 'generate_failed');
     }
@@ -72,7 +73,8 @@ class ScheduleRemoteDataSource {
       // The endpoint returns a ScheduleResult (updated schedule + the
       // hard-rule recheck warnings), NOT a bare MonthlySchedule.
       return ScheduleResultModel.fromJson(
-          response.data as Map<String, dynamic>);
+        response.data as Map<String, dynamic>,
+      );
     } on DioException catch (e) {
       throw ApiException.fromDio(e, 'override_failed');
     }
@@ -81,10 +83,12 @@ class ScheduleRemoteDataSource {
   /// POST /schedules/{id}/publish
   Future<MonthlySchedule> publish(int scheduleId) async {
     try {
-      final response =
-          await _dio.post(ApiEndpoints.schedulePublish(scheduleId));
+      final response = await _dio.post(
+        ApiEndpoints.schedulePublish(scheduleId),
+      );
       return MonthlyScheduleModel.fromJson(
-          response.data as Map<String, dynamic>);
+        response.data as Map<String, dynamic>,
+      );
     } on DioException catch (e) {
       throw ApiException.fromDio(e, 'publish_failed');
     }
@@ -94,12 +98,14 @@ class ScheduleRemoteDataSource {
   /// month as it stands now (generated, edited and approved changes).
   Future<List<ConstraintViolation>> fetchViolations(int scheduleId) async {
     try {
-      final response =
-          await _dio.get(ApiEndpoints.scheduleViolations(scheduleId));
+      final response = await _dio.get(
+        ApiEndpoints.scheduleViolations(scheduleId),
+      );
       final list = response.data as List<dynamic>;
       return list
-          .map((e) =>
-              ConstraintViolationModel.fromJson(e as Map<String, dynamic>))
+          .map(
+            (e) => ConstraintViolationModel.fromJson(e as Map<String, dynamic>),
+          )
           .toList();
     } on DioException catch (e) {
       throw ApiException.fromDio(e, 'violations_fetch_failed');
@@ -107,9 +113,7 @@ class ScheduleRemoteDataSource {
   }
 
   /// GET /shift-changes — all=true for admin list.
-  Future<List<ShiftChangeRequest>> fetchShiftChanges({
-    bool all = false,
-  }) async {
+  Future<List<ShiftChangeRequest>> fetchShiftChanges({bool all = false}) async {
     try {
       final response = await _dio.get(
         ApiEndpoints.shiftChanges,
@@ -117,8 +121,9 @@ class ScheduleRemoteDataSource {
       );
       final list = response.data as List<dynamic>;
       return list
-          .map((e) =>
-              ShiftChangeRequestModel.fromJson(e as Map<String, dynamic>))
+          .map(
+            (e) => ShiftChangeRequestModel.fromJson(e as Map<String, dynamic>),
+          )
           .toList();
     } on DioException catch (e) {
       throw ApiException.fromDio(e, 'shift_changes_fetch_failed');
@@ -147,9 +152,26 @@ class ScheduleRemoteDataSource {
 
       final response = await _dio.post(ApiEndpoints.shiftChanges, data: data);
       return ShiftChangeRequestModel.fromJson(
-          response.data as Map<String, dynamic>);
+        response.data as Map<String, dynamic>,
+      );
     } on DioException catch (e) {
       throw ApiException.fromDio(e, 'shift_change_create_failed');
+    }
+  }
+
+  /// GET /shift-changes/{id}/approval-preview — rule breaches approving
+  /// would add to the schedule. Saves nothing.
+  Future<List<String>> shiftChangeApprovalPreview(int id) async {
+    try {
+      final response = await _dio.get(
+        ApiEndpoints.shiftChangeApprovalPreview(id),
+      );
+      final json = response.data as Map<String, dynamic>;
+      return (json['warnings'] as List<dynamic>? ?? const [])
+          .map((e) => e.toString())
+          .toList();
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e, 'shift_change_preview_failed');
     }
   }
 
@@ -164,7 +186,8 @@ class ScheduleRemoteDataSource {
         data: {'status': status},
       );
       return ShiftChangeRequestModel.fromJson(
-          response.data as Map<String, dynamic>);
+        response.data as Map<String, dynamic>,
+      );
     } on DioException catch (e) {
       throw ApiException.fromDio(e, 'shift_change_decide_failed');
     }

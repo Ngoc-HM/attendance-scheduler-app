@@ -1,5 +1,25 @@
 # Project Changelog
 
+## 2026-11-18 — Customer meeting: warnings before approval, leave ceiling, dashboard, group F
+
+- **Approval warnings come first** (decision #65). Approve on a leave or a
+  shift change now checks what the approval would break and lists it; the
+  admin approves anyway or cancels. Without problems it approves at once.
+- **Shift-change request form** opens in the top-left corner without dimming
+  the page, so it does not cover the person's roster.
+- **Leave ceiling** (#66). A filed request counts against the annual quota
+  at once; a request that does not fit is refused with the days left. The
+  employee can cancel an own pending request (**Cancel** on the row). The
+  leave card shows what can still be registered this year and next.
+- **Dashboard** (#67), admin only and the admin's first page: on duty today,
+  missing check-in/out, requests waiting, this and next month's roster with
+  its rule violations, everyone's annual leave. Reports can export
+  **Annual leave** per year.
+- **Group F follows the flights** (#68): two people on a weekday with two
+  flight pairs, one otherwise and at weekends; two days off per week; the
+  days off swap every week. Rosters generated before this rule show the new
+  group-F lines in their violation list until they are regenerated.
+
 ## 2026-11-10 — Flight plan template and customer logo
 
 - Flights page (admin): new **Download template** button next to

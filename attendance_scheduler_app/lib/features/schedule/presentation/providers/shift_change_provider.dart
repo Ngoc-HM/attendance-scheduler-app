@@ -33,19 +33,18 @@ class ShiftChangeState {
     Object? error,
     bool? loadFailed,
     bool clearError = false,
-  }) =>
-      ShiftChangeState(
-        requests: requests ?? this.requests,
-        isLoading: isLoading ?? this.isLoading,
-        isMutating: isMutating ?? this.isMutating,
-        error: clearError ? null : (error ?? this.error),
-        loadFailed: loadFailed ?? this.loadFailed,
-      );
+  }) => ShiftChangeState(
+    requests: requests ?? this.requests,
+    isLoading: isLoading ?? this.isLoading,
+    isMutating: isMutating ?? this.isMutating,
+    error: clearError ? null : (error ?? this.error),
+    loadFailed: loadFailed ?? this.loadFailed,
+  );
 }
 
 class ShiftChangeController extends StateNotifier<ShiftChangeState> {
   ShiftChangeController(this._ds, {this.onDecided})
-      : super(const ShiftChangeState());
+    : super(const ShiftChangeState());
 
   final ScheduleRemoteDataSource _ds;
 
@@ -94,6 +93,20 @@ class ShiftChangeController extends StateNotifier<ShiftChangeState> {
     }
   }
 
+  /// Rule breaches approving request [id] would add, asked BEFORE the
+  /// decision; null when the check failed (error is set).
+  Future<List<String>?> approvalPreview(int id) async {
+    state = state.copyWith(isMutating: true, clearError: true);
+    try {
+      final lines = await _ds.shiftChangeApprovalPreview(id);
+      if (mounted) state = state.copyWith(isMutating: false);
+      return lines;
+    } catch (e) {
+      if (mounted) state = state.copyWith(isMutating: false, error: e);
+      return null;
+    }
+  }
+
   /// Returns the decided request, whose `warnings` carry the backend's rule
   /// recheck after an approval; null when the call failed (error is set).
   Future<ShiftChangeRequest?> decide(int id, String status) async {
@@ -118,8 +131,8 @@ class ShiftChangeController extends StateNotifier<ShiftChangeState> {
 
 final shiftChangeControllerProvider =
     StateNotifierProvider<ShiftChangeController, ShiftChangeState>(
-  (ref) => ShiftChangeController(
-    ref.watch(scheduleRemoteDataSourceProvider),
-    onDecided: () => refreshPendingCounts(ref),
-  ),
-);
+      (ref) => ShiftChangeController(
+        ref.watch(scheduleRemoteDataSourceProvider),
+        onDecided: () => refreshPendingCounts(ref),
+      ),
+    );

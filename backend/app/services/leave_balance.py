@@ -8,6 +8,11 @@ so approving, rejecting or revoking shows up immediately.
   one person in one calendar year.
 - exceeds_quota: whether approving a pending request takes its owner past the
   quota in any year it touches (an advisory warning; the admin decides).
+- ensure_within_quota: the registration ceiling (customer 2026-11-18). A
+  request counts against the quota from the moment it is filed, as if it
+  were already approved: a new one is refused once approved + pending + its
+  own days pass the quota of any year it touches. Days come back when a
+  request is rejected, revoked or cancelled by its owner.
 """
 
 from __future__ import annotations
@@ -61,7 +66,59 @@ def annual_leave_summary(db: Session, user_id: int, year: int) -> AnnualLeaveSum
         used=used,
         pending=pending,
         remaining=user.annual_leave_quota - used,
+        available=user.annual_leave_quota - used - pending,
     )
+
+
+def summaries(db: Session, users: list[User], year: int) -> dict[int, AnnualLeaveSummary]:
+    """``annual_leave_summary`` of every one of ``users`` for ``year`` in one
+    query (the leave report and the admin dashboard list everybody)."""
+    used: dict[int, int] = {}
+    pending: dict[int, int] = {}
+    ids = [u.id for u in users]
+    if ids:
+        requests = (
+            db.query(LeaveRequest)
+            .filter(
+                LeaveRequest.user_id.in_(ids),
+                LeaveRequest.status.in_([LeaveStatus.approved, LeaveStatus.pending]),
+                LeaveRequest.start_date <= date(year, 12, 31),
+                LeaveRequest.end_date >= date(year, 1, 1),
+            )
+            .all()
+        )
+        for r in requests:
+            bucket = used if r.status == LeaveStatus.approved else pending
+            bucket[r.user_id] = bucket.get(r.user_id, 0) + _days_in_year(r, year)
+    return {
+        u.id: AnnualLeaveSummary(
+            year=year,
+            quota=u.annual_leave_quota,
+            used=used.get(u.id, 0),
+            pending=pending.get(u.id, 0),
+            remaining=u.annual_leave_quota - used.get(u.id, 0),
+            available=u.annual_leave_quota - used.get(u.id, 0) - pending.get(u.id, 0),
+        )
+        for u in users
+    }
+
+
+def ensure_within_quota(db: Session, user_id: int, start: date, end: date) -> None:
+    """Refuse (400 ``leave.quota_exceeded``) a new request for ``start``–
+    ``end`` that does not fit what ``user_id`` may still register in every
+    calendar year it touches (quota − approved − pending)."""
+    for year in range(start.year, end.year + 1):
+        first = max(start, date(year, 1, 1))
+        last = min(end, date(year, 12, 31))
+        days = (last - first).days + 1
+        available = annual_leave_summary(db, user_id, year).available
+        if days > available:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail=t("leave.quota_exceeded").format(
+                    year=year, available=max(available, 0), days=days
+                ),
+            )
 
 
 def exceeds_quota(db: Session, req: LeaveRequest) -> bool:

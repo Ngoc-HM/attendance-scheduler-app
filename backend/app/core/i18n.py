@@ -61,6 +61,17 @@ MESSAGES: dict[str, dict[str, str]] = {
         "schedule.violation.monthly_off_excess": (
             "{person}: {amount} ordinary X day(s) above this month's entitlement ({target})."
         ),
+        "schedule.violation.role_f_staffing": (
+            "{day}: {amount} short in group F (need {need})."
+        ),
+        "schedule.violation.role_f_weekly_off_shortfall": (
+            "{person}: {amount} day(s) off short in the week of {start} "
+            "(group F rests {target} days a week)."
+        ),
+        "schedule.violation.role_f_weekly_off_excess": (
+            "{person}: {amount} day(s) off too many in the week of {start} "
+            "(group F rests {target} days a week)."
+        ),
         "schedule.violation.max_consecutive_working": (
             "{person}: more than 5 working days in a row from {start}."
         ),
@@ -136,9 +147,14 @@ MESSAGES: dict[str, dict[str, str]] = {
         "leave.schedule_applied": "The already-generated schedule was updated with this decision.",
         "leave.schedule_not_generated": "no schedule yet — this decision applies when the month is generated.",
         "leave.revoke_only_approved": "Only an approved leave can be revoked.",
+        "leave.cancel_only_pending": "Only a pending request can be cancelled.",
+        "leave.quota_exceeded": (
+            "{year}: {available} leave day(s) left to register, this request needs {days}."
+        ),
         # Flight-staffing risk of a leave (services/leave_staffing): the
         # month's roster exists → per short shift; no roster yet → head count.
         "leave.staffing_short_shift": "{day}: {amount} short on the {shift} shift",
+        "leave.staffing_f_short": "{day}: {remaining} group-F staff left, {need} needed",
         "leave.staffing_headcount": (
             "{day}: {remaining} group-A staff left, {need_a} A + {need_d} D needed"
         ),
@@ -231,6 +247,17 @@ MESSAGES: dict[str, dict[str, str]] = {
         "schedule.violation.monthly_off_excess": (
             "{person}: thừa {amount} ngày nghỉ X so với định mức tháng ({target})."
         ),
+        "schedule.violation.role_f_staffing": (
+            "{day}: thiếu {amount} người nhóm F (cần {need})."
+        ),
+        "schedule.violation.role_f_weekly_off_shortfall": (
+            "{person}: tuần bắt đầu {start} thiếu {amount} ngày nghỉ "
+            "(nhóm F nghỉ {target} ngày mỗi tuần)."
+        ),
+        "schedule.violation.role_f_weekly_off_excess": (
+            "{person}: tuần bắt đầu {start} thừa {amount} ngày nghỉ "
+            "(nhóm F nghỉ {target} ngày mỗi tuần)."
+        ),
         "schedule.violation.max_consecutive_working": (
             "{person}: làm quá 5 ngày liên tiếp từ {start}."
         ),
@@ -304,7 +331,12 @@ MESSAGES: dict[str, dict[str, str]] = {
         "leave.schedule_applied": "Lịch đã tạo được cập nhật theo quyết định này.",
         "leave.schedule_not_generated": "chưa có lịch — quyết định này sẽ được áp dụng khi tạo lịch tháng đó.",
         "leave.revoke_only_approved": "Chỉ hủy được đơn nghỉ đã duyệt.",
+        "leave.cancel_only_pending": "Chỉ huỷ được phiếu đang chờ duyệt.",
+        "leave.quota_exceeded": (
+            "Năm {year}: còn {available} ngày phép được đăng ký, phiếu này cần {days} ngày."
+        ),
         "leave.staffing_short_shift": "{day}: thiếu {amount} người ca {shift}",
+        "leave.staffing_f_short": "{day}: còn {remaining} người nhóm F, cần {need}",
         "leave.staffing_headcount": (
             "{day}: còn {remaining} người nhóm A, cần {need_a} ca A + {need_d} ca D"
         ),

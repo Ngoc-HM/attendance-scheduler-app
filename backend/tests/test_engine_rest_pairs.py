@@ -59,6 +59,16 @@ def _offs(grid, uid, days) -> list[date]:
     return [d for d in days if grid[(uid, d)] is X]
 
 
+def _assert_two_off_per_week(grid, uid, days) -> None:
+    """Group F rests by the week (customer 2026-11-18, ``role_f``): every
+    Monday–Sunday week lying inside ``days`` holds exactly two X."""
+    month = set(days)
+    for monday in (d for d in days if d.weekday() == 0):
+        week = [monday + timedelta(days=n) for n in range(7)]
+        if all(d in month for d in week):
+            assert sum(grid[(uid, d)] is X for d in week) == 2, (uid, monday)
+
+
 def _pair_starts(grid, uid, days) -> list[date]:
     offs = set(_offs(grid, uid, days))
     return [d for d in sorted(offs) if d + timedelta(days=1) in offs]
@@ -86,13 +96,19 @@ def test_november_shape_staffed_without_rest_breaches() -> None:
     rules = [v.rule for v in out.violations]
     assert rules.count("flight_staffing") < 3, rules
     assert not REST_RULES & set(rules), rules
+    assert not [r for r in rules if r.startswith("role_f")], rules
     grid = _grid(out)
     for p in people:
         assert_rest_rules(grid, p.user_id, days)
-    # Everyone gets the month's 9 Saturdays + Sundays as X — F and M no
-    # longer get free days off (a probe with no target gave them 14–21).
+    # A and M get the month's 9 Saturdays + Sundays as X (a probe with no
+    # target gave M 14–21); group F rests two days in every week instead.
     for p in people:
-        assert len(_offs(grid, p.user_id, days)) == 9, (p.user_id, _offs(grid, p.user_id, days))
+        if p.role is Role.F:
+            _assert_two_off_per_week(grid, p.user_id, days)
+        else:
+            assert len(_offs(grid, p.user_id, days)) == 9, (
+                p.user_id, _offs(grid, p.user_id, days)
+            )
 
 
 # --- 2/5/6. pairs, group cover, no free days off ----------------------------
@@ -114,9 +130,10 @@ def test_days_off_come_in_pairs() -> None:
     """Without staffing pressure rest comes in pairs (one person per role, so
     no group cover either). Owner rule 2026-11-15: three days only when they
     are required, and a single day may shift the rhythm. November 2026 owes 9
-    X: an odd count, so exactly one single day and no three-day rest."""
+    X: an odd count, so exactly one single day and no three-day rest.
+    Group F is not here: it rests by the week (``tests/test_role_f.py``)."""
     days = month_days(2026, 11)
-    people = [PersonInput(1, Role.T), PersonInput(2, Role.F), PersonInput(3, Role.M)]
+    people = [PersonInput(1, Role.T), PersonInput(3, Role.M)]
     out = _solve(people, days)
     assert out.feasible and not out.violations
     grid = _grid(out)
@@ -143,16 +160,21 @@ def test_role_group_is_never_all_off(f_and_m) -> None:
 
 
 def test_november_target_is_nine_for_f_and_m(f_and_m) -> None:
-    """Acceptance 6: November 2026 has 9 Saturdays + Sundays → 9 X each."""
+    """Acceptance 6: November 2026 has 9 Saturdays + Sundays → 9 X for M;
+    group F rests two days in every week (customer 2026-11-18)."""
     days, people, grid = f_and_m
     for p in people:
         assert_rest_rules(grid, p.user_id, days)
-        assert len(_offs(grid, p.user_id, days)) == 9, p.user_id
+        if p.role is Role.F:
+            _assert_two_off_per_week(grid, p.user_id, days)
+        else:
+            assert len(_offs(grid, p.user_id, days)) == 9, p.user_id
 
 
 def test_july_target_is_eight_for_every_role() -> None:
     """Acceptance 6: July 2026 (the owner's paper roster) has 8 Saturdays +
-    Sundays → 8 X for A, F, T and M alike."""
+    Sundays → 8 X for A, T and M alike; group F rests two days in every
+    week (customer 2026-11-18)."""
     days = month_days(2026, 7)
     people = (
         [PersonInput(u, Role.A) for u in (1, 2, 3, 4)]
@@ -164,7 +186,10 @@ def test_july_target_is_eight_for_every_role() -> None:
     grid = _grid(out)
     for p in people:
         assert_rest_rules(grid, p.user_id, days)
-        assert len(_offs(grid, p.user_id, days)) == 8, p.user_id
+        if p.role is Role.F:
+            _assert_two_off_per_week(grid, p.user_id, days)
+        else:
+            assert len(_offs(grid, p.user_id, days)) == 8, p.user_id
 
 
 def test_leave_over_a_weekend_lowers_the_target_by_two() -> None:

@@ -6,6 +6,8 @@ import '../../../../core/network/api_exception.dart';
 import '../../../../design_system/design_system.dart';
 import '../../../../i18n/app_localizations.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
+import '../../../schedule/presentation/widgets/shift_change_dialog.dart'
+    show confirmApprovalWarnings;
 import '../providers/leaves_provider.dart';
 
 /// Leaves page (F-05 / F-06).
@@ -69,12 +71,19 @@ class _LeavesPageState extends ConsumerState<LeavesPage> {
         onRevoke: isAdmin
             ? (index) => _confirmRevoke(context, ref, ctrl, index, l)
             : null,
+        // The owner may withdraw a request that is still pending.
+        onCancel: isAdmin
+            ? null
+            : (index) => _confirmCancel(context, ctrl, index, l),
         // Live window (GET /leaves/window). Unknown → assume open; the
         // server still rejects a submit outside the window.
         registrationOpen: state.window?.monthlyOpen ?? true,
         closesOnDay: state.window?.closesOnDay,
         compDays: state.compDays,
-        annualLeaveRemaining: state.balance?.remaining,
+        // What can still be registered: pending requests count at once.
+        annualLeaveRemaining: state.balance?.available,
+        annualLeaveYear: state.balance?.year,
+        annualLeaveNextYear: state.nextBalance?.available,
       ),
     );
   }
@@ -92,21 +101,64 @@ class _LeavesPageState extends ConsumerState<LeavesPage> {
     AppLocalizations l,
   ) async {
     try {
-      final warnings = approve
-          ? await ctrl.approve(index)
-          : await ctrl.reject(index);
+      if (approve) {
+        // Warn BEFORE approving (customer 2026-11-18): short flight shifts,
+        // rule breaches and the quota are listed; the admin may go ahead.
+        final lines = await ctrl.approvalPreview(index);
+        if (!context.mounted) return;
+        if (!await confirmApprovalWarnings(context, lines)) return;
+        await ctrl.approve(index);
+      } else {
+        await ctrl.reject(index);
+      }
       if (context.mounted) {
-        final base = approve
-            ? l.text('requestApproved')
-            : l.text('requestRejected');
-        // Decision-time warnings (e.g. an already-generated month is now
-        // stale and must be regenerated) must reach the admin's eyes.
         DsFeedback.show(
           context,
-          warnings.isEmpty ? base : '$base ${warnings.join('; ')}',
-          tone: warnings.isNotEmpty
-              ? DsTone.warning
-              : (approve ? DsTone.success : DsTone.danger),
+          l.text(approve ? 'requestApproved' : 'requestRejected'),
+          tone: approve ? DsTone.success : DsTone.danger,
+        );
+      }
+    } on ApiException catch (e) {
+      if (context.mounted) {
+        DsFeedback.show(context, apiErrorMessage(l, e), tone: DsTone.danger);
+      }
+    }
+  }
+
+  /// The owner withdraws a pending request; confirmed first because the
+  /// request is removed.
+  Future<void> _confirmCancel(
+    BuildContext context,
+    LeavesController ctrl,
+    int index,
+    AppLocalizations l,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => DsFormDialog(
+        title: l.text('cancelRequest'),
+        width: 380,
+        content: Text(l.text('cancelRequestConfirm')),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(l.text('close')),
+          ),
+          DsPrimaryButton(
+            label: l.text('cancelRequest'),
+            onPressed: () => Navigator.of(ctx).pop(true),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    try {
+      await ctrl.cancel(index);
+      if (context.mounted) {
+        DsFeedback.show(
+          context,
+          l.text('requestCancelled'),
+          tone: DsTone.success,
         );
       }
     } on ApiException catch (e) {
@@ -232,10 +284,7 @@ class _LeavesPageState extends ConsumerState<LeavesPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Registration-window guidance (matches backend leave_windows).
-              Text(
-                windowHint,
-                style: Theme.of(ctx).textTheme.bodySmall,
-              ),
+              Text(windowHint, style: Theme.of(ctx).textTheme.bodySmall),
               const SizedBox(height: DsSpacing.x3),
               // Start date picker
               TextField(
@@ -308,9 +357,7 @@ class _LeavesPageState extends ConsumerState<LeavesPage> {
                   ),
                   const SizedBox(width: DsSpacing.x2),
                   DsBadge(
-                    label: l.text(
-                      isAnnual ? 'annualLeave' : 'monthlyLeave',
-                    ),
+                    label: l.text(isAnnual ? 'annualLeave' : 'monthlyLeave'),
                     tone: isAnnual ? DsTone.success : DsTone.primary,
                   ),
                 ],
@@ -352,7 +399,8 @@ class _LeavesPageState extends ConsumerState<LeavesPage> {
                 // a reversed range is left to the backend's invalid-range error.
                 final start = startDate!;
                 final end = endDate!;
-                final days = DateTime.utc(end.year, end.month, end.day)
+                final days =
+                    DateTime.utc(end.year, end.month, end.day)
                         .difference(
                           DateTime.utc(start.year, start.month, start.day),
                         )
@@ -389,7 +437,11 @@ class _LeavesPageState extends ConsumerState<LeavesPage> {
                   }
                 } on ApiException catch (e) {
                   if (ctx.mounted) {
-                    DsFeedback.show(ctx, apiErrorMessage(l, e), tone: DsTone.danger);
+                    DsFeedback.show(
+                      ctx,
+                      apiErrorMessage(l, e),
+                      tone: DsTone.danger,
+                    );
                   }
                 }
               },
@@ -399,5 +451,4 @@ class _LeavesPageState extends ConsumerState<LeavesPage> {
       ),
     );
   }
-
 }

@@ -10,6 +10,7 @@ from app.api.v1.endpoints import (
     auth,
     calculations,
     compliance,
+    dashboard,
     flights,
     holidays,
     leaves,
@@ -43,3 +44,4 @@ api_router.include_router(
     pending_counts.router, prefix="/pending-counts", tags=["pending-counts"]
 )
 api_router.include_router(app_release.router, prefix="/app", tags=["app"])
+api_router.include_router(dashboard.router, prefix="/dashboard", tags=["dashboard"])

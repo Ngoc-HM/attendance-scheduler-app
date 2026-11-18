@@ -22,7 +22,7 @@ class LeaveModel {
   final DateTime startDate;
   final DateTime endDate;
   final String leaveType; // "monthly" | "annual"
-  final String status;    // "pending" | "approved" | "rejected"
+  final String status; // "pending" | "approved" | "rejected"
   final String? note;
 
   /// Days this leave leaves a flight shift short (role-A requester, pending
@@ -39,14 +39,14 @@ class LeaveModel {
     status: json['status'] as String? ?? 'pending',
     note: json['note'] as String?,
     staffingWarnings: [
-      for (final line in (json['staffing_warnings'] as List<dynamic>? ?? const []))
+      for (final line
+          in (json['staffing_warnings'] as List<dynamic>? ?? const []))
         line as String,
     ],
   );
 
   /// Number of calendar days (inclusive both ends).
-  int get days =>
-      endDate.difference(startDate).inDays + 1;
+  int get days => endDate.difference(startDate).inDays + 1;
 
   /// Human-readable date range: "DD/MM–DD/MM/YYYY".
   String get dateRange {
@@ -108,7 +108,9 @@ class LeaveWindow {
 /// One person's annual leave for a calendar year from `GET /leaves/balance`
 /// (backend `AnnualLeaveSummary`, owner decision D4). [used] and [pending]
 /// are approved / pending leave days in [year]; [remaining] is [quota] minus
-/// [used] and goes negative once leave was approved past the quota.
+/// [used] and goes negative once leave was approved past the quota;
+/// [available] also takes the pending days off — what can still be
+/// registered, since a filed request counts at once (customer 2026-11-18).
 class AnnualLeaveBalance {
   const AnnualLeaveBalance({
     required this.year,
@@ -116,13 +118,15 @@ class AnnualLeaveBalance {
     required this.used,
     required this.pending,
     required this.remaining,
-  });
+    int? available,
+  }) : available = available ?? remaining;
 
   final int year;
   final int quota;
   final int used;
   final int pending;
   final int remaining;
+  final int available;
 
   factory AnnualLeaveBalance.fromJson(Map<String, dynamic> json) =>
       AnnualLeaveBalance(
@@ -131,5 +135,6 @@ class AnnualLeaveBalance {
         used: json['used'] as int,
         pending: json['pending'] as int,
         remaining: json['remaining'] as int,
+        available: json['available'] as int?,
       );
 }

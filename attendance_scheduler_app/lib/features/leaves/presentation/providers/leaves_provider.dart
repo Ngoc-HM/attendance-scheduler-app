@@ -23,6 +23,7 @@ class LeavesState {
     this.window,
     this.compDays = 0,
     this.balance,
+    this.nextBalance,
   });
 
   final AsyncValue<List<LeaveEntry>> entries;
@@ -41,18 +42,23 @@ class LeavesState {
   /// it could not be fetched.
   final AnnualLeaveBalance? balance;
 
+  /// The same for next year: annual leave is registered the year before, so
+  /// the employee needs to see what is left there too (customer 2026-11-18).
+  final AnnualLeaveBalance? nextBalance;
+
   LeavesState copyWith({
     AsyncValue<List<LeaveEntry>>? entries,
     LeaveWindow? window,
     int? compDays,
     AnnualLeaveBalance? balance,
-  }) =>
-      LeavesState(
-        entries: entries ?? this.entries,
-        window: window ?? this.window,
-        compDays: compDays ?? this.compDays,
-        balance: balance ?? this.balance,
-      );
+    AnnualLeaveBalance? nextBalance,
+  }) => LeavesState(
+    entries: entries ?? this.entries,
+    window: window ?? this.window,
+    compDays: compDays ?? this.compDays,
+    balance: balance ?? this.balance,
+    nextBalance: nextBalance ?? this.nextBalance,
+  );
 
   /// Mapped display rows consumed by [DsLeavesView].
   AsyncValue<List<DsLeaveRowData>> get rows =>
@@ -64,7 +70,7 @@ class LeavesState {
 /// never the one from the first visit of the session (D4).
 class LeavesController extends StateNotifier<LeavesState> {
   LeavesController(this._ds, this._ref, {this.onDecided})
-      : super(const LeavesState(entries: AsyncValue.loading()));
+    : super(const LeavesState(entries: AsyncValue.loading()));
 
   final LeavesRemoteDataSource _ds;
   final Ref _ref;
@@ -77,8 +83,7 @@ class LeavesController extends StateNotifier<LeavesState> {
   /// newer one (Refresh during a load, reload after a decision).
   int _loadSeq = 0;
 
-  bool get _isAdmin =>
-      _ref.read(authControllerProvider).user?.isAdmin ?? false;
+  bool get _isAdmin => _ref.read(authControllerProvider).user?.isAdmin ?? false;
 
   /// Load leaves — admin sees all (GET /leaves?all=true); others own only —
   /// together with today's registration window and, for employees, their
@@ -91,7 +96,7 @@ class LeavesController extends StateNotifier<LeavesState> {
     final seq = ++_loadSeq;
     state = state.copyWith(entries: const AsyncValue.loading());
     final window = _loadWindow();
-    final balance = _loadBalance();
+    final balances = _loadBalances();
     int? compDays;
     final entries = await AsyncValue.guard(() async {
       final leaves = _isAdmin ? await _ds.listAll() : await _ds.listOwn();
@@ -104,13 +109,14 @@ class LeavesController extends StateNotifier<LeavesState> {
           .toList();
     });
     final loadedWindow = await window;
-    final loadedBalance = await balance;
+    final (loadedBalance, loadedNext) = await balances;
     if (!mounted || seq != _loadSeq) return;
     state = state.copyWith(
       entries: entries,
       window: loadedWindow,
       compDays: compDays,
       balance: loadedBalance,
+      nextBalance: loadedNext,
     );
   }
 
@@ -127,13 +133,19 @@ class LeavesController extends StateNotifier<LeavesState> {
 
   /// The signed-in employee's own balance. The admin's page aggregates every
   /// user, where one person's balance would mislead, so it is not fetched.
-  /// Like the window, a failure only hides the card.
-  Future<AnnualLeaveBalance?> _loadBalance() async {
-    if (_isAdmin) return null;
+  /// Like the window, a failure only hides the card (or its second year).
+  Future<(AnnualLeaveBalance?, AnnualLeaveBalance?)> _loadBalances() async {
+    if (_isAdmin) return (null, null);
+    final AnnualLeaveBalance current;
     try {
-      return await _ds.fetchBalance();
+      current = await _ds.fetchBalance();
     } catch (_) {
-      return null;
+      return (null, null);
+    }
+    try {
+      return (current, await _ds.fetchBalance(year: current.year + 1));
+    } catch (_) {
+      return (current, null);
     }
   }
 
@@ -151,6 +163,14 @@ class LeavesController extends StateNotifier<LeavesState> {
       note: note,
     );
     await load();
+  }
+
+  /// Admin: what approving the leave at display [index] would break —
+  /// asked BEFORE the decision; empty when nothing needs a confirmation.
+  Future<List<String>> approvalPreview(int index) async {
+    final id = _idAt(index);
+    if (id == null) return const [];
+    return _ds.approvalPreview(id);
   }
 
   /// Admin: approve the leave at display [index]. Returns decision warnings
@@ -172,6 +192,15 @@ class LeavesController extends StateNotifier<LeavesState> {
     onDecided?.call();
     await load();
     return warnings;
+  }
+
+  /// Employee: withdraw the own PENDING request at display [index]; its
+  /// days go back to what can be registered (customer 2026-11-18).
+  Future<void> cancel(int index) async {
+    final id = _idAt(index);
+    if (id == null) return;
+    await _ds.cancel(id);
+    await load();
   }
 
   /// Admin: revoke an APPROVED leave at display [index] (owner 2026-07-17) —
@@ -230,9 +259,9 @@ class LeavesController extends StateNotifier<LeavesState> {
 
 final leavesControllerProvider =
     StateNotifierProvider<LeavesController, LeavesState>(
-  (ref) => LeavesController(
-    ref.watch(leavesDataSourceProvider),
-    ref,
-    onDecided: () => refreshPendingCounts(ref),
-  ),
-);
+      (ref) => LeavesController(
+        ref.watch(leavesDataSourceProvider),
+        ref,
+        onDecided: () => refreshPendingCounts(ref),
+      ),
+    );

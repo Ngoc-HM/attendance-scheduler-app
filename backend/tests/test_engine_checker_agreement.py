@@ -38,6 +38,9 @@ ENGINE_RULES = {
     "role_a_minimum_a_days": "min_a",
     "comp_day_shortfall": "comp",
     "comp_day_excess": "comp",
+    "role_f_staffing": "f_staffing",
+    "role_f_weekly_off_shortfall": "f_rest_short",
+    "role_f_weekly_off_excess": "f_rest_over",
 }
 
 def _engine_keys(violations: list[Violation]) -> set[tuple[str, int | None]]:

@@ -20,6 +20,11 @@ Per day of the span that has flight demand (``DEMAND``: 1 pair → 1 ARR +
   approved alike), against the ARR + DEP demand
   (``leave.staffing_headcount``).
 
+Group F (customer 2026-11-18) is judged the same way against its own duty
+per day (``role_f.need``: two people on a weekday with two flight pairs,
+otherwise one): from the roster when the month has one, otherwise a head
+count of the group (``leave.staffing_f_short``).
+
 ``load`` reads everything a list needs in a fixed number of queries (role-A
 users, flight days, schedules and their role-A cells, approved leaves); the
 per-request work is then in memory.
@@ -39,6 +44,7 @@ from app.models.flight import FlightDay
 from app.models.leave import LeaveRequest
 from app.models.schedule import MonthlySchedule, ShiftAssignment
 from app.models.user import User
+from app.scheduler import role_f
 from app.schemas.leave import LeaveRead
 from app.services.schedule_violation_checker import DEMAND
 from app.services.schedule_violation_text import format_day
@@ -53,6 +59,7 @@ class StaffingContext:
     """What the risk check reads, loaded once for a set of requests."""
 
     role_a_ids: set[int] = field(default_factory=set)
+    role_f_ids: set[int] = field(default_factory=set)
     flight_pairs: dict[date, int] = field(default_factory=dict)
     scheduled_months: set[tuple[int, int]] = field(default_factory=set)
     cells: dict[tuple[int, date], AttendanceCode] = field(default_factory=dict)
@@ -68,16 +75,15 @@ def _span(req: LeaveRequest) -> list[date]:
 
 def load(db: Session, reqs: Iterable[LeaveRequest]) -> StaffingContext:
     """Everything needed to judge ``reqs`` — five queries whatever their number."""
-    role_a_ids = {
-        uid
-        for (uid,) in db.query(User.id).filter(
-            User.role == Role.A, User.status == UserStatus.active
-        )
-    }
-    relevant = [
-        r for r in reqs if r.status in _RISK_STATUSES and r.user_id in role_a_ids
-    ]
-    ctx = StaffingContext(role_a_ids=role_a_ids)
+    by_role: dict[Role, set[int]] = {Role.A: set(), Role.F: set()}
+    for uid, role in db.query(User.id, User.role).filter(
+        User.role.in_([Role.A, Role.F]), User.status == UserStatus.active
+    ):
+        by_role[role].add(uid)
+    role_a_ids, role_f_ids = by_role[Role.A], by_role[Role.F]
+    staff = role_a_ids | role_f_ids
+    relevant = [r for r in reqs if r.status in _RISK_STATUSES and r.user_id in staff]
+    ctx = StaffingContext(role_a_ids=role_a_ids, role_f_ids=role_f_ids)
     if not relevant:
         return ctx
     first = min(r.start_date for r in relevant)
@@ -111,7 +117,7 @@ def load(db: Session, reqs: Iterable[LeaveRequest]) -> StaffingContext:
                 ShiftAssignment.code,
             ).filter(
                 ShiftAssignment.schedule_id.in_(schedule_ids),
-                ShiftAssignment.user_id.in_(role_a_ids),
+                ShiftAssignment.user_id.in_(staff),
                 ShiftAssignment.work_date >= first,
                 ShiftAssignment.work_date <= last,
             )
@@ -121,7 +127,7 @@ def load(db: Session, reqs: Iterable[LeaveRequest]) -> StaffingContext:
         db.query(LeaveRequest)
         .filter(
             LeaveRequest.status == LeaveStatus.approved,
-            LeaveRequest.user_id.in_(role_a_ids),
+            LeaveRequest.user_id.in_(staff),
             LeaveRequest.start_date <= last,
             LeaveRequest.end_date >= first,
         )
@@ -132,8 +138,12 @@ def load(db: Session, reqs: Iterable[LeaveRequest]) -> StaffingContext:
 
 def warnings_for(ctx: StaffingContext, req: LeaveRequest) -> list[str]:
     """The request's staffing-risk lines, one per short day (or shift)."""
-    if req.status not in _RISK_STATUSES or req.user_id not in ctx.role_a_ids:
-        return []  # T/M/F (and disabled people) never count toward coverage
+    if req.status not in _RISK_STATUSES:
+        return []
+    if req.user_id in ctx.role_f_ids:
+        return _group_f_lines(ctx, req)
+    if req.user_id not in ctx.role_a_ids:
+        return []  # T/M (and disabled people) never count toward coverage
     others = ctx.role_a_ids - {req.user_id}
     lines: list[str] = []
     for day in _span(req):
@@ -147,6 +157,41 @@ def warnings_for(ctx: StaffingContext, req: LeaveRequest) -> list[str]:
     return lines
 
 
+def _matters(ctx: StaffingContext, req: LeaveRequest, day: date) -> bool:
+    """Whether the leave takes the person off duty on a rostered ``day``:
+    their own cell is AL (approved) or a working code (pending)."""
+    own = ctx.cells.get((req.user_id, day))
+    if req.status is LeaveStatus.approved:
+        return own is AttendanceCode.AL
+    return own is not None and own.is_working
+
+
+def _group_f_lines(ctx: StaffingContext, req: LeaveRequest) -> list[str]:
+    """Days of the span on which group F falls below its duty."""
+    others = ctx.role_f_ids - {req.user_id}
+    lines: list[str] = []
+    for day in _span(req):
+        due = role_f.need(day, ctx.flight_pairs.get(day, 0), len(ctx.role_f_ids))
+        if (day.year, day.month) in ctx.scheduled_months:
+            if not _matters(ctx, req, day):
+                continue
+            have = sum(1 for u in others if ctx.cells.get((u, day)) is AttendanceCode.AD)
+        else:
+            away = {
+                o.user_id
+                for o in ctx.approved
+                if o.id != req.id and o.start_date <= day <= o.end_date
+            }
+            have = len(others - away)
+        if have < due:
+            lines.append(
+                t("leave.staffing_f_short").format(
+                    day=format_day(day), remaining=have, need=due
+                )
+            )
+    return lines
+
+
 def _roster_lines(
     ctx: StaffingContext,
     req: LeaveRequest,
@@ -155,13 +200,7 @@ def _roster_lines(
     need_a: int,
     need_d: int,
 ) -> list[str]:
-    own = ctx.cells.get((req.user_id, day))
-    matters = (
-        own is AttendanceCode.AL
-        if req.status is LeaveStatus.approved
-        else own is not None and own.is_working
-    )
-    if not matters:
+    if not _matters(ctx, req, day):
         return []  # already off that day (X/CD, re-coded, no cell)
     arr = sum(1 for u in others if ctx.cells.get((u, day)) in _ARR_CODES)
     dep = sum(1 for u in others if ctx.cells.get((u, day)) in _DEP_CODES)

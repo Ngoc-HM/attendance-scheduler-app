@@ -18,3 +18,13 @@ class ORMModel(BaseModel):
 
 class Message(BaseModel):
     detail: str
+
+
+class ApprovalPreview(BaseModel):
+    """What approving a pending request would break (leave, shift change).
+
+    Empty ``warnings`` = nothing to confirm; otherwise the admin sees the
+    lines and chooses to approve anyway or not.
+    """
+
+    warnings: list[str] = []

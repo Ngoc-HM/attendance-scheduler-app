@@ -22,6 +22,7 @@ from app.scheduler import (
     objective_premium_off,
     objective_reserve_cover,
     objective_rest_spacing,
+    role_f,
 )
 from app.scheduler.domain import SolverInput
 
@@ -38,7 +39,13 @@ def ordered_terms(
     x: dict[tuple[int, date, AttendanceCode], cp_model.IntVar],
     inp: SolverInput,
 ) -> list[tuple[str, cp_model.LinearExprT]]:
-    stages = [("ordinary_rest_spacing", sum(objective_rest_spacing.terms(model, x, inp)))]
+    stages: list[tuple[str, cp_model.LinearExprT]] = []
+    # Group F's turns come first: they decide F's days off, and no rest
+    # preference of the other groups may trade them away.
+    turns = role_f.rotation_terms(x, inp)
+    if turns:
+        stages.append(("role_f_rotation", sum(turns)))
+    stages.append(("ordinary_rest_spacing", sum(objective_rest_spacing.terms(model, x, inp))))
     stages += objective_balance.ordered_terms(model, x, inp)
     # Keep every role group operational before maximizing preferred turns.
     # Otherwise groups without flight demand could all take every weekend.

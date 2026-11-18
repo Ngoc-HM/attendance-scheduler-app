@@ -10,7 +10,7 @@ from __future__ import annotations
 from app.models.enums import UserStatus
 from app.models.user import User
 from app.scheduler.calendar_utils import month_days
-from app.services import attendance_service
+from app.services import attendance_service, leave_balance
 from app.services.report_table import ReportTable, UserRow, build_monthly, build_yearly
 
 
@@ -51,3 +51,30 @@ def yearly(db, year: int) -> ReportTable:
     }
     ids = {uid for grid in grids.values() for uid, _ in grid}
     return build_yearly(users=_user_rows(db, ids), year=year, grids_by_month=grids)
+
+
+def leave_balance_report(db, year: int) -> ReportTable:
+    """Leave of every active person in ``year`` (customer 2026-11-18): quota,
+    approved, waiting for a decision, what can still be registered, and the
+    comp days (CD) they are owed."""
+    users = (
+        db.query(User)
+        .filter(User.status == UserStatus.active)
+        .order_by(User.role, User.id)
+        .all()
+    )
+    summaries = leave_balance.summaries(db, users, year)
+    table = ReportTable(
+        title=f"Leave {year}",
+        headers=[
+            "Code", "User", "Role", "Quota", "Approved", "Pending", "Left",
+            "Comp days",
+        ],
+    )
+    for u in users:
+        s = summaries[u.id]
+        table.rows.append([
+            u.code or "", u.full_name, u.role.value, str(s.quota), str(s.used),
+            str(s.pending), str(s.available), str(u.carry_comp),
+        ])
+    return table

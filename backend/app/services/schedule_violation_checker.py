@@ -14,6 +14,7 @@ Rules mirrored (engine module in brackets):
 * >= 2 pure A days per role-A person / full month  [constraints_role_a_distribution]
 * owed comp days (CD) granted, none unearned       [constraints_comp_days]
 * no more than 3 consecutive OFF days              [constraints_off_chain]
+* group F: duty per day and two X per week         [role_f]
 
 Each breach is a ``Violation`` with the engine's rule name, ``key`` and
 ``params`` (no prose for the client): ``schedule_violation_text`` renders it
@@ -26,6 +27,7 @@ from __future__ import annotations
 from datetime import date, timedelta
 
 from app.models.enums import AttendanceCode, Role
+from app.scheduler import role_f
 from app.scheduler.constraints_off_chain import MAX_CONSECUTIVE_OFF
 from app.scheduler.constraints_role_a_distribution import (
     MIN_A_DAYS,
@@ -69,11 +71,81 @@ def recheck(
     warnings += check_min_a_days(grid, roles, days)
     warnings += check_comp_days(grid, roles, days, carry_comps or {})
     warnings += check_off_chain(grid, roles, days, annual_off or {}, prev_codes)
+    warnings += check_role_f_staffing(grid, {**(cover_roles or {}), **roles}, days, flight_pairs)
+    warnings += check_role_f_weekly_rest(grid, roles, days, prev_codes or {}, approved_off)
     return warnings
 
 
 def _days(days: list[date]) -> list[date]:
     return sorted(set(days))
+
+
+def _leave_cells(grid, uid, days, approved_off) -> dict[date, AttendanceCode]:
+    """The person's leave days as persisted: AL / S cells, and a CD that is
+    an approved request (an ordinary generated CD is not leave)."""
+    return {
+        d: grid[(uid, d)]
+        for d in days
+        if grid.get((uid, d)) in (AttendanceCode.AL, AttendanceCode.S)
+        or (
+            grid.get((uid, d)) is AttendanceCode.CD
+            and d in (approved_off or {}).get(uid, {})
+        )
+    }
+
+
+def check_role_f_staffing(grid, roles, days, flight_pairs) -> list[Violation]:
+    """Group F's duty per day (``role_f.need``): two people on a weekday with
+    two flight pairs, otherwise one. Only under-coverage warns."""
+    members = [uid for uid, role in roles.items() if role is Role.F]
+    warnings: list[Violation] = []
+    for d in _days(days):
+        due = role_f.need(d, flight_pairs.get(d, 0), len(members))
+        have = sum(1 for u in members if grid.get((u, d)) is AttendanceCode.AD)
+        if have < due:
+            warnings.append(
+                Violation(
+                    rule="role_f_staffing",
+                    message=f"{d}: group F short {have}/{due}",
+                    day=d,
+                    params={"need": due, "amount": due - have},
+                )
+            )
+    return warnings
+
+
+def check_role_f_weekly_rest(grid, roles, days, prev_codes, approved_off=None) -> list[Violation]:
+    """Group F: two ordinary X per Monday–Sunday week (``role_f.week_rest``),
+    read across the month start through ``prev_codes``."""
+    days = _days(days)
+    warnings: list[Violation] = []
+    for uid, role in roles.items():
+        if role is not Role.F or not days:
+            continue
+        pinned = _leave_cells(grid, uid, days, approved_off)
+        prev = role_f.previous_codes(days[0], tuple(prev_codes.get(uid, ())))
+        for week in role_f.week_rest(days, pinned, prev):
+            chosen = sum(
+                grid.get((uid, d)) is AttendanceCode.X for d in week.days if d not in pinned
+            )
+            if week.low <= chosen <= week.high:
+                continue
+            direction = "shortfall" if chosen < week.low else "excess"
+            bound = week.low if chosen < week.low else week.high
+            warnings.append(
+                Violation(
+                    rule=f"role_f_weekly_off_{direction}",
+                    message=f"User {uid}: weekly X {direction} in the week of {week.monday}",
+                    day=week.monday,
+                    user_id=uid,
+                    params={
+                        "start": week.monday,
+                        "target": week.target,
+                        "amount": abs(chosen - bound),
+                    },
+                )
+            )
+    return warnings
 
 
 def check_monthly_quota(grid, roles, days, approved_off=None) -> list[Violation]:
@@ -84,19 +156,13 @@ def check_monthly_quota(grid, roles, days, approved_off=None) -> list[Violation]
     """
     days = _days(days)
     warnings: list[Violation] = []
-    for uid in roles:
+    for uid, role in roles.items():
+        if role is Role.F:
+            continue  # group F rests by the week (check_role_f_weekly_rest)
         # Approval of an existing roster intentionally preserves ordinary X.
         # Only persisted leave codes consume leave entitlement, even when the
         # approved request's full span includes an already-resting X cell.
-        pinned = {
-            d: grid[(uid, d)]
-            for d in days
-            if grid.get((uid, d)) in (AttendanceCode.AL, AttendanceCode.S)
-            or (
-                grid.get((uid, d)) is AttendanceCode.CD
-                and d in (approved_off or {}).get(uid, {})
-            )
-        }
+        pinned = _leave_cells(grid, uid, days, approved_off)
         expected = entitlement(days, pinned)
         chosen = sum(grid.get((uid, d)) is AttendanceCode.X for d in days if d not in pinned)
         if chosen == expected:

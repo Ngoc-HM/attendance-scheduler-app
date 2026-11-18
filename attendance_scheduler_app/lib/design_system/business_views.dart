@@ -623,9 +623,9 @@ class _DsDayGrid extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final trailWidth = trailingHeaders.length * _trailW;
-        final dayW = ((constraints.maxWidth - leftWidth - trailWidth) /
-                daysInMonth)
-            .clamp(_dayMinW, _dayMaxW);
+        final dayW =
+            ((constraints.maxWidth - leftWidth - trailWidth) / daysInMonth)
+                .clamp(_dayMinW, _dayMaxW);
         final rightNatural = daysInMonth * dayW + trailWidth;
         final rightWidth = math.max(
           rightNatural,
@@ -654,7 +654,8 @@ class _DsDayGrid extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       _scrollHeader(l, daysInMonth, dayW),
-                      for (final row in rows) _scrollRow(row, daysInMonth, dayW),
+                      for (final row in rows)
+                        _scrollRow(row, daysInMonth, dayW),
                     ],
                   ),
                 ),
@@ -708,7 +709,11 @@ class _DsDayGrid extends StatelessWidget {
     ),
   );
 
-  Widget _scrollHeader(AppLocalizations l, int daysInMonth, double dayW) => Container(
+  Widget _scrollHeader(
+    AppLocalizations l,
+    int daysInMonth,
+    double dayW,
+  ) => Container(
     height: _headerH,
     color: DsColors.surfaceSubtle,
     child: Row(
@@ -725,52 +730,55 @@ class _DsDayGrid extends StatelessWidget {
     ),
   );
 
-  Widget _scrollRow(_DsDayGridRow row, int daysInMonth, double dayW) => Container(
-    height: _rowH,
-    decoration: const BoxDecoration(
-      border: Border(bottom: BorderSide(color: DsColors.border)),
-    ),
-    child: Row(
-      children: [
-        for (var i = 0; i < daysInMonth; i++)
-          _scrollCell(
-            dayW,
-            InkWell(
-              onTap: row.onDayTap == null ? null : () => row.onDayTap!(i + 1),
-              borderRadius: BorderRadius.circular(6),
-              child: _DsDayCell(
-                note: i < row.notes.length ? row.notes[i] : null,
-                child: i < row.shifts.length
-                    // Scaled down, never wrapped, when the column is narrow
-                    // ("O/D" must stay on one line).
-                    ? FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: DsShiftBadge(
-                          code: row.shifts[i],
-                          compact: true,
-                          mark: i < row.marks.length ? row.marks[i] : null,
-                        ),
-                      )
-                    : const Text(
-                        '—',
-                        style: TextStyle(color: DsColors.textMuted),
-                      ),
+  Widget _scrollRow(_DsDayGridRow row, int daysInMonth, double dayW) =>
+      Container(
+        height: _rowH,
+        decoration: const BoxDecoration(
+          border: Border(bottom: BorderSide(color: DsColors.border)),
+        ),
+        child: Row(
+          children: [
+            for (var i = 0; i < daysInMonth; i++)
+              _scrollCell(
+                dayW,
+                InkWell(
+                  onTap: row.onDayTap == null
+                      ? null
+                      : () => row.onDayTap!(i + 1),
+                  borderRadius: BorderRadius.circular(6),
+                  child: _DsDayCell(
+                    note: i < row.notes.length ? row.notes[i] : null,
+                    child: i < row.shifts.length
+                        // Scaled down, never wrapped, when the column is narrow
+                        // ("O/D" must stay on one line).
+                        ? FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: DsShiftBadge(
+                              code: row.shifts[i],
+                              compact: true,
+                              mark: i < row.marks.length ? row.marks[i] : null,
+                            ),
+                          )
+                        : const Text(
+                            '—',
+                            style: TextStyle(color: DsColors.textMuted),
+                          ),
+                  ),
+                ),
               ),
-            ),
-          ),
-        for (final value in row.trailing)
-          _scrollCell(
-            _trailW,
-            Center(
-              child: Text(
-                value,
-                style: const TextStyle(color: DsColors.textPrimary),
+            for (final value in row.trailing)
+              _scrollCell(
+                _trailW,
+                Center(
+                  child: Text(
+                    value,
+                    style: const TextStyle(color: DsColors.textPrimary),
+                  ),
+                ),
               ),
-            ),
-          ),
-      ],
-    ),
-  );
+          ],
+        ),
+      );
 
   Widget _scrollCell(double weight, Widget child) => Expanded(
     flex: weight.round(),
@@ -1202,10 +1210,13 @@ class DsLeavesView extends StatelessWidget {
     this.onApprove,
     this.onReject,
     this.onRevoke,
+    this.onCancel,
     this.registrationOpen = true,
     this.closesOnDay,
     required this.compDays,
     this.annualLeaveRemaining,
+    this.annualLeaveYear,
+    this.annualLeaveNextYear,
   });
 
   final List<DsLeaveRowData> rows;
@@ -1222,6 +1233,9 @@ class DsLeavesView extends StatelessWidget {
   /// Admin: revoke a previously APPROVED leave (owner 2026-07-17).
   final ValueChanged<int>? onRevoke;
 
+  /// Employee: withdraw the own PENDING request (customer 2026-11-18).
+  final ValueChanged<int>? onCancel;
+
   /// Whether the monthly registration window (day 1–[closesOnDay]) is
   /// currently open — drives the banner so it never claims "open" after it
   /// closed.
@@ -1235,10 +1249,17 @@ class DsLeavesView extends StatelessWidget {
   /// for someone with no requests and count a person once per request.
   final int compDays;
 
-  /// "Annual leave left" card value (quota minus approved days this year).
-  /// Null → no card (admin view, or the balance could not be loaded);
-  /// negative once leave was approved past the quota.
+  /// "Annual leave left" card value: quota minus approved AND pending days
+  /// this year, i.e. what can still be registered. Null → no card (admin
+  /// view, or the balance could not be loaded); negative once the admin
+  /// lowered the quota below what is already taken.
   final int? annualLeaveRemaining;
+
+  /// The year [annualLeaveRemaining] is for, and the same figure for the
+  /// year after: annual leave is registered a year ahead, so the card shows
+  /// both ("2026 · 2027" / "30 · 27"). Either null → this year alone.
+  final int? annualLeaveYear;
+  final int? annualLeaveNextYear;
 
   @override
   Widget build(BuildContext context) {
@@ -1247,6 +1268,9 @@ class DsLeavesView extends StatelessWidget {
     final approved = rows.where((row) => row.status == 'Approved').length;
     final day = closesOnDay;
     final annualLeft = annualLeaveRemaining;
+    final annualYear = annualLeaveYear;
+    final annualNext = annualLeaveNextYear;
+    final bothYears = annualYear != null && annualNext != null;
     return DsPage(
       title: l.text('leaveRequests'),
       subtitle: day == null ? null : l.leaveSubtitle(day),
@@ -1289,10 +1313,17 @@ class DsLeavesView extends StatelessWidget {
               ),
               if (annualLeft != null)
                 DsMetricCard(
-                  label: l.text('annualLeaveRemaining'),
-                  value: '$annualLeft',
+                  label: bothYears
+                      ? '${l.text('annualLeaveRemaining')} '
+                            '$annualYear · ${annualYear + 1}'
+                      : l.text('annualLeaveRemaining'),
+                  value: bothYears
+                      ? '$annualLeft · $annualNext'
+                      : '$annualLeft',
                   icon: Icons.beach_access_outlined,
-                  tone: annualLeft < 0 ? DsTone.danger : DsTone.primary,
+                  tone: annualLeft < 0 || (annualNext ?? 0) < 0
+                      ? DsTone.danger
+                      : DsTone.primary,
                 ),
             ],
           ),
@@ -1321,6 +1352,7 @@ class DsLeavesView extends StatelessWidget {
                   onApprove: onApprove,
                   onReject: onReject,
                   onRevoke: onRevoke,
+                  onCancel: onCancel,
                 ),
               ],
             ),
@@ -1338,6 +1370,7 @@ class _LeavesTable extends StatelessWidget {
     this.onApprove,
     this.onReject,
     this.onRevoke,
+    this.onCancel,
   });
 
   final List<DsLeaveRowData> rows;
@@ -1347,6 +1380,9 @@ class _LeavesTable extends StatelessWidget {
   final ValueChanged<int>? onApprove;
   final ValueChanged<int>? onReject;
   final ValueChanged<int>? onRevoke;
+
+  /// Employee view: "Cancel" on the own pending rows.
+  final ValueChanged<int>? onCancel;
 
   @override
   Widget build(BuildContext context) {
@@ -1361,7 +1397,10 @@ class _LeavesTable extends StatelessWidget {
       DsTableColumn(header: l.text('days'), flex: 1),
       DsTableColumn(header: l.text('carry'), flex: 1),
       DsTableColumn(header: l.status, flex: 2),
-      if (canDecide) DsTableColumn(header: l.actions, flex: 4),
+      if (canDecide)
+        DsTableColumn(header: l.actions, flex: 4)
+      else if (onCancel != null)
+        DsTableColumn(header: l.actions, flex: 3),
     ];
 
     final table = DsDataTable(
@@ -1421,7 +1460,16 @@ class _LeavesTable extends StatelessWidget {
                   onPressed: () => onRevoke!(index),
                 ),
                 _ => const SizedBox.shrink(),
-              },
+              }
+            else if (onCancel != null)
+              rows[index].status == 'Pending'
+                  ? DsTextAction(
+                      label: l.cancel,
+                      icon: Icons.close,
+                      tone: DsTone.danger,
+                      onPressed: () => onCancel!(index),
+                    )
+                  : const SizedBox.shrink(),
           ],
       ],
       // Staffing risk sits under the row's cells, full width, so the columns
@@ -1438,8 +1486,11 @@ class _LeavesTable extends StatelessWidget {
     // hẹp hơn thì cuộn ngang thay vì bị overflow (DsDataTable dùng Expanded
     // nên cần đặt trong SizedBox cố định chiều rộng khi cuộn).
     const employeeMinWidth = 760.0;
+    const employeeCancelMinWidth = 880.0;
     const adminMinWidth = 1000.0;
-    final minWidth = canDecide ? adminMinWidth : employeeMinWidth;
+    final minWidth = canDecide
+        ? adminMinWidth
+        : (onCancel != null ? employeeCancelMinWidth : employeeMinWidth);
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -2015,8 +2066,7 @@ class _UsersTable extends StatelessWidget {
                   onEditQuota: onEditQuota == null
                       ? null
                       : () => onEditQuota!(user.id),
-                  onDelete:
-                      onDelete == null ? null : () => onDelete!(user.id),
+                  onDelete: onDelete == null ? null : () => onDelete!(user.id),
                 ),
               ],
             ),
@@ -2072,7 +2122,11 @@ class _UserActionsMenu extends StatelessWidget {
                 SizedBox(
                   width: 24,
                   child: r == user.role
-                      ? const Icon(Icons.check, size: 16, color: DsColors.primary)
+                      ? const Icon(
+                          Icons.check,
+                          size: 16,
+                          color: DsColors.primary,
+                        )
                       : null,
                 ),
                 Text(l.roleLabel(r)),
@@ -2087,16 +2141,18 @@ class _UserActionsMenu extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
-    PopupMenuItem<String> item(String value, String label,
-            {bool danger = false}) =>
-        PopupMenuItem<String>(
-          value: value,
-          height: 40,
-          child: Text(
-            label,
-            style: TextStyle(color: danger ? DsColors.danger : null),
-          ),
-        );
+    PopupMenuItem<String> item(
+      String value,
+      String label, {
+      bool danger = false,
+    }) => PopupMenuItem<String>(
+      value: value,
+      height: 40,
+      child: Text(
+        label,
+        style: TextStyle(color: danger ? DsColors.danger : null),
+      ),
+    );
     return PopupMenuButton<String>(
       tooltip: l.actions,
       position: PopupMenuPosition.under,
@@ -2111,8 +2167,7 @@ class _UserActionsMenu extends StatelessWidget {
       },
       itemBuilder: (_) => [
         if (user.status == 'active') item('role', l.text('changeRole')),
-        if (onEditQuota != null)
-          item('quota', l.text('editAnnualLeaveQuota')),
+        if (onEditQuota != null) item('quota', l.text('editAnnualLeaveQuota')),
         const PopupMenuDivider(),
         if (user.status == 'active')
           item('disable', l.disable, danger: true)

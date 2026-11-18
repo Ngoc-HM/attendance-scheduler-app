@@ -148,7 +148,13 @@ def create_request(
     if _has_overlap(db, user_id, start, end):
         raise HTTPException(status.HTTP_409_CONFLICT, detail=t("leave.overlap"))
 
-    # 5. Persist.
+    # 5. Registration ceiling (customer 2026-11-18): a filed request counts
+    # against the annual quota at once, so the total can never pass it. The
+    # user row is locked so two submissions cannot both take the last days.
+    db.query(User).filter(User.id == user_id).with_for_update().one_or_none()
+    leave_balance.ensure_within_quota(db, user_id, start, end)
+
+    # 6. Persist.
     req = LeaveRequest(
         user_id=user_id,
         start_date=start,
@@ -258,6 +264,67 @@ def decide(
     db.commit()
     db.refresh(req)
     return req, warnings
+
+
+def cancel(db: Session, leave_id: int, user_id: int) -> None:
+    """The owner withdraws their own PENDING request (customer 2026-11-18):
+    its days go back to what they can register. The row is deleted — a
+    pending request never touched a schedule. A decided request stays with
+    the admin (reject / revoke) → 409; someone else's → 404.
+    """
+    req = _get_locked_or_404(db, leave_id)
+    if req.user_id != user_id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=t("leave.not_found"))
+    if req.status != LeaveStatus.pending:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, detail=t("leave.cancel_only_pending")
+        )
+    db.delete(req)
+    db.commit()
+
+
+def preview_approval(db: Session, leave_id: int) -> list[str]:
+    """What approving a pending leave would break, without approving it
+    (customer 2026-11-18: warn BEFORE the decision).
+
+    The approval is applied inside the transaction and rolled back: rule
+    breaches it adds to the already-generated months of the span (those the
+    months already had are not repeated), the flight-staffing risk and the
+    annual quota. An empty list means the admin can approve without a prompt.
+    """
+    from app.services import schedule_service  # local: it imports this module
+
+    req = _get_locked_or_404(db, leave_id)
+    if req.status != LeaveStatus.pending:
+        raise HTTPException(status.HTTP_409_CONFLICT, detail=t("leave.already_decided"))
+    try:
+        months = {
+            (day.year, day.month)
+            for day in (
+                req.start_date + timedelta(days=i)
+                for i in range((req.end_date - req.start_date).days + 1)
+            )
+        }
+        snapshot = schedule_service.snapshot_violations(db, months)
+        over_quota = leave_balance.exceeds_quota(db, req)
+        req.status = LeaveStatus.approved
+        _write_into_schedule(db, req, AttendanceCode.AL, skip=AttendanceCode.X)
+        db.flush()
+        staffing = leave_staffing.staffing_warnings(db, req)
+        lines = schedule_service.new_violation_lines(
+            db,
+            snapshot,
+            # The staffing lines already name the short shifts of this leave.
+            exclude_rules=(
+                frozenset({"flight_staffing", "role_f_staffing"}) if staffing else frozenset()
+            ),
+        )
+        lines += staffing
+        if over_quota:
+            lines.append(t("leave.balance_exceeded"))
+    finally:
+        db.rollback()
+    return list(dict.fromkeys(lines))
 
 
 def revoke(

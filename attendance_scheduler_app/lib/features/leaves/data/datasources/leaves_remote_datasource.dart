@@ -96,6 +96,20 @@ class LeavesRemoteDataSource {
     }
   }
 
+  /// GET /leaves/{id}/approval-preview — what approving would break
+  /// (short flight shifts, rule breaches, the annual quota). Saves nothing.
+  Future<List<String>> approvalPreview(int id) async {
+    try {
+      final response = await _dio.get(ApiEndpoints.leaveApprovalPreview(id));
+      final json = response.data as Map<String, dynamic>;
+      return (json['warnings'] as List<dynamic>? ?? const [])
+          .map((e) => e.toString())
+          .toList();
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e, 'Failed to check the leave approval');
+    }
+  }
+
   /// POST /leaves/{id}/decide — admin approve or reject.
   ///
   /// Returns the decided leave plus decision-time warnings (e.g. the leave
@@ -116,6 +130,16 @@ class LeavesRemoteDataSource {
     }
   }
 
+  /// POST /leaves/{id}/cancel — the owner withdraws their own pending
+  /// request; its days can be registered again.
+  Future<void> cancel(int id) async {
+    try {
+      await _dio.post(ApiEndpoints.leaveCancel(id));
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e, 'Failed to cancel the leave request');
+    }
+  }
+
   /// POST /leaves/{id}/revoke — admin revokes a previously approved leave
   /// (restores balance, marks rejected). Returns decision-time warnings.
   Future<(LeaveModel, List<String>)> revoke(int id) async {
@@ -133,10 +157,9 @@ class LeavesRemoteDataSource {
 
   // ---------------------------------------------------------------------------
 
-  static List<LeaveModel> _parseList(dynamic data) =>
-      (data as List<dynamic>)
-          .map((e) => LeaveModel.fromJson(e as Map<String, dynamic>))
-          .toList();
+  static List<LeaveModel> _parseList(dynamic data) => (data as List<dynamic>)
+      .map((e) => LeaveModel.fromJson(e as Map<String, dynamic>))
+      .toList();
 
   static String _fmt(DateTime d) =>
       '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';

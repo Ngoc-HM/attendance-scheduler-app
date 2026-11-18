@@ -78,7 +78,9 @@ class AnnualLeaveSummary(BaseModel):
 
     ``used`` / ``pending`` are the approved / pending leave days that fall
     inside ``year``; ``remaining = quota - used`` (negative once an admin
-    approved past the quota).
+    approved past the quota). ``available = quota - used - pending`` is what
+    the person can still register: a filed request counts at once
+    (customer 2026-11-18).
     """
 
     year: int
@@ -86,3 +88,4 @@ class AnnualLeaveSummary(BaseModel):
     used: int
     pending: int
     remaining: int
+    available: int

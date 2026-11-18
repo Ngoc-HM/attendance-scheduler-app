@@ -79,7 +79,10 @@ class _ShiftChangeRequestDialogState
 
     return DsFormDialog(
       title: l.text('requestShiftChange'),
-      width: 360,
+      width: 320,
+      // Top-left corner: the form must not cover the person's roster
+      // (customer 2026-11-18); shown with showDsCornerDialog.
+      alignment: Alignment.topLeft,
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -112,12 +115,7 @@ class _ShiftChangeRequestDialogState
               value: _selectedCode,
               isExpanded: true,
               items: ShiftCodeX.requestableCodesFor(widget.role)
-                  .map(
-                    (c) => DropdownMenuItem(
-                      value: c,
-                      child: Text(c.code),
-                    ),
-                  )
+                  .map((c) => DropdownMenuItem(value: c, child: Text(c.code)))
                   .toList(),
               onChanged: (v) {
                 if (v != null) setState(() => _selectedCode = v);
@@ -165,13 +163,13 @@ class _ShiftChangeRequestDialogState
 
   Future<void> _submit() async {
     if (_kind == 'swap_with' && _counterpartUserId == null) return;
-    final ok = await ref.read(shiftChangeControllerProvider.notifier).submit(
+    final ok = await ref
+        .read(shiftChangeControllerProvider.notifier)
+        .submit(
           workDate: widget.workDate,
           kind: _kind,
-          requestedCode:
-              _kind == 'change_code' ? _selectedCode.code : null,
-          counterpartUserId:
-              _kind == 'swap_with' ? _counterpartUserId : null,
+          requestedCode: _kind == 'change_code' ? _selectedCode.code : null,
+          counterpartUserId: _kind == 'swap_with' ? _counterpartUserId : null,
           note: _noteCtrl.text,
         );
     if (mounted) {
@@ -207,8 +205,7 @@ class ShiftChangePendingPanel extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l = AppLocalizations.of(context);
     final state = ref.watch(shiftChangeControllerProvider);
-    final pending =
-        state.requests.where((r) => r.status == 'pending').toList();
+    final pending = state.requests.where((r) => r.status == 'pending').toList();
 
     if (state.isLoading) {
       return const Center(child: CircularProgressIndicator());
@@ -257,7 +254,10 @@ class ShiftChangePendingPanel extends ConsumerWidget {
               if (req.warnings.isNotEmpty)
                 Text(
                   req.warnings.join('; '),
-                  style: const TextStyle(color: DsColors.danger, fontSize: DsFontSize.micro),
+                  style: const TextStyle(
+                    color: DsColors.danger,
+                    fontSize: DsFontSize.micro,
+                  ),
                 ),
             ],
           ),
@@ -265,8 +265,10 @@ class ShiftChangePendingPanel extends ConsumerWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               IconButton(
-                icon: const Icon(Icons.check_circle_outline,
-                    color: DsColors.success),
+                icon: const Icon(
+                  Icons.check_circle_outline,
+                  color: DsColors.success,
+                ),
                 tooltip: l.text('approve'),
                 onPressed: state.isMutating
                     ? null
@@ -293,12 +295,24 @@ class ShiftChangePendingPanel extends ConsumerWidget {
     String status,
     AppLocalizations l,
   ) async {
-    final decided = await ref
-        .read(shiftChangeControllerProvider.notifier)
-        .decide(id, status);
-    if (decided != null) {
-      onDecided(decided);
-      return;
+    final ctrl = ref.read(shiftChangeControllerProvider.notifier);
+    var failed = false;
+    if (status == 'approved') {
+      // Warn BEFORE approving (customer 2026-11-18): the admin sees what
+      // the change would break and may still go ahead.
+      final lines = await ctrl.approvalPreview(id);
+      failed = lines == null;
+      if (!context.mounted) return;
+      if (lines != null && !await confirmApprovalWarnings(context, lines)) {
+        return;
+      }
+    }
+    if (!failed) {
+      final decided = await ctrl.decide(id, status);
+      if (decided != null) {
+        onDecided(decided);
+        return;
+      }
     }
     if (!context.mounted) return;
     DsFeedback.show(
@@ -316,6 +330,35 @@ class ShiftChangePendingPanel extends ConsumerWidget {
 String _isoDate(DateTime d) =>
     '${d.year}-${d.month.toString().padLeft(2, '0')}-'
     '${d.day.toString().padLeft(2, '0')}';
+
+/// Asks the admin to confirm an approval that would break rules: the
+/// [lines] are listed and the admin approves anyway or cancels. No lines →
+/// true at once, without a dialog.
+Future<bool> confirmApprovalWarnings(
+  BuildContext context,
+  List<String> lines,
+) async {
+  if (lines.isEmpty) return true;
+  final l = AppLocalizations.of(context);
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => DsFormDialog(
+      title: l.text('approveWarningsTitle'),
+      content: RuleWarningsList(lines: lines),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(false),
+          child: Text(l.cancel),
+        ),
+        DsPrimaryButton(
+          label: l.text('approveAnyway'),
+          onPressed: () => Navigator.of(ctx).pop(true),
+        ),
+      ],
+    ),
+  );
+  return confirmed == true;
+}
 
 /// Rule warnings / violations, one per line with a warning icon, for a
 /// dialog or panel; long lists scroll instead of growing past [maxHeight].

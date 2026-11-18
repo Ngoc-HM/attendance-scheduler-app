@@ -67,6 +67,10 @@ class SolverInput:
     # Known flight pairs of the first five next-month days (missing = unknown),
     # for consecutive-work-run lookahead (``objective_boundary_week``).
     next_flight_pairs: dict[date, int] = field(default_factory=dict)
+    # Known flight pairs of the six days before the month (missing = unknown):
+    # group F's turns continue through a week that started last month
+    # (``role_f.rotation_duty``).
+    prev_flight_pairs: dict[date, int] = field(default_factory=dict)
     max_solve_seconds: float = 30.0
 
 

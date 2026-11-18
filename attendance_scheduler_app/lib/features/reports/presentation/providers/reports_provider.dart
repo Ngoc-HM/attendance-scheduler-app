@@ -19,13 +19,13 @@ class ExportFailure extends ExportResult {
   /// shows with `apiErrorMessage` (backend detail, or a translated "server
   /// unavailable" / "server error"); [message] is its raw detail.
   ExportFailure(ApiException this.error)
-      : message = error.message,
-        messageKey = null;
+    : message = error.message,
+      messageKey = null;
 
   /// A client-side check failed; the page localizes [messageKey].
   const ExportFailure.localized(String this.messageKey)
-      : message = '',
-        error = null;
+    : message = '',
+      error = null;
 
   final String message;
   final String? messageKey;
@@ -40,6 +40,7 @@ class ReportsState {
     this.selectedYear,
     this.selectedMonth,
     this.selectedFormat = 'csv',
+    this.selectedKind = 'attendance',
   });
 
   final bool isExporting;
@@ -51,6 +52,10 @@ class ReportsState {
   final int? selectedMonth;
   final String selectedFormat; // 'csv' | 'xlsx'
 
+  /// 'attendance' (month or year) or 'leave' (everyone's annual leave of
+  /// the selected year: quota, approved, pending, left, comp days).
+  final String selectedKind;
+
   ReportsState copyWith({
     bool? isExporting,
     ExportResult? lastResult,
@@ -58,14 +63,15 @@ class ReportsState {
     int? selectedMonth,
     bool fullYear = false,
     String? selectedFormat,
-  }) =>
-      ReportsState(
-        isExporting: isExporting ?? this.isExporting,
-        lastResult: lastResult ?? this.lastResult,
-        selectedYear: selectedYear ?? this.selectedYear,
-        selectedMonth: fullYear ? null : (selectedMonth ?? this.selectedMonth),
-        selectedFormat: selectedFormat ?? this.selectedFormat,
-      );
+    String? selectedKind,
+  }) => ReportsState(
+    isExporting: isExporting ?? this.isExporting,
+    lastResult: lastResult ?? this.lastResult,
+    selectedYear: selectedYear ?? this.selectedYear,
+    selectedMonth: fullYear ? null : (selectedMonth ?? this.selectedMonth),
+    selectedFormat: selectedFormat ?? this.selectedFormat,
+    selectedKind: selectedKind ?? this.selectedKind,
+  );
 }
 
 /// Writes a downloaded report and returns the saved path.
@@ -74,11 +80,13 @@ typedef ReportFileSaver = DownloadedFileSaver;
 class ReportsController extends StateNotifier<ReportsState> {
   /// [saveFile] defaults to the system downloads folder; tests pass a fake.
   ReportsController(this._ds, {ReportFileSaver? saveFile})
-      : _saveFile = saveFile ?? saveToDownloads,
-        super(ReportsState(
+    : _saveFile = saveFile ?? saveToDownloads,
+      super(
+        ReportsState(
           selectedYear: DateTime.now().year,
           selectedMonth: DateTime.now().month,
-        ));
+        ),
+      );
 
   final ReportsRemoteDataSource _ds;
   final ReportFileSaver _saveFile;
@@ -90,12 +98,24 @@ class ReportsController extends StateNotifier<ReportsState> {
       ? state.copyWith(fullYear: true)
       : state.copyWith(selectedMonth: month);
   void selectFormat(String fmt) => state = state.copyWith(selectedFormat: fmt);
+  void selectKind(String kind) => state = state.copyWith(selectedKind: kind);
 
   /// Export the selected period: the month's report, or the yearly report
   /// when the full year is selected. Null when an export is already running
   /// (the click is ignored).
-  Future<ExportResult?> export() =>
-      state.selectedMonth == null ? exportYearly() : exportMonthly();
+  Future<ExportResult?> export() {
+    if (state.selectedKind == 'leave') return exportLeave();
+    return state.selectedMonth == null ? exportYearly() : exportMonthly();
+  }
+
+  /// Download the annual leave report of the selected year.
+  Future<ExportResult?> exportLeave() async {
+    final year = state.selectedYear;
+    if (year == null) {
+      return const ExportFailure.localized('selectYearFirst');
+    }
+    return _export(() => _ds.leaveBalance(year, state.selectedFormat));
+  }
 
   /// Download monthly report, save to downloads directory, surface path.
   Future<ExportResult?> exportMonthly() async {
@@ -104,9 +124,7 @@ class ReportsController extends StateNotifier<ReportsState> {
     if (year == null || month == null) {
       return const ExportFailure.localized('selectYearMonthFirst');
     }
-    return _export(
-      () => _ds.monthly(year, month, state.selectedFormat),
-    );
+    return _export(() => _ds.monthly(year, month, state.selectedFormat));
   }
 
   /// Download yearly report, save to downloads directory, surface path.
@@ -121,9 +139,7 @@ class ReportsController extends StateNotifier<ReportsState> {
   /// One export at a time: a second click (Export or a row's Download)
   /// while one runs returns null. A failed download shows the backend detail
   /// or `reportExportFailed`; only a failed file write is `reportSaveFailed`.
-  Future<ExportResult?> _export(
-    Future<ReportDownload> Function() fetch,
-  ) async {
+  Future<ExportResult?> _export(Future<ReportDownload> Function() fetch) async {
     if (state.isExporting) return null;
     state = state.copyWith(isExporting: true);
     final ReportDownload download;
@@ -157,5 +173,5 @@ class ReportsController extends StateNotifier<ReportsState> {
 
 final reportsControllerProvider =
     StateNotifierProvider<ReportsController, ReportsState>(
-  (ref) => ReportsController(ref.watch(reportsDataSourceProvider)),
-);
+      (ref) => ReportsController(ref.watch(reportsDataSourceProvider)),
+    );
