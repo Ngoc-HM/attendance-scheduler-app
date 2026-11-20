@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.core.business_time import business_today
 from app.core.config import settings
 from app.core.i18n import t
+from app.models.attendance import AttendanceRecord
 from app.models.enums import AttendanceCode, ScheduleStatus, SwapKind, UserStatus
 from app.models.schedule import MonthlySchedule, ShiftAssignment
 from app.models.shift_change_request import ShiftChangeRequest
@@ -297,6 +298,49 @@ def _delete_cells(db: Session, schedule: MonthlySchedule, *, carried: bool) -> N
     ).delete(synchronize_session=False)
     db.flush()
     db.expire(schedule, ["assignments"])
+
+
+def delete_month(db: Session, year: int, month: int) -> None:
+    """Remove a month's roster entirely (owner 2026-11-20: a clean slate, so
+    a re-test is not shaped by what was generated before).
+
+    Every cell dated in the month goes — its own cells and the days the
+    previous month's roster ran into — and the schedule row with them. The
+    days THIS month's roster ran into the next month go too; when the next
+    month was generated itself, those cells stay as that month's own cells
+    (it would otherwise have holes). Actuals still as seeded from the roster
+    (nobody recorded them) are removed with it; recorded ones, sick days and
+    time-clock punches stay. Published or draft alike — the app asks first.
+    404 when the month has no schedule.
+    """
+    schedule = schedule_carry.find(db, year, month)
+    if schedule is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=t("schedule.not_found"))
+    following = _following_schedule(db, year, month)
+    if following is not None:
+        tail = carry_days(year, month)
+        if schedule_carry.has_own_cells(db, following.id):
+            for cell in schedule_carry.tail_cells(db, following.id, tail):
+                cell.carried = False
+        else:
+            _delete_days(db, following, tail)
+            rest = month_days(following.year, following.month)
+            if not schedule_carry.tail_cells(db, following.id, rest):
+                db.delete(following)
+    days = month_days(year, month)
+    db.query(AttendanceRecord).filter(
+        AttendanceRecord.work_date >= days[0],
+        AttendanceRecord.work_date <= days[-1],
+        AttendanceRecord.recorded_by.is_(None),
+        AttendanceRecord.code != AttendanceCode.S,
+    ).delete(synchronize_session=False)
+    db.query(ShiftAssignment).filter(ShiftAssignment.schedule_id == schedule.id).delete(
+        synchronize_session=False
+    )
+    db.flush()
+    db.expire(schedule, ["assignments"])
+    db.delete(schedule)
+    db.commit()
 
 
 def _day_list(days: list[date], limit: int = 6) -> str:

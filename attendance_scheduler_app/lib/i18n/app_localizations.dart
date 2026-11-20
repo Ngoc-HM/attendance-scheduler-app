@@ -76,6 +76,13 @@ class AppLocalizations {
       'scheduleTitle': 'Schedule',
       'scheduleSubtitle': 'Monthly roster for the Frankfurt team',
       'publishSchedule': 'Publish schedule',
+      'deleteSchedule': 'Delete schedule',
+      'deleteScheduleBody':
+          'Every roster cell of this month is removed, with the days it runs '
+          'into the next month. This cannot be undone.',
+      'deleteSchedulePublished':
+          'This roster is published: staff will no longer see it.',
+      'scheduleDeleted': 'Schedule deleted.',
       'generateSchedule': 'Generate schedule',
       'employees': 'Employees',
       'arrDuties': 'A shifts',
@@ -569,6 +576,13 @@ class AppLocalizations {
       'scheduleTitle': 'Lịch làm',
       'scheduleSubtitle': 'Lịch làm hàng tháng của đội Frankfurt',
       'publishSchedule': 'Công bố lịch',
+      'deleteSchedule': 'Xóa lịch',
+      'deleteScheduleBody':
+          'Toàn bộ ô lịch của tháng này bị xóa, kể cả các ngày tràn sang '
+          'tháng sau. Không hoàn tác được.',
+      'deleteSchedulePublished':
+          'Lịch này đã công bố: nhân viên sẽ không còn thấy lịch.',
+      'scheduleDeleted': 'Đã xóa lịch.',
       'generateSchedule': 'Tạo lịch tự động',
       'employees': 'Nhân sự',
       'arrDuties': 'Ca A',

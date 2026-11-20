@@ -160,6 +160,8 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
                 isAdmin && onScreen && !scheduleState.schedule!.isCarryOnly
                 ? () => _onPublish(context, l)
                 : null,
+            // Any roster on screen can be removed, a carry-only month too.
+            onDelete: isAdmin && onScreen ? () => _onDelete(context, l) : null,
             emptyMessage: _emptyMessage(l, scheduleState, isAdmin),
             onCellTap: isAdmin
                 ? (row, dayIndex) => _onEditCell(context, l, row, dayIndex)
@@ -627,6 +629,68 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
         apiErrorMessage(
           l,
           ref.read(shiftChangeControllerProvider).error,
+          fallbackKey: 'actionFailed',
+        ),
+        tone: DsTone.danger,
+      );
+    }
+  }
+
+  /// Removes the roster of the month on screen entirely, after the admin
+  /// confirms (owner 2026-11-20): a clean slate so generating again is not
+  /// shaped by what was there. A published roster says so in the question.
+  Future<void> _onDelete(BuildContext context, AppLocalizations l) async {
+    final year = _month.year;
+    final month = _month.month;
+    final published =
+        ref.read(scheduleControllerProvider).schedule?.status ==
+        ScheduleStatus.published;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => DsFormDialog(
+        title: '${l.text('deleteSchedule')} ${l.monthYear(_month)}',
+        width: 420,
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(l.text('deleteScheduleBody')),
+            if (published) ...[
+              const SizedBox(height: DsSpacing.x2),
+              Text(l.text('deleteSchedulePublished')),
+            ],
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(l.cancel),
+          ),
+          DsPrimaryButton(
+            label: l.text('deleteSchedule'),
+            onPressed: () => Navigator.of(ctx).pop(true),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    final ok = await ref
+        .read(scheduleControllerProvider.notifier)
+        .deleteMonth(year: year, month: month);
+    if (!context.mounted) return;
+    if (ok) {
+      ref.invalidate(clockBoardProvider);
+      DsFeedback.show(
+        context,
+        l.text('scheduleDeleted'),
+        tone: DsTone.success,
+      );
+    } else {
+      DsFeedback.show(
+        context,
+        apiErrorMessage(
+          l,
+          ref.read(scheduleControllerProvider).error,
           fallbackKey: 'actionFailed',
         ),
         tone: DsTone.danger,

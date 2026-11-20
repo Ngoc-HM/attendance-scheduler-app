@@ -128,6 +128,14 @@ class _FakeScheduleDataSource extends ScheduleRemoteDataSource {
 
   final fetchedMonths = <int>[];
   final published = <int>[];
+
+  /// Months removed with [deleteMonth]; a deleted month answers 404 after.
+  final deleted = <int>[];
+
+  @core.override
+  Future<void> deleteMonth(int year, int month) async {
+    deleted.add(month);
+  }
   final violationCalls = <int>[];
   final decided = <(int, String)>[];
   final responded = <(int, bool)>[];
@@ -140,7 +148,7 @@ class _FakeScheduleDataSource extends ScheduleRemoteDataSource {
     final gate = held[month];
     if (gate != null) await gate.future;
     if (fetchError != null) throw fetchError!;
-    if (month == _july && !julyExists) {
+    if ((month == _july && !julyExists) || deleted.contains(month)) {
       throw const ApiException('Schedule not found.', statusCode: 404);
     }
     final days = DateTime(year, month + 1, 0).day;
@@ -1235,6 +1243,48 @@ void main() {
       await tester.tap(find.text('Close'));
       await tester.pumpAndSettle();
       expect(find.text('Roster not generated'), findsNothing);
+    });
+
+    // Owner 2026-11-20: remove a month's roster entirely before re-testing.
+    testWidgets('admin deletes the month on screen after confirming', (
+      tester,
+    ) async {
+      final ds = _FakeScheduleDataSource();
+      await _pump(tester, user: _admin, ds: ds);
+
+      await tester.tap(find.widgetWithText(DsSecondaryButton, 'Delete schedule'));
+      await tester.pumpAndSettle();
+      expect(ds.deleted, isEmpty, reason: 'asked first');
+      expect(find.text('Delete schedule June 2026'), findsOneWidget);
+
+      await tester.tap(find.widgetWithText(DsPrimaryButton, 'Delete schedule'));
+      await tester.pumpAndSettle();
+
+      expect(ds.deleted, [_june]);
+      expect(find.text('Schedule deleted.'), findsOneWidget);
+      expect(find.text(_generateHint), findsOneWidget, reason: 'the month is empty');
+      expect(find.widgetWithText(DsSecondaryButton, 'Delete schedule'), findsNothing);
+      await _drainToast(tester);
+    });
+
+    testWidgets('cancelling the delete question keeps the roster', (
+      tester,
+    ) async {
+      final ds = _FakeScheduleDataSource();
+      await _pump(tester, user: _admin, ds: ds);
+
+      await tester.tap(find.widgetWithText(DsSecondaryButton, 'Delete schedule'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+
+      expect(ds.deleted, isEmpty);
+      expect(find.widgetWithText(DsSecondaryButton, 'Delete schedule'), findsOneWidget);
+    });
+
+    testWidgets('no delete button for an employee', (tester) async {
+      await _pump(tester, user: _employee, ds: _FakeScheduleDataSource());
+      expect(find.text('Delete schedule'), findsNothing);
     });
   });
 }

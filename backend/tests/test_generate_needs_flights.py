@@ -128,3 +128,74 @@ def test_filling_from_an_empty_previous_month_is_refused(db: Session) -> None:
         flight_service.apply_previous_month(db, *DEC)
     assert err.value.status_code == 409
     assert err.value.detail == "The last week of the previous month has no flights to copy."
+
+
+# --- delete a month's roster (owner 2026-11-20) ------------------------------
+
+
+def _months(db: Session) -> dict[tuple[int, int], int]:
+    return {
+        (s.year, s.month): len(s.assignments)
+        for s in db.query(MonthlySchedule).order_by(MonthlySchedule.year, MonthlySchedule.month)
+    }
+
+
+def test_deleting_a_month_removes_it_and_the_days_it_ran_into(db: Session) -> None:
+    from app.models.attendance import AttendanceRecord
+    from app.models.enums import AttendanceCode
+    from app.models.schedule import ShiftAssignment
+
+    _enter(db, month_days(*NOV) + month_days(*DEC))
+    assert schedule_service.generate(db, *NOV).feasible
+    assert _months(db) == {NOV: 30, DEC: 6}  # one person; 1–6 Dec carried
+
+    # A seeded actual goes with the roster, a recorded one stays.
+    uid = db.query(ShiftAssignment.user_id).first()[0]
+    db.add_all([
+        AttendanceRecord(user_id=uid, work_date=date(2026, 11, 3), code=AttendanceCode.AD),
+        AttendanceRecord(user_id=uid, work_date=date(2026, 11, 4), code=AttendanceCode.AD,
+                         recorded_by=uid),
+    ])
+    db.commit()
+
+    schedule_service.delete_month(db, *NOV)
+
+    assert _months(db) == {}  # December held only November's carried days
+    assert [r.work_date for r in db.query(AttendanceRecord)] == [date(2026, 11, 4)]
+    with pytest.raises(HTTPException) as err:
+        schedule_service.delete_month(db, *NOV)
+    assert err.value.status_code == 404
+
+
+def test_deleting_a_month_leaves_a_generated_next_month_whole(db: Session) -> None:
+    from app.models.schedule import ShiftAssignment
+
+    _enter(db, month_days(*NOV) + month_days(*DEC) + month_days(2027, 1))
+    assert schedule_service.generate(db, *NOV).feasible
+    assert schedule_service.generate(db, *DEC).feasible
+    assert _months(db) == {NOV: 30, DEC: 31, (2027, 1): 3}
+
+    schedule_service.delete_month(db, *NOV)
+
+    # December keeps all its days; 1–6 Dec are its own cells now.
+    assert _months(db) == {DEC: 31, (2027, 1): 3}
+    december = (
+        db.query(ShiftAssignment)
+        .join(MonthlySchedule, ShiftAssignment.schedule_id == MonthlySchedule.id)
+        .filter(MonthlySchedule.year == 2026, MonthlySchedule.month == 12)
+    )
+    assert not any(a.carried for a in december)
+
+    # Deleting December also takes the days it ran into January.
+    schedule_service.delete_month(db, *DEC)
+    assert _months(db) == {}
+
+
+def test_delete_endpoint_is_admin_only(client) -> None:
+    v = "/api/v1"
+    assert client.delete(f"{v}/schedules/2051/3").status_code == 401
+    token = client.post(
+        f"{v}/auth/login", data={"username": "admin", "password": "admin123"}
+    ).json()["access_token"]
+    admin = {"Authorization": f"Bearer {token}"}
+    assert client.delete(f"{v}/schedules/2051/3", headers=admin).status_code == 404

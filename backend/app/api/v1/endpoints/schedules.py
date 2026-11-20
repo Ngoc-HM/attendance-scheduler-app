@@ -57,6 +57,15 @@ def get_schedule(db: DbSession, year: YearPath, month: MonthPath, current_user: 
     return schedule
 
 
+@router.delete("/{year}/{month}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_schedule(db: DbSession, year: YearPath, month: MonthPath, admin: AdminUser) -> None:
+    """Remove the month's roster entirely, with the days it ran into the
+    next month (admin; for a clean re-generation)."""
+    schedule_service.delete_month(db, year, month)
+    audit_service.record(db, admin.id, "schedule.delete", "MonthlySchedule",
+                         detail=f"{year}-{month:02d}")
+
+
 @router.post("/generate", response_model=ScheduleResult)
 def generate_schedule(
     db: DbSession, payload: GenerateScheduleRequest, admin: AdminUser

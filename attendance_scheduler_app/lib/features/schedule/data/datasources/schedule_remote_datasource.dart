@@ -94,6 +94,16 @@ class ScheduleRemoteDataSource {
     }
   }
 
+  /// DELETE /schedules/{year}/{month} (admin) — remove the month's roster
+  /// entirely, with the days it ran into the next month.
+  Future<void> deleteMonth(int year, int month) async {
+    try {
+      await _dio.delete(ApiEndpoints.schedule(year, month));
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e, 'schedule_delete_failed');
+    }
+  }
+
   /// GET /schedules/{id}/violations (admin) — the hard-rule recheck of the
   /// month as it stands now (generated, edited and approved changes).
   Future<List<ConstraintViolation>> fetchViolations(int scheduleId) async {

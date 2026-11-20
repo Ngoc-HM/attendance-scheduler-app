@@ -224,6 +224,7 @@ class DsScheduleView extends StatelessWidget {
     required this.onNextMonth,
     this.onGenerate,
     this.onPublish,
+    this.onDelete,
     this.flightLabels = const {},
     this.onCellTap,
     this.isRowTappable,
@@ -243,6 +244,9 @@ class DsScheduleView extends StatelessWidget {
   /// Admin roster actions; each button renders only when its callback is set.
   final VoidCallback? onGenerate;
   final VoidCallback? onPublish;
+
+  /// Admin: remove the month's roster entirely (owner 2026-11-20).
+  final VoidCallback? onDelete;
 
   /// Cell tap: (person row, 0-based roster row) — admin edit (F-09) or an
   /// employee's own shift-change request. Null → read-only roster.
@@ -270,6 +274,12 @@ class DsScheduleView extends StatelessWidget {
       title: l.text('scheduleTitle'),
       subtitle: l.text('scheduleSubtitle'),
       actions: [
+        if (onDelete != null)
+          DsSecondaryButton(
+            label: l.text('deleteSchedule'),
+            icon: Icons.delete_outline,
+            onPressed: onDelete,
+          ),
         if (onPublish != null)
           DsSecondaryButton(
             label: l.text('publishSchedule'),

@@ -293,6 +293,25 @@ class ScheduleController extends StateNotifier<ScheduleState> {
       return false;
     }
   }
+
+  /// Removes the roster of [year]/[month], the month on screen, entirely
+  /// (owner 2026-11-20: a clean slate before generating again), then
+  /// reloads the month — which is empty now. True on success; false when
+  /// that month is not the one loaded or the call failed (error set).
+  Future<bool> deleteMonth({required int year, required int month}) async {
+    if (!state.holds(year, month)) return false;
+    state = state.copyWith(isMutating: true, clearError: true);
+    try {
+      await _ds.deleteMonth(year, month);
+    } catch (e) {
+      if (mounted) state = state.copyWith(isMutating: false, error: e);
+      return false;
+    }
+    if (!mounted) return true;
+    state = state.copyWith(isMutating: false);
+    await load(year, month, isAdmin: true);
+    return true;
+  }
 }
 
 // ── Providers ─────────────────────────────────────────────────────────────────

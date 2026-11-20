@@ -11,6 +11,8 @@
   says when the next month's flights are not entered yet.
 - **Flights page: "Apply last month's flights"** (#76) fills the month by
   weekday from the last week of the previous month.
+- **Schedule page: "Delete schedule"** (#77) removes the month's roster
+  entirely, with the days it ran into the next month, after a confirmation.
 
 ## 2026-11-20 — A swap shows what is exchanged
 
