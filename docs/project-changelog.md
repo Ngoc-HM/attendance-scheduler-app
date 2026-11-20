@@ -1,5 +1,23 @@
 # Project Changelog
 
+## 2026-11-20 — A swap shows what is exchanged
+
+- **Both shifts on every swap** (decision #69): the request form shows "Ca
+  của bạn" and, once a colleague is chosen, "Ca của <code>" with each
+  person's code of that day; the colleague's panel and the admin's pending
+  list show the same two codes, read live from the roster
+  (`requester_shift` / `counterpart_shift`). A swap with a colleague who has
+  no roster cell that day is refused when filed. The form itself is now a
+  floating card (date with weekday, light mode switch, outlined pickers).
+- **One screen for the admin's approvals** (decision #73): the Leaves page
+  is the admin's "Duyệt yêu cầu" — leave, shift changes and new accounts in
+  one table, newest first, each approved or rejected there (shift changes
+  with the warning dialog, accounts with the role dialog). A swap still
+  waiting for the colleague has no action. The schedule page's request
+  panel and the Users page's Approve button are gone; the one navigation
+  badge counts all three. Employees see their own shift changes next to
+  their leave ("Nghỉ phép & đổi ca").
+
 ## 2026-11-18 — A month's roster runs to the end of its last week
 
 - **Roster through the week's end** (decision #72): generating a month also

@@ -1,6 +1,8 @@
-// The admin's shell maps the pending counts onto its tabs (owner
-// 2026-11-10): Leaves = leaves, Schedule = shift changes, Users = accounts.
-// Employees get no badge and never call the endpoint.
+// The admin's shell shows the pending counts (owner 2026-11-10) on one tab
+// since everything the admin approves lives on one screen (owner
+// 2026-11-20): Approvals = leaves + shift changes + sign-ups; Schedule and
+// Users carry no number. Employees get no badge, never call the endpoint,
+// and keep the "Leaves" label.
 
 import 'package:attendance_scheduler_app/core/storage/locale_storage.dart';
 import 'package:attendance_scheduler_app/design_system/design_system.dart';
@@ -74,25 +76,19 @@ Finder _pillOf(String label) => find.descendant(
 );
 
 void main() {
-  testWidgets('admin: counts land on Schedule, Leaves and Users', (
+  testWidgets('admin: every count lands on Approvals, none elsewhere', (
     tester,
   ) async {
     final counts = await _pumpShell(tester, UserRole.m);
 
     expect(counts.calls, 1, reason: 'loaded when the shell first shows');
-    expect(find.byType(DsNavigationCountPill), findsNWidgets(3));
+    expect(find.byType(DsNavigationCountPill), findsOneWidget);
     expect(
-      find.descendant(of: _pillOf('Schedule'), matching: find.text('5')),
+      find.descendant(of: _pillOf('Approvals'), matching: find.text('14')),
       findsOneWidget,
+      reason: '2 leaves + 5 shift changes + 7 sign-ups',
     );
-    expect(
-      find.descendant(of: _pillOf('Leaves'), matching: find.text('2')),
-      findsOneWidget,
-    );
-    expect(
-      find.descendant(of: _pillOf('Users'), matching: find.text('7')),
-      findsOneWidget,
-    );
+    expect(find.text('Leaves'), findsNothing);
   });
 
   testWidgets('admin: switching tab and the timer reload the counts', (
@@ -114,6 +110,8 @@ void main() {
 
     expect(counts.calls, 0);
     expect(find.byType(DsNavigationCountPill), findsNothing);
+    expect(find.text('Leaves'), findsOneWidget);
+    expect(find.text('Approvals'), findsNothing);
   });
 
   testWidgets('the user card shows the person\'s code, not the role', (

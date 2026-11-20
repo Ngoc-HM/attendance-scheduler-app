@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
+from datetime import date
+
 from fastapi import APIRouter, HTTPException, Query, status
+from sqlalchemy.orm import Session
 
 from app.api.deps import ActiveUser, AdminUser, DbSession
 from app.core.i18n import t
-from app.models.enums import LeaveStatus
+from app.models.enums import AttendanceCode, LeaveStatus, SwapKind
+from app.models.shift_change_request import ShiftChangeRequest
+from app.models.user import User
 from app.schemas.common import ApprovalPreview
 from app.schemas.shift_change import (
     ShiftChangeCreate,
@@ -19,8 +24,37 @@ from app.services import audit_service, shift_change_service
 router = APIRouter()
 
 
-def _to_read(req, strict_review: bool, warnings: list[str] | None = None) -> ShiftChangeRead:
-    """Convert ORM object + derived fields to ShiftChangeRead."""
+def _read_one(
+    db: Session,
+    req: ShiftChangeRequest,
+    viewer: User,
+    strict_review: bool,
+    warnings: list[str] | None = None,
+) -> ShiftChangeRead:
+    codes = shift_change_service.roster_codes(db, [req], viewer)
+    return _to_read(req, strict_review, codes, warnings)
+
+
+def _read_many(
+    db: Session, pairs: list[tuple[ShiftChangeRequest, bool]], viewer: User
+) -> list[ShiftChangeRead]:
+    codes = shift_change_service.roster_codes(db, [req for req, _ in pairs], viewer)
+    return [_to_read(req, strict, codes) for req, strict in pairs]
+
+
+def _to_read(
+    req: ShiftChangeRequest,
+    strict_review: bool,
+    codes: dict[tuple[int, date], AttendanceCode],
+    warnings: list[str] | None = None,
+) -> ShiftChangeRead:
+    """Convert ORM object + derived fields to ShiftChangeRead. ``codes`` comes
+    from ``shift_change_service.roster_codes`` (one query for the whole list)."""
+    counterpart_shift = (
+        codes.get((req.counterpart_user_id, req.work_date))
+        if req.kind is SwapKind.swap_with and req.counterpart_user_id is not None
+        else None
+    )
     return ShiftChangeRead(
         id=req.id,
         requester_id=req.requester_id,
@@ -32,7 +66,10 @@ def _to_read(req, strict_review: bool, warnings: list[str] | None = None) -> Shi
         note=req.note,
         decided_by_id=req.decided_by_id,
         decided_at=req.decided_at,
+        created_at=req.created_at,
         counterpart_status=req.counterpart_status,
+        requester_shift=codes.get((req.requester_id, req.work_date)),
+        counterpart_shift=counterpart_shift,
         strict_review=strict_review,
         warnings=warnings or [],
     )
@@ -46,7 +83,7 @@ def create_shift_change(
 ):
     """Request a change on the current user's own scheduled cell."""
     req, strict_review = shift_change_service.create_request(db, current_user.id, payload)
-    return _to_read(req, strict_review)
+    return _read_one(db, req, current_user, strict_review)
 
 
 @router.get("", response_model=list[ShiftChangeRead])
@@ -64,17 +101,15 @@ def list_shift_changes(
     else:
         pairs = shift_change_service.list_for_user(db, current_user.id)
 
-    return [_to_read(req, strict) for req, strict in pairs]
+    return _read_many(db, pairs, current_user)
 
 
 # Declared before the /{req_id}/... routes.
 @router.get("/incoming", response_model=list[ShiftChangeRead])
 def incoming_shift_changes(db: DbSession, current_user: ActiveUser):
     """Swaps a colleague asked the caller into, still waiting for an answer."""
-    return [
-        _to_read(req, strict)
-        for req, strict in shift_change_service.list_incoming(db, current_user.id)
-    ]
+    pairs = shift_change_service.list_incoming(db, current_user.id)
+    return _read_many(db, pairs, current_user)
 
 
 @router.post("/{req_id}/respond", response_model=ShiftChangeRead)
@@ -91,7 +126,7 @@ def respond_to_swap(
         f"shift_change.counterpart_{'accepted' if payload.accept else 'declined'}",
         "ShiftChangeRequest", req_id, detail=f"requester={req.requester_id}",
     )
-    return _to_read(req, False)
+    return _read_one(db, req, current_user, False)
 
 
 @router.get("/{req_id}/approval-preview", response_model=ApprovalPreview)
@@ -118,4 +153,4 @@ def decide_shift_change(
     )
     audit_service.record(db, admin.id, f"shift_change.{payload.status.value}",
                          "ShiftChangeRequest", req_id, detail=f"requester={req.requester_id}")
-    return _to_read(req, strict_review, warnings)
+    return _read_one(db, req, admin, strict_review, warnings)

@@ -5,6 +5,7 @@
 library;
 
 import 'package:attendance_scheduler_app/design_system/design_system.dart';
+import 'package:attendance_scheduler_app/features/auth/domain/entities/user.dart';
 import 'package:attendance_scheduler_app/features/auth/presentation/pages/login_page.dart';
 import 'package:attendance_scheduler_app/features/home/presentation/pages/home_shell.dart';
 import 'package:attendance_scheduler_app/features/schedule/data/datasources/schedule_remote_datasource.dart';
@@ -13,6 +14,7 @@ import 'package:attendance_scheduler_app/features/flights/data/models/flight_day
 import 'package:attendance_scheduler_app/features/schedule/presentation/pages/schedule_page.dart';
 import 'package:attendance_scheduler_app/features/schedule/presentation/providers/schedule_provider.dart';
 import 'package:attendance_scheduler_app/features/schedule/presentation/providers/shift_change_provider.dart';
+import 'package:attendance_scheduler_app/features/schedule/presentation/widgets/shift_change_dialog.dart';
 import 'package:attendance_scheduler_app/features/users/data/user_management_datasource.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
@@ -144,6 +146,61 @@ void main() {
     await expectLater(
       find.byKey(const Key('schedule-compact-golden')),
       matchesGoldenFile('goldens/schedule_compact.png'),
+    );
+  });
+
+  // The shift-change form in swap mode with both "shift of" rows (owner
+  // 2026-11-20): floating corner card, light mode switch, outlined pickers.
+  testWidgets('shift-change form swap visual', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(480, 560));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    const people = [
+      UserDirectoryEntry(id: 7, code: 'F1', role: UserRole.f),
+      UserDirectoryEntry(id: 9, code: 'F3', role: UserRole.f),
+    ];
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: _scheduleOverrides(),
+        child: MaterialApp(
+          theme: AppTheme.light,
+          debugShowCheckedModeBanner: false,
+          // The form opens in the overlay, above the page: the golden
+          // captures the whole app.
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => Center(
+                child: TextButton(
+                  onPressed: () => showDsCornerDialog<bool>(
+                    context: context,
+                    builder: (_) => ShiftChangeRequestDialog(
+                      workDate: DateTime(2026, 11, 4),
+                      role: UserRole.f,
+                      people: people,
+                      currentUserId: 7,
+                      codesOnDay: const {7: 'AD', 9: 'X'},
+                    ),
+                  ),
+                  child: const Text('open'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Swap with colleague'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(DropdownButtonFormField<int?>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('F3').last);
+    await tester.pumpAndSettle();
+
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/shift_change_form_swap.png'),
     );
   });
 }

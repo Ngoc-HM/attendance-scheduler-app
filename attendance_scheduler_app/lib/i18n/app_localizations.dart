@@ -110,6 +110,14 @@ class AppLocalizations {
       'excelFileHint': 'Excel files up to 10 MB',
       'chooseFile': 'Choose file',
       'leaveRequests': 'Leave requests',
+      // One screen for everything the admin decides (owner 2026-11-20);
+      // employees see their own leave and shift changes there.
+      'approvals': 'Approvals',
+      'leaveAndShiftChanges': 'Leave & shift changes',
+      'requestTypeSwap': 'Shift swap',
+      'requestTypeCodeChange': 'Code change',
+      'requestTypeNewAccount': 'New account',
+      'awaitingColleague': 'Waiting for colleague',
       'leaveSubtitle':
           'Monthly leave: register by day {day} of the previous month. '
           'Annual leave: register the year before.',
@@ -253,8 +261,6 @@ class AppLocalizations {
       'leavesLoadFailed': 'Could not load leave requests.',
       'newShiftCode': 'New shift code',
       'noHolidaysYet': 'No holidays yet.',
-      'noPendingShiftChanges': 'No pending shift-change requests.',
-      'pendingShiftChanges': 'Pending shift-change requests',
       'myShiftChangeRequests': 'My shift-change requests',
       'noShiftChangeRequests':
           'No requests yet. Tap one of your own cells in the roster to request a change.',
@@ -277,12 +283,10 @@ class AppLocalizations {
       'schedulePublished': 'Schedule published.',
       'selectColleague': 'Select a colleague',
       'selectEmployee': 'Select an employee',
-      'shiftChangeRequests': 'Shift-change requests',
       'sickCoverAssigned': 'Sick day recorded; A/D cover assigned.',
       'sickCoverNoneAvailable':
           'Sick day recorded; no eligible colleague for cover — resolve manually.',
       'startDate': 'Start date',
-      'strictReviewRequired': 'Strict review (fixed role)',
       'swapWith': 'Swap with colleague',
       // --- Flight preset feature
       'flightPresets': 'Flight Presets',
@@ -479,6 +483,9 @@ class AppLocalizations {
           'The following month already has a schedule. This roster '
           'breaks these rules in its first days; regenerate or edit it:',
       'swapPartner': 'Swap partner',
+      'yourShift': 'Your shift',
+      'theirShift': 'Their shift',
+      'shiftOf': "{code}'s shift",
       // Three-step swap (customer 2026-11-18)
       'incomingSwapRequests': 'Colleagues asking to swap shifts',
       'swapAccept': 'Accept',
@@ -592,6 +599,12 @@ class AppLocalizations {
       'excelFileHint': 'Tệp Excel tối đa 10 MB',
       'chooseFile': 'Chọn tệp',
       'leaveRequests': 'Đăng ký nghỉ',
+      'approvals': 'Duyệt yêu cầu',
+      'leaveAndShiftChanges': 'Nghỉ phép & đổi ca',
+      'requestTypeSwap': 'Đổi ca',
+      'requestTypeCodeChange': 'Đổi mã ca',
+      'requestTypeNewAccount': 'Tài khoản mới',
+      'awaitingColleague': 'Chờ đồng nghiệp',
       'leaveSubtitle':
           'Nghỉ tháng: đăng ký chậm nhất đến hết ngày {day} của tháng trước. '
           'Nghỉ phép năm: đăng ký từ năm trước.',
@@ -735,8 +748,6 @@ class AppLocalizations {
       'leavesLoadFailed': 'Không thể tải danh sách nghỉ phép.',
       'newShiftCode': 'Mã ca mới',
       'noHolidaysYet': 'Chưa có ngày lễ nào.',
-      'noPendingShiftChanges': 'Không có yêu cầu đổi ca chờ duyệt.',
-      'pendingShiftChanges': 'Yêu cầu đổi ca chờ duyệt',
       'myShiftChangeRequests': 'Yêu cầu đổi ca của tôi',
       'noShiftChangeRequests':
           'Chưa có yêu cầu nào. Nhấn vào một ô của bạn trên lịch để yêu cầu đổi ca.',
@@ -758,13 +769,11 @@ class AppLocalizations {
       'schedulePublished': 'Đã công bố lịch.',
       'selectColleague': 'Chọn đồng nghiệp',
       'selectEmployee': 'Chọn nhân sự',
-      'shiftChangeRequests': 'Yêu cầu đổi ca',
       'sickCoverAssigned': 'Đã ghi nhận nghỉ ốm; đã gán người bù ca A/D.',
       'sickCoverNoneAvailable':
           'Đã ghi nhận nghỉ ốm; không có đồng nghiệp phù hợp để bù — xử lý tay.',
       'startDate': 'Ngày bắt đầu',
-      'strictReviewRequired': 'Xét duyệt chặt (nhóm cố định)',
-      'swapWith': 'Hoán đổi với đồng nghiệp',
+      'swapWith': 'Đổi với đồng nghiệp',
       // --- Flight preset feature
       'flightPresets': 'Mẫu chuyến bay',
       'addPreset': 'Thêm mẫu',
@@ -955,6 +964,9 @@ class AppLocalizations {
           'Tháng sau đã có lịch. Lịch vừa tạo làm tháng sau vi phạm các '
           'quy tắc dưới đây ở những ngày đầu; hãy tạo lại hoặc sửa tháng sau:',
       'swapPartner': 'Người hoán đổi',
+      'yourShift': 'Ca của bạn',
+      'theirShift': 'Ca của họ',
+      'shiftOf': 'Ca của {code}',
       // Three-step swap (customer 2026-11-18)
       'incomingSwapRequests': 'Đồng nghiệp xin hoán đổi ca',
       'swapAccept': 'Đồng ý',
@@ -1114,6 +1126,8 @@ class AppLocalizations {
     'approved' => text('approved'),
     'rejected' => text('rejected'),
     'ready' => text('statusReady'),
+    'awaitingcolleague' => text('awaitingColleague'),
+    'declinedbycolleague' => text('swapDeclinedByColleague'),
     _ => status,
   };
 
@@ -1121,6 +1135,9 @@ class AppLocalizations {
     'monthly leave' => text('monthlyLeave'),
     'annual leave' => text('annualLeave'),
     'compensation' => text('compensation'),
+    'shift swap' => text('requestTypeSwap'),
+    'code change' => text('requestTypeCodeChange'),
+    'new account' => text('requestTypeNewAccount'),
     _ => type,
   };
 
@@ -1162,6 +1179,35 @@ class AppLocalizations {
   /// "ID 7" — a row whose user is not in the loaded directory.
   String userFallback(int userId) =>
       text('userFallback').replaceAll('{id}', '$userId');
+
+  /// "Ca của F3" / "F3's shift".
+  String shiftOf(String code) => text('shiftOf').replaceAll('{code}', code);
+
+  /// The day with its full weekday: "Thứ 4, 04/11/2026" / "Wed, 04 Nov 2026".
+  String weekdayDate(DateTime date) {
+    if (isVietnamese) {
+      final weekday = date.weekday == DateTime.sunday
+          ? 'Chủ nhật'
+          : 'Thứ ${date.weekday + 1}';
+      return '$weekday, ${_two(date.day)}/${_two(date.month)}/${date.year}';
+    }
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    return '${shortWeekday(date)}, ${_two(date.day)} '
+        '${months[date.month - 1]} ${date.year}';
+  }
 
   static String _two(int value) => value.toString().padLeft(2, '0');
 }

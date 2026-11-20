@@ -1241,9 +1241,13 @@ class DsLeavesView extends StatelessWidget {
     this.annualLeaveRemaining,
     this.annualLeaveYear,
     this.annualLeaveNextYear,
+    this.title,
   });
 
   final List<DsLeaveRowData> rows;
+
+  /// Page title; null → "Leave requests".
+  final String? title;
   final VoidCallback onMonthlyRequest;
   final VoidCallback onAnnualRequest;
 
@@ -1251,6 +1255,7 @@ class DsLeavesView extends StatelessWidget {
   final VoidCallback? onRefresh;
 
   /// Null → viewer cannot decide (employee): the actions column is hidden.
+  /// Offered on every 'Pending' row, whatever its [DsRequestKind].
   final ValueChanged<int>? onApprove;
   final ValueChanged<int>? onReject;
 
@@ -1296,7 +1301,7 @@ class DsLeavesView extends StatelessWidget {
     final annualNext = annualLeaveNextYear;
     final bothYears = annualYear != null && annualNext != null;
     return DsPage(
-      title: l.text('leaveRequests'),
+      title: title ?? l.text('leaveRequests'),
       subtitle: day == null ? null : l.leaveSubtitle(day),
       // No reload button: the list reloads itself on open and after every
       // action (owner 2026-11-13: fewer buttons).
@@ -1412,19 +1417,30 @@ class _LeavesTable extends StatelessWidget {
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
     final canDecide = onApprove != null && onReject != null;
+    // Height of a row action (DsTextAction): the theme's button height, or
+    // the 48 px tap target where the platform pads it (touch).
+    final actionHeight =
+        Theme.of(context).materialTapTargetSize == MaterialTapTargetSize.padded
+        ? kMinInteractiveDimension
+        : DsControlHeight.medium;
     // employee | role | type | dates | days | carry | status | actions(admin)
+    // Shift changes and sign-ups share the table (owner 2026-11-20): the
+    // dates cell ("08/11/2026 · T1 (AD) ⇄ T2 (X)") and the status ("Đồng
+    // nghiệp đã từ chối") need the room; the code and the one-letter role
+    // little. At 1280 px the admin table sits at its minimum width, where
+    // Approve + Reject, the status and the type still fit whole.
     final columns = [
       DsTableColumn(header: l.text('employee'), flex: 3),
       DsTableColumn(header: l.role, flex: 2),
-      DsTableColumn(header: l.text('type'), flex: 3),
-      DsTableColumn(header: l.text('dates'), flex: 3),
-      DsTableColumn(header: l.text('days'), flex: 1),
-      DsTableColumn(header: l.text('carry'), flex: 1),
-      DsTableColumn(header: l.status, flex: 2),
+      DsTableColumn(header: l.text('type'), flex: 5),
+      DsTableColumn(header: l.text('dates'), flex: 9),
+      DsTableColumn(header: l.text('days'), flex: 2),
+      DsTableColumn(header: l.text('carry'), flex: 2),
+      DsTableColumn(header: l.status, flex: 7),
       if (canDecide)
-        DsTableColumn(header: l.actions, flex: 4)
+        DsTableColumn(header: l.actions, flex: 9)
       else if (onCancel != null)
-        DsTableColumn(header: l.actions, flex: 3),
+        DsTableColumn(header: l.actions, flex: 5),
     ];
 
     final table = DsDataTable(
@@ -1443,18 +1459,26 @@ class _LeavesTable extends StatelessWidget {
               style: DsType.tableCell,
               overflow: TextOverflow.ellipsis,
             ),
-            Text(
-              rows[index].range,
-              style: DsType.tableCell,
-              overflow: TextOverflow.ellipsis,
+            // One line: a shift change's day + shifts can outgrow the
+            // column at the minimum window, so it ends in "…" and the full
+            // text shows on hover.
+            Tooltip(
+              message: rows[index].range,
+              child: Text(
+                rows[index].range,
+                style: DsType.tableCell,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
-            Text('${rows[index].days}', style: DsType.tableCell),
-            Text('${rows[index].carryComp}', style: DsType.tableCell),
+            Text('${rows[index].days ?? '—'}', style: DsType.tableCell),
+            Text('${rows[index].carryComp ?? '—'}', style: DsType.tableCell),
             DsBadge(
               label: l.statusLabel(rows[index].status),
               tone: switch (rows[index].status) {
                 'Approved' => DsTone.success,
-                'Rejected' => DsTone.danger,
+                'Rejected' ||
+                DsLeaveRowData.statusDeclinedByColleague => DsTone.danger,
                 _ => DsTone.warning,
               },
             ),
@@ -1477,23 +1501,30 @@ class _LeavesTable extends StatelessWidget {
                     ),
                   ],
                 ),
-                'Approved' when onRevoke != null => DsTextAction(
-                  label: l.text('revokeApproval'),
-                  icon: Icons.undo,
-                  tone: DsTone.danger,
-                  onPressed: () => onRevoke!(index),
-                ),
-                _ => const SizedBox.shrink(),
+                'Approved'
+                    when onRevoke != null &&
+                        rows[index].kind == DsRequestKind.leave =>
+                  DsTextAction(
+                    label: l.text('revokeApproval'),
+                    icon: Icons.undo,
+                    tone: DsTone.danger,
+                    onPressed: () => onRevoke!(index),
+                  ),
+                // As tall as a button, so a row without actions (decided,
+                // or a swap waiting for the colleague) keeps the height of
+                // the rows around it.
+                _ => SizedBox(height: actionHeight),
               }
             else if (onCancel != null)
-              rows[index].status == 'Pending'
+              rows[index].status == 'Pending' &&
+                      rows[index].kind == DsRequestKind.leave
                   ? DsTextAction(
                       label: l.cancel,
                       icon: Icons.close,
                       tone: DsTone.danger,
                       onPressed: () => onCancel!(index),
                     )
-                  : const SizedBox.shrink(),
+                  : SizedBox(height: actionHeight),
           ],
       ],
       // Staffing risk sits under the row's cells, full width, so the columns
@@ -1900,7 +1931,6 @@ class DsUsersView extends StatelessWidget {
     required this.loading,
     required this.onRefresh,
     required this.onCreate,
-    required this.onApprove,
     required this.onDisable,
     required this.onEnable,
     required this.onChangeRole,
@@ -1914,7 +1944,6 @@ class DsUsersView extends StatelessWidget {
   final String? error;
   final VoidCallback onRefresh;
   final VoidCallback onCreate;
-  final ValueChanged<int> onApprove;
   final ValueChanged<int> onDisable;
   final ValueChanged<int> onEnable;
 
@@ -1993,7 +2022,6 @@ class DsUsersView extends StatelessWidget {
               padding: EdgeInsets.zero,
               child: _UsersTable(
                 users: users,
-                onApprove: onApprove,
                 onDisable: onDisable,
                 onEnable: onEnable,
                 onChangeRole: onChangeRole,
@@ -2012,7 +2040,6 @@ class DsUsersView extends StatelessWidget {
 class _UsersTable extends StatelessWidget {
   const _UsersTable({
     required this.users,
-    required this.onApprove,
     required this.onDisable,
     required this.onEnable,
     required this.onChangeRole,
@@ -2021,7 +2048,6 @@ class _UsersTable extends StatelessWidget {
   });
 
   final List<DsUserRowData> users;
-  final ValueChanged<int> onApprove;
   final ValueChanged<int> onDisable;
   final ValueChanged<int> onEnable;
   final void Function(int id, String role) onChangeRole;
@@ -2068,31 +2094,18 @@ class _UsersTable extends StatelessWidget {
                 _ => DsTone.neutral,
               },
             ),
-            // Actions cell: approving a sign-up stays a visible button (the
-            // one action the admin came for); everything else lives in one
-            // "⋯" menu so rows stay one line tall (owner 2026-11-13).
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (user.status == 'pending') ...[
-                  _ActionButton(
-                    label: l.approve,
-                    tone: DsTone.success,
-                    onPressed: () => onApprove(user.id),
-                  ),
-                  const SizedBox(width: DsSpacing.x2),
-                ],
-                _UserActionsMenu(
-                  user: user,
-                  onChangeRole: (role) => onChangeRole(user.id, role),
-                  onDisable: () => onDisable(user.id),
-                  onEnable: () => onEnable(user.id),
-                  onEditQuota: onEditQuota == null
-                      ? null
-                      : () => onEditQuota!(user.id),
-                  onDelete: onDelete == null ? null : () => onDelete!(user.id),
-                ),
-              ],
+            // Actions cell: one "⋯" menu so rows stay one line tall (owner
+            // 2026-11-13). Sign-ups are approved on the Approvals screen
+            // (owner 2026-11-20).
+            _UserActionsMenu(
+              user: user,
+              onChangeRole: (role) => onChangeRole(user.id, role),
+              onDisable: () => onDisable(user.id),
+              onEnable: () => onEnable(user.id),
+              onEditQuota: onEditQuota == null
+                  ? null
+                  : () => onEditQuota!(user.id),
+              onDelete: onDelete == null ? null : () => onDelete!(user.id),
             ),
           ],
       ],
@@ -2202,52 +2215,6 @@ class _UserActionsMenu extends StatelessWidget {
     );
   }
 }
-
-/// Compact, clearly-bordered tonal button for a single row action (approve /
-/// disable / enable). Text-only — no leading icon — so the actions column stays
-/// clean and the tap target reads unmistakably as a button.
-class _ActionButton extends StatelessWidget {
-  const _ActionButton({
-    required this.label,
-    required this.onPressed,
-    this.tone = DsTone.primary,
-  });
-
-  final String label;
-  final VoidCallback onPressed;
-  final DsTone tone;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = dsToneColors(tone);
-    return TextButton(
-      onPressed: onPressed,
-      style: TextButton.styleFrom(
-        backgroundColor: colors.background,
-        foregroundColor: colors.foreground,
-        padding: const EdgeInsets.symmetric(
-          horizontal: DsSpacing.x3,
-          vertical: DsSpacing.x2,
-        ),
-        minimumSize: Size.zero,
-        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        textStyle: const TextStyle(
-          fontSize: DsFontSize.footnote,
-          fontWeight: FontWeight.w600,
-        ),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(DsRadius.medium),
-          side: BorderSide(color: colors.foreground.withValues(alpha: 0.30)),
-        ),
-      ),
-      child: Text(label),
-    );
-  }
-}
-
-/// Bordered button that opens a small menu to switch a user's role between
-/// M / T / A. Current role is checked + disabled; selecting another fires
-/// [onSelected] with the new role letter (the caller confirms + persists).
 
 class DsCreateUserDialog<T> extends StatelessWidget {
   const DsCreateUserDialog({

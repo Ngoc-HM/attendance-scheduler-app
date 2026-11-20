@@ -136,6 +136,9 @@ abstract final class AppTheme {
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
+          // Disabled reads as a faded primary, not a grey slab.
+          disabledBackgroundColor: DsColors.primary.withValues(alpha: 0.35),
+          disabledForegroundColor: DsColors.surface,
           minimumSize: const Size(0, DsControlHeight.medium),
           padding: const EdgeInsets.symmetric(horizontal: DsSpacing.x4),
           shape: const RoundedRectangleBorder(borderRadius: _radius),
@@ -150,6 +153,39 @@ abstract final class AppTheme {
           side: const BorderSide(color: DsColors.borderStrong),
           shape: const RoundedRectangleBorder(borderRadius: _radius),
           textStyle: textTheme.labelLarge,
+        ),
+      ),
+      // Material's default paints the selected segment in
+      // secondaryContainer, which our slate `secondary` turns dark grey. Any
+      // SegmentedButton reads like DsSegmentedSwitch instead: the selected
+      // segment in the primary tint with primary text and border, the
+      // others white with the normal border, no check mark.
+      segmentedButtonTheme: SegmentedButtonThemeData(
+        selectedIcon: const SizedBox.shrink(),
+        style: ButtonStyle(
+          backgroundColor: WidgetStateProperty.resolveWith(
+            (states) => states.contains(WidgetState.selected)
+                ? DsColors.primarySoft
+                : DsColors.surface,
+          ),
+          foregroundColor: WidgetStateProperty.resolveWith(
+            (states) => states.contains(WidgetState.disabled)
+                ? DsColors.textDisabled
+                : states.contains(WidgetState.selected)
+                ? DsColors.primary
+                : DsColors.textSecondary,
+          ),
+          side: WidgetStateProperty.resolveWith(
+            (states) => BorderSide(
+              color: states.contains(WidgetState.selected)
+                  ? DsColors.primary.withValues(alpha: 0.45)
+                  : DsColors.borderStrong,
+            ),
+          ),
+          shape: const WidgetStatePropertyAll(
+            RoundedRectangleBorder(borderRadius: _radius),
+          ),
+          textStyle: WidgetStatePropertyAll(textTheme.labelLarge),
         ),
       ),
       textButtonTheme: TextButtonThemeData(

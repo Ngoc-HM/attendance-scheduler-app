@@ -20,6 +20,15 @@ extension ShiftCodeX on ShiftCode {
     ShiftCode.al => 'AL',
   };
 
+  /// The code for a raw backend symbol ("A/D", "X", ...); null when [raw]
+  /// is null or unknown.
+  static ShiftCode? tryParse(String? raw) {
+    for (final code in ShiftCode.values) {
+      if (code.code == raw) return code;
+    }
+    return null;
+  }
+
   /// Whether the code counts as a working day (spec §7).
   bool get isWorking => switch (this) {
     ShiftCode.a ||

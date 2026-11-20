@@ -1,6 +1,8 @@
 // User-management errors (review 2026-11-08 D2): the backend's own message
 // (last-admin lockout, duplicate username, not pending, quota out of range)
-// reaches the admin instead of a generic "Could not load users.".
+// reaches the admin instead of a generic "Could not load users.". Approving
+// a sign-up moved to the Approvals screen (owner 2026-11-20); its 409 is
+// covered in test/features/leaves/leaves_requests_inbox_test.dart.
 
 import 'dart:convert';
 import 'dart:typed_data';
@@ -142,17 +144,6 @@ void main() {
 
       expect(find.text(_lastAdmin), findsOneWidget);
       expect(find.text('Could not load users.'), findsNothing);
-      await _clearToast(tester);
-    });
-
-    testWidgets('not_pending 409 on Approve shows the backend message', (tester) async {
-      await _pump(tester, const UsersPage());
-      await tester.tap(find.text('Approve'));
-      await tester.pumpAndSettle();
-      await tester.tap(_inDialog(find.text('Approve')));
-      await tester.pumpAndSettle();
-
-      expect(find.text(_notPending), findsOneWidget);
       await _clearToast(tester);
     });
 

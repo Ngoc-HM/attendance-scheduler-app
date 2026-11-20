@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+
 from pydantic import BaseModel, Field
 
 from app.models.enums import Role, UserStatus
@@ -52,6 +54,9 @@ class UserRead(ORMModel):
     carry_comp: int
     carry_streak: int
     annual_leave_quota: int
+    # Sign-up date of a pending account in the admin's inbox (owner
+    # 2026-11-20).
+    created_at: datetime | None = None
 
 
 class UserUpdateResult(BaseModel):

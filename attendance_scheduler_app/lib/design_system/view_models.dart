@@ -48,6 +48,11 @@ class DsFlightRowData {
   final String status;
 }
 
+/// What a row of the requests table is (owner 2026-11-20: everything the
+/// admin decides sits in one table). Only leave rows can be revoked or
+/// cancelled; the others are decided once.
+enum DsRequestKind { leave, shiftChange, signUp }
+
 class DsLeaveRowData {
   const DsLeaveRowData({
     required this.employee,
@@ -58,19 +63,33 @@ class DsLeaveRowData {
     required this.status,
     required this.carryComp,
     this.staffingWarnings = const [],
+    this.kind = DsRequestKind.leave,
   });
+
+  /// Status values besides the leave ones ('Pending' / 'Approved' /
+  /// 'Rejected'): a swap still waiting for the colleague, or declined by
+  /// them. Neither can be decided by the admin.
+  static const String statusAwaitingColleague = 'AwaitingColleague';
+  static const String statusDeclinedByColleague = 'DeclinedByColleague';
 
   final String employee;
   final String role;
   final String type;
+
+  /// Dates cell: a leave's range, a shift change's day with the shifts, or
+  /// a sign-up's date.
   final String range;
-  final int days;
+
+  /// Null → "—" (a sign-up has no days and no carry).
+  final int? days;
   final String status;
-  final int carryComp;
+  final int? carryComp;
 
   /// Flight-staffing risk lines shown on the row (one per day or shift);
   /// empty → the row looks like any other.
   final List<String> staffingWarnings;
+
+  final DsRequestKind kind;
 
   DsLeaveRowData copyWith({String? status}) {
     return DsLeaveRowData(
@@ -82,6 +101,7 @@ class DsLeaveRowData {
       status: status ?? this.status,
       carryComp: carryComp,
       staffingWarnings: staffingWarnings,
+      kind: kind,
     );
   }
 }

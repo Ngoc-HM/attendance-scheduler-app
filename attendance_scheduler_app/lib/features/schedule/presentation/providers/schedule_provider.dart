@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/network/api_exception.dart';
+import '../../../attendance/data/datasources/time_clock_remote_datasource.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../../users/data/user_management_datasource.dart';
 import '../../data/datasources/schedule_remote_datasource.dart';
@@ -303,6 +304,27 @@ final scheduleControllerProvider =
     ref.watch(userManagementDataSourceProvider),
   ),
 );
+
+/// A shift change was approved away from the Schedule page (the Approvals
+/// screen, owner 2026-11-20): the roster month held in memory reloads so
+/// the new cells show, and the Attendance grid re-reads its tints — what
+/// the Schedule page did itself when it decided requests. Nothing loaded
+/// yet → nothing to reload (the page loads on open). Safe from a disposed
+/// caller.
+void refreshRosterAfterShiftChange(Ref ref) {
+  final container = ref.container;
+  final schedule = container.read(scheduleControllerProvider).schedule;
+  if (schedule != null) {
+    container
+        .read(scheduleControllerProvider.notifier)
+        .load(
+          schedule.year,
+          schedule.month,
+          isAdmin: container.read(isAdminProvider),
+        );
+  }
+  container.invalidate(clockBoardProvider);
+}
 
 /// Convenience: current user is admin.
 final isAdminProvider = Provider<bool>((ref) {

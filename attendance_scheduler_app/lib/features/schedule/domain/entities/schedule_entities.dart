@@ -155,6 +155,9 @@ class ShiftChangeRequest extends Equatable {
     this.decidedById,
     this.decidedAt,
     this.counterpartStatus,
+    this.requesterShift,
+    this.counterpartShift,
+    this.createdAt,
   });
 
   final int id;
@@ -175,6 +178,14 @@ class ShiftChangeRequest extends Equatable {
   /// change.
   final String? counterpartStatus;
 
+  /// The requester's and (swap only) the colleague's current roster codes
+  /// on [workDate], as the backend reads them; null without a cell.
+  final String? requesterShift;
+  final String? counterpartShift;
+
+  /// When the request was filed; orders the admin's request table.
+  final DateTime? createdAt;
+
   @override
   List<Object?> get props => [
     id,
@@ -183,5 +194,7 @@ class ShiftChangeRequest extends Equatable {
     kind,
     status,
     counterpartStatus,
+    requesterShift,
+    counterpartShift,
   ];
 }

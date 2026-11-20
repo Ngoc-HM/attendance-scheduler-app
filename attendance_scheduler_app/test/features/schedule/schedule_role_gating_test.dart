@@ -530,8 +530,8 @@ void main() {
     await tester.tap(find.text('Swap with colleague'));
     await tester.pumpAndSettle();
 
-    final picker = tester.widget<DropdownButton<int>>(
-      find.byType(DropdownButton<int>),
+    final picker = tester.widget<DropdownButton<int?>>(
+      find.byType(DropdownButton<int?>),
     );
     // T1's directory has only A1 and M1 besides T1: a cross-role swap is
     // refused by the backend, so nobody is offered (see

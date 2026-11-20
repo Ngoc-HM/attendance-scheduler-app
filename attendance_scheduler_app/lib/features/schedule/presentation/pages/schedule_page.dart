@@ -31,7 +31,6 @@ class SchedulePage extends ConsumerStatefulWidget {
 
 class _SchedulePageState extends ConsumerState<SchedulePage> {
   late DateTime _month;
-  bool _showShiftChanges = false;
   // Roster row (1 = the 1st, then the next month's carried days) → FLT codes.
   Map<int, String> _flightLabels = const {};
 
@@ -48,11 +47,9 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
     ref
         .read(scheduleControllerProvider.notifier)
         .load(_month.year, _month.month, isAdmin: isAdmin);
-    if (isAdmin) {
-      ref.read(shiftChangeControllerProvider.notifier).load(all: true);
-    } else {
-      ref.read(shiftChangeControllerProvider.notifier).load();
-    }
+    // The admin decides shift changes on the Approvals screen (owner
+    // 2026-11-20); only an employee's own panels need them here.
+    if (!isAdmin) ref.read(shiftChangeControllerProvider.notifier).load();
     _loadFlights();
   }
 
@@ -196,49 +193,6 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
             codeById: {for (final p in scheduleState.people) p.id: p.code},
           ),
         ],
-        if (isAdmin && _showShiftChanges) ...[
-          const Divider(height: 1),
-          Padding(
-            padding: const EdgeInsets.all(DsSpacing.x4),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    l.text('pendingShiftChanges'),
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.close),
-                  onPressed: () => setState(() => _showShiftChanges = false),
-                ),
-              ],
-            ),
-          ),
-          // The page, not the panel row, shows the decision and reloads the
-          // grid: the row leaves the tree once its request is decided.
-          ShiftChangePendingPanel(
-            codeById: {for (final p in scheduleState.people) p.id: p.code},
-            onDecided: _onShiftChangeDecided,
-          ),
-        ],
-        if (isAdmin)
-          Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: DsSpacing.x4,
-              vertical: DsSpacing.x2,
-            ),
-            child: TextButton.icon(
-              icon: Icon(
-                _showShiftChanges
-                    ? Icons.expand_less
-                    : Icons.swap_horiz_outlined,
-              ),
-              label: Text(l.text('shiftChangeRequests')),
-              onPressed: () =>
-                  setState(() => _showShiftChanges = !_showShiftChanges),
-            ),
-          ),
       ],
     );
   }
@@ -535,21 +489,6 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
     ),
   );
 
-  /// A shift-change request was decided (admin panel). Approving rewrites
-  /// schedule cells, so the grid reloads at once. What the change breaks
-  /// was shown and confirmed before the approval (ShiftChangePendingPanel).
-  void _onShiftChangeDecided(ShiftChangeRequest decided) {
-    if (!mounted) return;
-    final l = AppLocalizations.of(context);
-    if (decided.status != 'approved') {
-      DsFeedback.show(context, l.text('requestRejected'), tone: DsTone.success);
-      return;
-    }
-    _loadMonth();
-    ref.invalidate(clockBoardProvider);
-    DsFeedback.show(context, l.text('requestApproved'), tone: DsTone.success);
-  }
-
   /// The signed-in person answered a colleague's swap request
   /// (IncomingSwapRequestsPanel). Nothing changes on the grid until the
   /// admin approves it.
@@ -657,13 +596,26 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
     User me,
     int dayIndex,
   ) async {
+    final workDate = DateTime(_month.year, _month.month, dayIndex + 1);
+    final state = ref.read(scheduleControllerProvider);
+    final schedule = state.schedule;
     final submitted = await showDsCornerDialog<bool>(
       context: context,
       builder: (_) => ShiftChangeRequestDialog(
-        workDate: DateTime(_month.year, _month.month, dayIndex + 1),
+        workDate: workDate,
         role: me.role,
-        people: ref.read(scheduleControllerProvider).people,
+        people: state.people,
         currentUserId: me.id,
+        // The roster on screen for that day: the form shows what a swap
+        // exchanges before it is sent.
+        codesOnDay: {
+          if (schedule != null)
+            for (final a in [
+              ...schedule.assignments,
+              ...schedule.carryAssignments,
+            ])
+              if (DateUtils.isSameDay(a.workDate, workDate)) a.userId: a.code,
+        },
       ),
     );
     if (submitted == null || !context.mounted) return; // cancelled

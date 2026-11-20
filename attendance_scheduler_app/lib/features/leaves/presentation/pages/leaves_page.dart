@@ -8,12 +8,15 @@ import '../../../../i18n/app_localizations.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../../schedule/presentation/widgets/shift_change_dialog.dart'
     show confirmApprovalWarnings;
+import '../../../users/presentation/widgets/account_approval_dialogs.dart';
 import '../providers/leaves_provider.dart';
 
-/// Leaves page (F-05 / F-06).
+/// Leaves page (F-05 / F-06), the admin's one request screen (owner
+/// 2026-11-20).
 ///
-/// All users: submit request, view own leaves.
-/// Admin: view all leaves, approve / reject pending.
+/// All users: submit leave, view own leave and shift-change requests.
+/// Admin ("Approvals"): every leave, shift change and sign-up in one table;
+/// approve / reject what is pending.
 ///
 /// Reloads every time it is opened and from its refresh button (D4).
 class LeavesPage extends ConsumerStatefulWidget {
@@ -57,6 +60,7 @@ class _LeavesPageState extends ConsumerState<LeavesPage> {
       ),
       data: (rows) => DsLeavesView(
         rows: rows,
+        title: l.text(isAdmin ? 'approvals' : 'leaveAndShiftChanges'),
         onRefresh: ctrl.load,
         onMonthlyRequest: () => _showMonthlyRequestDialog(context, ref, l),
         onAnnualRequest: () => _showAnnualRequestDialog(context, ref, l),
@@ -100,8 +104,23 @@ class _LeavesPageState extends ConsumerState<LeavesPage> {
     bool approve,
     AppLocalizations l,
   ) async {
+    final entry = ctrl.entryAt(index);
+    if (entry == null) return;
     try {
-      if (approve) {
+      if (entry.kind == DsRequestKind.signUp) {
+        // A sign-up is approved with a role and rejected by deleting the
+        // account — the same dialogs the Users page used.
+        if (approve) {
+          final account = entry.account;
+          if (account == null) return;
+          final role = await showApproveAccountDialog(context, account);
+          if (role == null || !context.mounted) return;
+          await ctrl.approveAccount(index, role);
+        } else {
+          if (!await confirmDeleteAccount(context)) return;
+          await ctrl.reject(index);
+        }
+      } else if (approve) {
         // Warn BEFORE approving (customer 2026-11-18): short flight shifts,
         // rule breaches and the quota are listed; the admin may go ahead.
         final lines = await ctrl.approvalPreview(index);

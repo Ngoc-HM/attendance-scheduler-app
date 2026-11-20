@@ -129,6 +129,9 @@ class ShiftChangeRequestModel extends ShiftChangeRequest {
     super.decidedById,
     super.decidedAt,
     super.counterpartStatus,
+    super.requesterShift,
+    super.counterpartShift,
+    super.createdAt,
   });
 
   factory ShiftChangeRequestModel.fromJson(Map<String, dynamic> json) {
@@ -151,6 +154,9 @@ class ShiftChangeRequestModel extends ShiftChangeRequest {
       decidedById: json['decided_by_id'] as int?,
       decidedAt: decidedAtStr != null ? DateTime.parse(decidedAtStr) : null,
       counterpartStatus: json['counterpart_status'] as String?,
+      requesterShift: json['requester_shift'] as String?,
+      counterpartShift: json['counterpart_shift'] as String?,
+      createdAt: DateTime.tryParse(json['created_at'] as String? ?? ''),
     );
   }
 }

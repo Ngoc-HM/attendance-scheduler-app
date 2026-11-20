@@ -31,6 +31,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:attendance_scheduler_app/features/schedule/data/datasources/schedule_remote_datasource.dart';
+import '../leaves/no_shift_changes.dart';
 
 const _admin = UserModel(id: 1, username: 'admin', fullName: 'Admin', role: UserRole.m, status: 'active', code: 'M1');
 const _anna = UserModel(id: 7, username: 'anna', fullName: 'Anna', role: UserRole.t, status: 'active', code: 'T3');
@@ -122,6 +124,7 @@ ProviderContainer _container(_Leaves leaves) {
     tokenStorageProvider.overrideWithValue(_MemoryTokenStorage()),
     dioProvider.overrideWithValue(Dio()..httpClientAdapter = _OfflineAdapter()),
     leavesDataSourceProvider.overrideWithValue(leaves),
+    scheduleRemoteDataSourceProvider.overrideWithValue(NoShiftChanges()),
     userManagementDataSourceProvider.overrideWithValue(_Users()),
   ]);
   addTearDown(c.dispose);

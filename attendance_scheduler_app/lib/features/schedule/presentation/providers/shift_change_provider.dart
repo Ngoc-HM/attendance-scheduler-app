@@ -1,6 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../home/presentation/providers/pending_counts_provider.dart';
 import '../../data/datasources/schedule_remote_datasource.dart';
 import '../../domain/entities/schedule_entities.dart';
 
@@ -28,7 +27,7 @@ class ShiftChangeState {
   final Object? error;
 
   /// The last [ShiftChangeController.load] failed, so [requests] is not
-  /// trustworthy (as opposed to [error] from a failed submit or decide).
+  /// trustworthy (as opposed to [error] from a failed submit or answer).
   final bool loadFailed;
 
   ShiftChangeState copyWith({
@@ -49,32 +48,31 @@ class ShiftChangeState {
   );
 }
 
+/// The signed-in employee's shift changes on the Schedule page: their own
+/// requests and the swaps waiting for their answer. The admin decides
+/// requests on the Approvals screen (owner 2026-11-20), through the leaves
+/// controller.
 class ShiftChangeController extends StateNotifier<ShiftChangeState> {
-  ShiftChangeController(this._ds, {this.onDecided})
-    : super(const ShiftChangeState());
+  ShiftChangeController(this._ds) : super(const ShiftChangeState());
 
   final ScheduleRemoteDataSource _ds;
 
-  /// Runs after every successful decision (the nav badge refresh).
-  final void Function()? onDecided;
-
-  /// Own requests, or every request with [all] (admin). The employee view
-  /// also loads the swaps waiting for their answer ([loadIncoming]).
-  Future<void> load({bool all = false}) async {
+  /// Own requests, then the swaps waiting for an answer ([loadIncoming]).
+  Future<void> load() async {
     state = state.copyWith(
       isLoading: true,
       loadFailed: false,
       clearError: true,
     );
     try {
-      final requests = await _ds.fetchShiftChanges(all: all);
+      final requests = await _ds.fetchShiftChanges();
       if (!mounted) return;
       state = state.copyWith(isLoading: false, requests: requests);
     } catch (e) {
       if (!mounted) return;
       state = state.copyWith(isLoading: false, loadFailed: true, error: e);
     }
-    if (!all) await loadIncoming();
+    await loadIncoming();
   }
 
   /// Swaps waiting for the signed-in person's answer. The panel shows only
@@ -134,47 +132,11 @@ class ShiftChangeController extends StateNotifier<ShiftChangeState> {
       return false;
     }
   }
-
-  /// Rule breaches approving request [id] would add, asked BEFORE the
-  /// decision; null when the check failed (error is set).
-  Future<List<String>?> approvalPreview(int id) async {
-    state = state.copyWith(isMutating: true, clearError: true);
-    try {
-      final lines = await _ds.shiftChangeApprovalPreview(id);
-      if (mounted) state = state.copyWith(isMutating: false);
-      return lines;
-    } catch (e) {
-      if (mounted) state = state.copyWith(isMutating: false, error: e);
-      return null;
-    }
-  }
-
-  /// Returns the decided request, whose `warnings` carry the backend's rule
-  /// recheck after an approval; null when the call failed (error is set).
-  Future<ShiftChangeRequest?> decide(int id, String status) async {
-    state = state.copyWith(isMutating: true, clearError: true);
-    try {
-      final updated = await _ds.decideShiftChange(id: id, status: status);
-      onDecided?.call();
-      if (!mounted) return updated;
-      final newList = [
-        for (final r in state.requests)
-          if (r.id == id) updated else r,
-      ];
-      state = state.copyWith(isMutating: false, requests: newList);
-      return updated;
-    } catch (e) {
-      if (!mounted) return null;
-      state = state.copyWith(isMutating: false, error: e);
-      return null;
-    }
-  }
 }
 
 final shiftChangeControllerProvider =
     StateNotifierProvider<ShiftChangeController, ShiftChangeState>(
       (ref) => ShiftChangeController(
         ref.watch(scheduleRemoteDataSourceProvider),
-        onDecided: () => refreshPendingCounts(ref),
       ),
     );

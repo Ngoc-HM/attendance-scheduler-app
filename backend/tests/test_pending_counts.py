@@ -105,3 +105,25 @@ def test_employee_gets_403(client: TestClient) -> None:
 
 def test_unauthenticated_gets_401(client: TestClient) -> None:
     assert client.get(URL).status_code == 401
+
+
+def test_inbox_lists_carry_created_at(client: TestClient) -> None:
+    """The admin's one request table (owner 2026-11-20) merges leave, shift
+    changes and sign-ups newest first, so every list says when each row was
+    filed."""
+    admin = _bearer(client, "admin", "admin123")
+    uid = _create_user(client, admin, "pc_inbox")
+    leave_id, swap_id = _add_rows(uid)
+
+    leaves = client.get(f"{V}/leaves", headers=admin, params={"all": "true"})
+    changes = client.get(f"{V}/shift-changes", headers=admin, params={"all": "true"})
+    users = client.get(f"{V}/users", headers=admin)
+    for res in (leaves, changes, users):
+        assert res.status_code == 200, res.text
+
+    def created(rows: list[dict[str, object]], row_id: int) -> object:
+        return next(r for r in rows if r["id"] == row_id)["created_at"]
+
+    assert created(leaves.json(), leave_id)
+    assert created(changes.json(), swap_id)
+    assert created(users.json(), uid)

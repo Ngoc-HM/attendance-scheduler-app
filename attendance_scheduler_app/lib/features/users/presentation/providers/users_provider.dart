@@ -5,7 +5,8 @@ import '../../../home/presentation/providers/pending_counts_provider.dart';
 import '../../data/user_management_datasource.dart';
 
 /// Holds the admin user list as an [AsyncValue] and exposes mutating actions
-/// (create / approve / update / delete) that refresh the list (F-01, F-03).
+/// (create / update / delete) that refresh the list (F-01, F-03). Sign-ups
+/// are approved on the Approvals screen (owner 2026-11-20).
 class UsersController extends StateNotifier<AsyncValue<List<User>>> {
   UsersController(this._ds, {this.onDecided})
       : super(const AsyncValue.loading()) {
@@ -14,8 +15,8 @@ class UsersController extends StateNotifier<AsyncValue<List<User>>> {
 
   final UserManagementDataSource _ds;
 
-  /// Runs after a change that can settle a pending account — approve, a
-  /// status change, a delete — so the nav badge drops at once.
+  /// Runs after a change that can settle a pending account — a status
+  /// change, a delete — so the nav badge drops at once.
   final void Function()? onDecided;
 
   Future<void> load() async {
@@ -44,13 +45,6 @@ class UsersController extends StateNotifier<AsyncValue<List<User>>> {
       role: role.apiValue,
       annualLeaveQuota: annualLeaveQuota,
     );
-    await load();
-  }
-
-  /// Activates a pending account with the role the admin picked (F-03).
-  Future<void> approve(int id, UserRole role) async {
-    await _ds.approve(id, role: role.apiValue);
-    onDecided?.call();
     await load();
   }
 

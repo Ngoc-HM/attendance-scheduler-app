@@ -12,6 +12,8 @@ Coverage targets:
 - a swap that would hand leave (AL) to the counterpart → 422 at approval.
 - three-step swap (customer 2026-11-18): the colleague accepts or declines
   first; the admin cannot preview or approve before that; a decline rejects.
+- both people's current codes of the day on every read (owner 2026-11-20);
+  a swap with a colleague who has no cell that day → 409 at creation.
 """
 
 from __future__ import annotations
@@ -741,3 +743,146 @@ def test_code_change_goes_straight_to_the_admin(client: TestClient):
 
     assert dec.status_code == 200, dec.text
     assert _cell(uid, day) == "X"
+
+
+# ---------------------------------------------------------------------------
+# What is exchanged (owner 2026-11-20): every read carries both people's
+# current roster codes of the day; a colleague without a cell is refused.
+# Each test owns its people and a 2061-07 day of its own.
+# ---------------------------------------------------------------------------
+
+
+def _list(client, headers, path=""):
+    res = client.get(f"{V}/shift-changes{path}", headers=headers)
+    assert res.status_code == 200, res.text
+    return res.json()
+
+
+def test_swap_reads_carry_both_codes_everywhere(client: TestClient):
+    admin = _bearer(_token(client, "admin", "admin123"))
+    day = date(2061, 7, 1)
+    me = _create_user(client, admin, "sh_codes_me", role="A")["id"]
+    you = _create_user(client, admin, "sh_codes_you", role="A")["id"]
+    _give_cell(me, day, "A")
+    _give_cell(you, day, "X")
+
+    created = _request(
+        client, "sh_codes_me",
+        {"work_date": day.isoformat(), "kind": "swap_with", "counterpart_user_id": you},
+    )
+    assert created.status_code == 201, created.text
+    assert (created.json()["requester_shift"], created.json()["counterpart_shift"]) == (
+        "A", "X",
+    )
+    req_id = created.json()["id"]
+
+    me_h = _bearer(_token(client, "sh_codes_me", "secret1"))
+    you_h = _bearer(_token(client, "sh_codes_you", "secret1"))
+    rows = [
+        next(r for r in _list(client, me_h) if r["id"] == req_id),
+        next(r for r in _list(client, you_h, "/incoming") if r["id"] == req_id),
+        next(r for r in _list(client, admin, "?all=true") if r["id"] == req_id),
+    ]
+    for row in rows:
+        assert (row["requester_shift"], row["counterpart_shift"]) == ("A", "X")
+
+    answered = _respond(client, "sh_codes_you", req_id, accept=True)
+    assert (answered.json()["requester_shift"], answered.json()["counterpart_shift"]) == (
+        "A", "X",
+    )
+    # After approval the codes read are the roster's current ones: swapped.
+    decided = _decide(client, admin, req_id)
+    assert decided.status_code == 200, decided.text
+    assert (decided.json()["requester_shift"], decided.json()["counterpart_shift"]) == (
+        "X", "A",
+    )
+
+
+def test_code_change_has_no_counterpart_shift(client: TestClient):
+    admin = _bearer(_token(client, "admin", "admin123"))
+    day = date(2061, 7, 2)
+    uid = _create_user(client, admin, "sh_codes_one", role="A")["id"]
+    _give_cell(uid, day, "D")
+
+    res = _request(
+        client, "sh_codes_one",
+        {"work_date": day.isoformat(), "kind": "change_code", "requested_code": "X"},
+    )
+
+    assert res.status_code == 201, res.text
+    assert res.json()["requester_shift"] == "D"
+    assert res.json()["counterpart_shift"] is None
+
+
+def test_shift_is_none_without_a_cell(client: TestClient):
+    """A request whose day has no cell (e.g. the month was regenerated
+    without the person) reads None rather than failing."""
+    from app.core.database import SessionLocal
+    from app.models.shift_change_request import ShiftChangeRequest
+
+    admin = _bearer(_token(client, "admin", "admin123"))
+    me = _create_user(client, admin, "sh_none_me", role="A")["id"]
+    you = _create_user(client, admin, "sh_none_you", role="A")["id"]
+    day = date(2061, 7, 3)
+    _give_cell(me, day, "A")
+    db = SessionLocal()
+    try:
+        row = ShiftChangeRequest(
+            requester_id=me, work_date=day, kind=SwapKind.swap_with,
+            counterpart_user_id=you, counterpart_status=LeaveStatus.pending,
+            status=LeaveStatus.pending,
+        )
+        db.add(row)
+        db.commit()
+        req_id = row.id
+    finally:
+        db.close()
+
+    row = next(r for r in _list(client, admin, "?all=true") if r["id"] == req_id)
+
+    assert (row["requester_shift"], row["counterpart_shift"]) == ("A", None)
+
+
+def test_colleague_sickness_reads_as_off_for_the_other_person(client: TestClient):
+    """§9.1: the colleague does not learn of the requester's sickness; the
+    requester and the admin see the code as it is."""
+    admin = _bearer(_token(client, "admin", "admin123"))
+    day = date(2061, 7, 4)
+    me = _create_user(client, admin, "sh_sick_me", role="A")["id"]
+    you = _create_user(client, admin, "sh_sick_you", role="A")["id"]
+    _give_cell(me, day, "A")
+    _give_cell(you, day, "X")
+    req = _request(
+        client, "sh_sick_me",
+        {"work_date": day.isoformat(), "kind": "swap_with", "counterpart_user_id": you},
+    )
+    assert req.status_code == 201, req.text
+    _give_cell(me, day, "S")  # fell sick after filing
+
+    you_h = _bearer(_token(client, "sh_sick_you", "secret1"))
+    me_h = _bearer(_token(client, "sh_sick_me", "secret1"))
+    theirs = next(r for r in _list(client, you_h, "/incoming") if r["id"] == req.json()["id"])
+    mine = next(r for r in _list(client, me_h) if r["id"] == req.json()["id"])
+    admins = next(r for r in _list(client, admin, "?all=true") if r["id"] == req.json()["id"])
+
+    assert theirs["requester_shift"] == "X"
+    assert mine["requester_shift"] == "S"
+    assert admins["requester_shift"] == "S"
+
+
+def test_swap_with_colleague_without_cell_is_refused(client: TestClient):
+    admin = _bearer(_token(client, "admin", "admin123"))
+    day = date(2061, 7, 5)
+    me = _create_user(client, admin, "sh_nocell_me", role="A")["id"]
+    you = _create_user(client, admin, "sh_nocell_you", role="A")["id"]
+    _give_cell(me, day, "A")
+
+    res = _request(
+        client, "sh_nocell_me",
+        {"work_date": day.isoformat(), "kind": "swap_with", "counterpart_user_id": you},
+    )
+
+    assert res.status_code == 409, res.text
+    assert res.json()["detail"] == "That colleague has no scheduled shift on that day."
+    mine = _list(client, _bearer(_token(client, "sh_nocell_me", "secret1")))
+    assert mine == []

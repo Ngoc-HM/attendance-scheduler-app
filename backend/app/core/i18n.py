@@ -176,6 +176,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "swap.counterpart_self": "You cannot swap a shift with yourself.",
         "swap.counterpart_inactive": "That colleague's account is not active.",
         "swap.counterpart_other_role": "You can only swap with a colleague who works the same shift codes.",
+        "swap.counterpart_no_cell": "That colleague has no scheduled shift on that day.",
         # --- Attendance / holidays (F-10..F-13) ---
         "attendance.not_found": "Attendance record not found.",
         "holiday.not_found": "Holiday not found.",
@@ -368,6 +369,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "swap.counterpart_self": "Không thể hoán đổi ca với chính mình.",
         "swap.counterpart_inactive": "Tài khoản của đồng nghiệp này không còn hoạt động.",
         "swap.counterpart_other_role": "Chỉ được hoán đổi ca với đồng nghiệp làm cùng loại mã ca.",
+        "swap.counterpart_no_cell": "Đồng nghiệp này không có ca trong lịch vào ngày đó.",
         # --- Attendance / holidays (F-10..F-13) ---
         "attendance.not_found": "Không tìm thấy bản ghi chấm công.",
         "holiday.not_found": "Không tìm thấy ngày lễ.",

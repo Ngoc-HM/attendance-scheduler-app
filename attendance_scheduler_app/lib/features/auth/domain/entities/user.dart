@@ -33,6 +33,7 @@ class User extends Equatable {
     required this.code,
     this.carryComp = 0,
     this.annualLeaveQuota = 0,
+    this.createdAt,
   });
 
   final int id;
@@ -50,6 +51,10 @@ class User extends Equatable {
 
   /// Admin-set days of leave per calendar year (`annual_leave_quota`, D4).
   final int annualLeaveQuota;
+
+  /// When the account was created (`created_at`); a pending account's
+  /// sign-up date in the admin's request table.
+  final DateTime? createdAt;
 
   bool get isAdmin => role.isAdmin;
 

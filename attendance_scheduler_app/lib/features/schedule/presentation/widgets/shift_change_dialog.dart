@@ -15,6 +15,9 @@ import '../providers/shift_change_provider.dart';
 /// offered to the requestable set (regular working or off codes, no AL / CD).
 /// [people] is the code directory for swap_with (only same-role colleagues
 /// are offered); [currentUserId] is excluded from the counterpart picker.
+/// [codesOnDay] is the roster on screen for [workDate] (person id → raw
+/// code): a swap shows what each side gives before it is sent (owner
+/// 2026-11-20); the submit button is the confirmation.
 class ShiftChangeRequestDialog extends ConsumerStatefulWidget {
   const ShiftChangeRequestDialog({
     super.key,
@@ -22,12 +25,14 @@ class ShiftChangeRequestDialog extends ConsumerStatefulWidget {
     required this.role,
     required this.people,
     required this.currentUserId,
+    this.codesOnDay = const {},
   });
 
   final DateTime workDate;
   final UserRole role;
   final List<UserDirectoryEntry> people;
   final int currentUserId;
+  final Map<int, String> codesOnDay;
 
   @override
   ConsumerState<ShiftChangeRequestDialog> createState() =>
@@ -40,6 +45,9 @@ class _ShiftChangeRequestDialogState
   ShiftCode _selectedCode = ShiftCode.x; // requestable for every role
   int? _counterpartUserId;
   final _noteCtrl = TextEditingController();
+
+  /// Height of each "Ca của …" row, so a badge row and a "—" row match.
+  static const double _shiftRowHeight = 32;
 
   @override
   void dispose() {
@@ -72,97 +80,149 @@ class _ShiftChangeRequestDialogState
   static int _codeSeq(String code) =>
       int.tryParse(code.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
 
+  ShiftCode? _codeOf(int? userId) =>
+      userId == null ? null : ShiftCodeX.tryParse(widget.codesOnDay[userId]);
+
+  /// A swap needs a colleague who is on that day's roster (the backend
+  /// refuses one without a cell).
+  bool get _canSubmit =>
+      _kind != 'swap_with' ||
+      (_counterpartUserId != null && _codeOf(_counterpartUserId) != null);
+
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
     final ctrl = ref.watch(shiftChangeControllerProvider);
+    final colleagues = _colleagues;
+    final colleagueCode = colleagues
+        .where((p) => p.id == _counterpartUserId)
+        .map((p) => p.code)
+        .firstOrNull;
 
     return DsFormDialog(
       title: l.text('requestShiftChange'),
+      subtitle: l.weekdayDate(widget.workDate),
       width: 320,
       // Top-left corner: the form must not cover the person's roster
       // (customer 2026-11-18); shown with showDsCornerDialog.
       alignment: Alignment.topLeft,
       content: Column(
         mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            '${l.text('date')}: ${widget.workDate.year}-'
-            '${widget.workDate.month.toString().padLeft(2, '0')}-'
-            '${widget.workDate.day.toString().padLeft(2, '0')}',
-          ),
-          const SizedBox(height: DsSpacing.x4),
-          SegmentedButton<String>(
-            segments: [
-              ButtonSegment(
-                value: 'change_code',
-                label: Text(l.text('changeCode')),
-              ),
-              ButtonSegment(
-                value: 'swap_with',
-                label: Text(l.text('swapWith')),
-              ),
+          DsSegmentedSwitch<String>(
+            options: [
+              DsSelectOption(value: 'change_code', label: l.text('changeCode')),
+              DsSelectOption(value: 'swap_with', label: l.text('swapWith')),
             ],
-            selected: {_kind},
-            onSelectionChanged: (s) => setState(() => _kind = s.first),
+            value: _kind,
+            onChanged: (kind) => setState(() => _kind = kind),
           ),
           const SizedBox(height: DsSpacing.x4),
-          if (_kind == 'change_code') ...[
-            Text(l.text('newShiftCode')),
-            const SizedBox(height: DsSpacing.x2),
-            DropdownButton<ShiftCode>(
+          if (_kind == 'change_code')
+            DsSelectField<ShiftCode>(
+              key: const ValueKey('shift-change-code'),
+              label: l.text('newShiftCode'),
               value: _selectedCode,
-              isExpanded: true,
               items: ShiftCodeX.requestableCodesFor(widget.role)
                   .map((c) => DropdownMenuItem(value: c, child: Text(c.code)))
                   .toList(),
               onChanged: (v) {
                 if (v != null) setState(() => _selectedCode = v);
               },
-            ),
-          ] else ...[
-            Text(l.text('selectColleague')),
-            const SizedBox(height: DsSpacing.x2),
-            DropdownButton<int>(
+            )
+          else ...[
+            DsSelectField<int?>(
+              key: const ValueKey('shift-change-colleague'),
+              label: l.text('selectColleague'),
               value: _counterpartUserId,
-              isExpanded: true,
-              hint: Text(l.text('selectColleague')),
-              items: _colleagues
+              items: colleagues
                   .map(
-                    (p) => DropdownMenuItem(value: p.id, child: Text(p.code)),
+                    (p) => DropdownMenuItem<int?>(
+                      value: p.id,
+                      child: Text(p.code),
+                    ),
                   )
                   .toList(),
               onChanged: (v) => setState(() => _counterpartUserId = v),
             ),
+            const SizedBox(height: DsSpacing.x4),
+            DsInset(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _shiftRow(
+                    context,
+                    l.text('yourShift'),
+                    _codeOf(widget.currentUserId),
+                  ),
+                  if (colleagueCode != null)
+                    _shiftRow(
+                      context,
+                      l.shiftOf(colleagueCode),
+                      _codeOf(_counterpartUserId),
+                    ),
+                ],
+              ),
+            ),
           ],
           const SizedBox(height: DsSpacing.x4),
-          TextField(
+          DsTextField(
             controller: _noteCtrl,
-            decoration: InputDecoration(
-              labelText: l.text('note'),
-              border: const OutlineInputBorder(),
-            ),
+            label: l.text('note'),
             maxLines: 2,
           ),
         ],
       ),
       actions: [
-        TextButton(
+        DsTextAction(
+          label: l.text('cancel'),
           onPressed: () => Navigator.of(context).pop(),
-          child: Text(l.text('cancel')),
         ),
         DsPrimaryButton(
           label: l.text('submitRequest'),
           loading: ctrl.isMutating,
-          onPressed: ctrl.isMutating ? null : _submit,
+          onPressed: ctrl.isMutating || !_canSubmit ? null : _submit,
         ),
       ],
     );
   }
 
+  /// One "Ca của …" line: label left, the day's code right-aligned in a
+  /// fixed-width slot so both rows' badges share one column; "—" without a
+  /// roster cell.
+  Widget _shiftRow(BuildContext context, String label, ShiftCode? code) {
+    return SizedBox(
+      height: _shiftRowHeight,
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+          ),
+          SizedBox(
+            width: 48,
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: code == null
+                  ? const SizedBox(
+                      width: 38,
+                      child: Text('—', textAlign: TextAlign.center),
+                    )
+                  : DsShiftBadge(code: code),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _submit() async {
-    if (_kind == 'swap_with' && _counterpartUserId == null) return;
+    if (!_canSubmit) return;
     final ok = await ref
         .read(shiftChangeControllerProvider.notifier)
         .submit(
@@ -175,163 +235,6 @@ class _ShiftChangeRequestDialogState
     if (mounted) {
       Navigator.of(context).pop(ok);
     }
-  }
-}
-
-/// Admin panel showing pending shift-change requests with approve/reject.
-/// Each row names the requester and, for a swap, the partner by code (D3).
-/// Only what the admin can decide now is listed: code changes, and swaps the
-/// colleague already accepted (customer 2026-11-18).
-/// A successful decision is handed to [onDecided]; the panel itself only
-/// reports a failed one.
-class ShiftChangePendingPanel extends ConsumerWidget {
-  const ShiftChangePendingPanel({
-    super.key,
-    this.codeById = const {},
-    required this.onDecided,
-  });
-
-  /// Person id → code (e.g. "A3").
-  final Map<int, String> codeById;
-
-  /// Called with the decided request after a successful approval or
-  /// rejection. The caller shows the feedback (toast, or the backend's rule
-  /// warnings) and reloads the grid: deciding the last pending request
-  /// removes its row, so this panel can no longer do it from that row.
-  final ValueChanged<ShiftChangeRequest> onDecided;
-
-  String _code(AppLocalizations l, int? id) =>
-      id == null ? '—' : (codeById[id] ?? l.userFallback(id));
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final l = AppLocalizations.of(context);
-    final state = ref.watch(shiftChangeControllerProvider);
-    final pending = state.requests
-        .where(
-          (r) =>
-              r.status == 'pending' &&
-              (r.kind != 'swap_with' || r.counterpartStatus == 'approved'),
-        )
-        .toList();
-
-    if (state.isLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-    if (pending.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.all(DsSpacing.x4),
-        child: Text(l.text('noPendingShiftChanges')),
-      );
-    }
-
-    return ListView.separated(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: pending.length,
-      separatorBuilder: (_, _) => const Divider(height: 1),
-      itemBuilder: (context, i) {
-        final req = pending[i];
-        final isSwap = req.kind == 'swap_with';
-        return ListTile(
-          leading: req.strictReview
-              ? const Icon(Icons.warning_amber, color: DsColors.warning)
-              : const Icon(Icons.swap_horiz_outlined),
-          title: Text(
-            '${_code(l, req.requesterId)} · '
-            '${l.text(isSwap ? 'swapWith' : 'changeCode')} · '
-            '${_isoDate(req.workDate)}',
-          ),
-          subtitle: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (req.strictReview)
-                Text(
-                  l.text('strictReviewRequired'),
-                  style: const TextStyle(color: DsColors.warning),
-                ),
-              if (isSwap)
-                Text(
-                  '${l.text('swapPartner')}: '
-                  '${_code(l, req.counterpartUserId)}',
-                )
-              else if (req.requestedCode != null)
-                Text('${l.text("newShiftCode")}: ${req.requestedCode}'),
-              if (req.note != null && req.note!.isNotEmpty)
-                Text('${l.text('note')}: ${req.note}'),
-              if (req.warnings.isNotEmpty)
-                Text(
-                  req.warnings.join('; '),
-                  style: const TextStyle(
-                    color: DsColors.danger,
-                    fontSize: DsFontSize.micro,
-                  ),
-                ),
-            ],
-          ),
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              IconButton(
-                icon: const Icon(
-                  Icons.check_circle_outline,
-                  color: DsColors.success,
-                ),
-                tooltip: l.text('approve'),
-                onPressed: state.isMutating
-                    ? null
-                    : () => _decide(context, ref, req.id, 'approved', l),
-              ),
-              IconButton(
-                icon: const Icon(Icons.cancel_outlined, color: DsColors.danger),
-                tooltip: l.text('reject'),
-                onPressed: state.isMutating
-                    ? null
-                    : () => _decide(context, ref, req.id, 'rejected', l),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Future<void> _decide(
-    BuildContext context,
-    WidgetRef ref,
-    int id,
-    String status,
-    AppLocalizations l,
-  ) async {
-    final ctrl = ref.read(shiftChangeControllerProvider.notifier);
-    var failed = false;
-    if (status == 'approved') {
-      // Warn BEFORE approving (customer 2026-11-18): the admin sees what
-      // the change would break and may still go ahead.
-      final lines = await ctrl.approvalPreview(id);
-      failed = lines == null;
-      if (!context.mounted) return;
-      if (lines != null && !await confirmApprovalWarnings(context, lines)) {
-        return;
-      }
-    }
-    if (!failed) {
-      final decided = await ctrl.decide(id, status);
-      if (decided != null) {
-        onDecided(decided);
-        return;
-      }
-    }
-    if (!context.mounted) return;
-    DsFeedback.show(
-      context,
-      apiErrorMessage(
-        l,
-        ref.read(shiftChangeControllerProvider).error,
-        fallbackKey: 'actionFailed',
-      ),
-      tone: DsTone.danger,
-    );
   }
 }
 
@@ -562,6 +465,10 @@ class IncomingSwapRequestsPanel extends ConsumerWidget {
                   columns: [
                     DsTableColumn(header: l.text('employee'), flex: 2),
                     DsTableColumn(header: l.text('date'), flex: 2),
+                    // What is exchanged (owner 2026-11-20): the asker's
+                    // code of that day, then the colleague's own.
+                    DsTableColumn(header: l.text('theirShift'), flex: 2),
+                    DsTableColumn(header: l.text('yourShift'), flex: 2),
                     DsTableColumn(header: l.actions, flex: 5),
                   ],
                   rows: [
@@ -576,6 +483,8 @@ class IncomingSwapRequestsPanel extends ConsumerWidget {
                           _isoDate(request.workDate),
                           style: DsType.tableCell,
                         ),
+                        _shiftCell(request.requesterShift),
+                        _shiftCell(request.counterpartShift),
                         Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
@@ -612,6 +521,14 @@ class IncomingSwapRequestsPanel extends ConsumerWidget {
         ],
       ),
     );
+  }
+
+  /// A roster code as a badge; "—" without a cell (or an unknown code).
+  static Widget _shiftCell(String? raw) {
+    final code = ShiftCodeX.tryParse(raw);
+    return code == null
+        ? const Text('—', style: DsType.tableCell)
+        : DsShiftBadge(code: code, compact: true);
   }
 
   Future<void> _answer(

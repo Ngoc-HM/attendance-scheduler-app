@@ -46,9 +46,16 @@ class ShiftChangeRead(ORMModel):
     note: str | None
     decided_by_id: int | None
     decided_at: datetime | None
+    # When the request was filed: the admin's inbox merges leave, shift
+    # changes and sign-ups newest first (owner 2026-11-20).
+    created_at: datetime | None = None
     # swap_with: the colleague's own answer (pending / approved / rejected);
     # the admin decides only once it is approved. None for a code change.
     counterpart_status: LeaveStatus | None = None
+    # The two people's current roster codes on work_date, read at request
+    # time (None without a cell; counterpart_shift None for a code change).
+    requester_shift: AttendanceCode | None = None
+    counterpart_shift: AttendanceCode | None = None
     # Derived at read time from requester.role.is_fixed (not stored in DB).
     strict_review: bool
     # Non-empty when an approved request's schedule application is pending.

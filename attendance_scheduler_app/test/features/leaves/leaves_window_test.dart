@@ -19,6 +19,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:attendance_scheduler_app/features/schedule/data/datasources/schedule_remote_datasource.dart';
+import 'no_shift_changes.dart';
 
 class _UnusedAuthRepository implements AuthRepository {
   @override
@@ -190,6 +192,7 @@ Future<_FakeLeaves> _pump(
       overrides: [
         authControllerProvider.overrideWith((ref) => _SignedIn(user)),
         leavesDataSourceProvider.overrideWithValue(leavesDs),
+        scheduleRemoteDataSourceProvider.overrideWithValue(NoShiftChanges()),
         userManagementDataSourceProvider.overrideWithValue(_FakeUsers(users)),
       ],
       child: MaterialApp(

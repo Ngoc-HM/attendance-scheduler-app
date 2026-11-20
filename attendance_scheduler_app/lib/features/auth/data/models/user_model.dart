@@ -11,6 +11,7 @@ class UserModel extends User {
     required super.code,
     super.carryComp,
     super.annualLeaveQuota,
+    super.createdAt,
   });
 
   factory UserModel.fromJson(Map<String, dynamic> json) => UserModel(
@@ -24,5 +25,6 @@ class UserModel extends User {
     code: json['code'] as String? ?? '',
     carryComp: json['carry_comp'] as int? ?? 0,
     annualLeaveQuota: json['annual_leave_quota'] as int? ?? 0,
+    createdAt: DateTime.tryParse(json['created_at'] as String? ?? ''),
   );
 }

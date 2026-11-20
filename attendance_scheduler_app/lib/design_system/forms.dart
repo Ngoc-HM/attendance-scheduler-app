@@ -131,6 +131,7 @@ class DsTextField extends StatelessWidget {
     this.inputFormatters,
     this.hint,
     this.enabled = true,
+    this.maxLines = 1,
   });
 
   final TextEditingController controller;
@@ -144,10 +145,14 @@ class DsTextField extends StatelessWidget {
   final String? hint;
   final bool enabled;
 
+  /// Lines the field shows (a short note: 2). Must be 1 when obscured.
+  final int maxLines;
+
   @override
   Widget build(BuildContext context) {
     return TextFormField(
       controller: controller,
+      maxLines: maxLines,
       validator: validator,
       obscureText: obscureText,
       onFieldSubmitted: onSubmitted,
@@ -195,6 +200,91 @@ class DsSelectOption<T> {
 
   final T value;
   final String label;
+}
+
+/// A light two-or-more-way switch: equal-width segments in one outlined
+/// track, the selected one in the primary tint with primary text. Labels
+/// stay on one line (ellipsized if the track is too narrow).
+class DsSegmentedSwitch<T> extends StatelessWidget {
+  const DsSegmentedSwitch({
+    super.key,
+    required this.options,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final List<DsSelectOption<T>> options;
+  final T value;
+  final ValueChanged<T> onChanged;
+
+  static const double height = 36;
+
+  @override
+  Widget build(BuildContext context) {
+    final textStyle = Theme.of(context).textTheme.bodySmall?.copyWith(
+      fontSize: 13,
+    );
+    return Container(
+      height: height,
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: DsColors.surface,
+        borderRadius: BorderRadius.circular(DsRadius.medium),
+        border: Border.all(color: DsColors.borderStrong),
+      ),
+      child: Row(
+        children: [
+          for (final option in options)
+            Expanded(
+              child: Semantics(
+                button: true,
+                selected: option.value == value,
+                child: Material(
+                  color: option.value == value
+                      ? DsColors.primarySoft
+                      : DsColors.surface,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(DsRadius.small + 1),
+                    side: option.value == value
+                        ? BorderSide(
+                            color: DsColors.primary.withValues(alpha: 0.25),
+                          )
+                        : BorderSide.none,
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: InkWell(
+                    onTap: option.value == value
+                        ? null
+                        : () => onChanged(option.value),
+                    child: Center(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: DsSpacing.x1,
+                        ),
+                        child: Text(
+                          option.label,
+                          maxLines: 1,
+                          softWrap: false,
+                          overflow: TextOverflow.ellipsis,
+                          style: textStyle?.copyWith(
+                            color: option.value == value
+                                ? DsColors.primary
+                                : DsColors.textSecondary,
+                            fontWeight: option.value == value
+                                ? FontWeight.w600
+                                : FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
 }
 
 class DsAuthPage extends StatelessWidget {
@@ -373,29 +463,161 @@ class DsFormDialog extends StatelessWidget {
     required this.actions,
     this.width = 480,
     this.alignment,
+    this.subtitle,
   });
 
   final String title;
   final Widget content;
   final List<Widget> actions;
+
+  /// Width of [content]; the card adds its own padding around it.
   final double width;
 
   /// Where the dialog sits in the window; null = centred. A dialog the
   /// person fills in while reading the page behind it (a shift-change
   /// request over the roster) goes to a corner, see [showDsCornerDialog].
+  /// A corner dialog is a floating card: the page is not dimmed, so the
+  /// card carries its own border and soft shadow to stand off the page.
   final AlignmentGeometry? alignment;
+
+  /// One muted line under the title (e.g. the day the form is about).
+  final String? subtitle;
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      alignment: alignment,
-      // A corner dialog hugs the corner so it covers as little as possible.
-      insetPadding: alignment == null
-          ? const EdgeInsets.symmetric(horizontal: 40, vertical: 24)
-          : const EdgeInsets.all(DsSpacing.x3),
-      title: Text(title),
-      content: SizedBox(width: width, child: content),
+    final titleWidget = subtitle == null
+        ? Text(title)
+        : Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title),
+              const SizedBox(height: DsSpacing.x1),
+              Text(
+                subtitle!,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(color: DsColors.textSecondary),
+              ),
+            ],
+          );
+    if (alignment == null) {
+      return AlertDialog(
+        insetPadding: const EdgeInsets.symmetric(horizontal: 40, vertical: 24),
+        title: titleWidget,
+        content: SizedBox(width: width, child: content),
+        actions: actions,
+      );
+    }
+    return _DsFloatingFormCard(
+      alignment: alignment!,
+      title: title,
+      subtitle: subtitle,
+      width: width,
+      content: content,
       actions: actions,
+    );
+  }
+}
+
+/// The corner variant of [DsFormDialog]: surface, border, rounded corners
+/// and a soft shadow, hugging its corner so it covers as little as possible.
+class _DsFloatingFormCard extends StatelessWidget {
+  const _DsFloatingFormCard({
+    required this.alignment,
+    required this.title,
+    required this.subtitle,
+    required this.width,
+    required this.content,
+    required this.actions,
+  });
+
+  final AlignmentGeometry alignment;
+  final String title;
+  final String? subtitle;
+  final double width;
+  final Widget content;
+  final List<Widget> actions;
+
+  static const double _padding = DsSpacing.x5;
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    return SafeArea(
+      child: Align(
+        alignment: alignment,
+        child: Padding(
+          padding: const EdgeInsets.all(DsSpacing.x3),
+          child: Semantics(
+            scopesRoute: true,
+            explicitChildNodes: true,
+            namesRoute: true,
+            label: title,
+            child: Material(
+              type: MaterialType.transparency,
+              child: Container(
+                // Content width + padding + the 1 px border on each side.
+                width: width + 2 * _padding + 2,
+                decoration: BoxDecoration(
+                  color: DsColors.surface,
+                  borderRadius: BorderRadius.circular(DsRadius.xLarge),
+                  border: Border.all(color: DsColors.border),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x1F0F172A),
+                      blurRadius: 32,
+                      offset: Offset(0, 12),
+                    ),
+                    BoxShadow(
+                      color: Color(0x140F172A),
+                      blurRadius: 6,
+                      offset: Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(_padding),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(
+                        title,
+                        style: textTheme.titleMedium?.copyWith(
+                          color: DsColors.textPrimary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      if (subtitle != null) ...[
+                        const SizedBox(height: DsSpacing.x1),
+                        Text(
+                          subtitle!,
+                          style: textTheme.bodyMedium?.copyWith(
+                            color: DsColors.textSecondary,
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: DsSpacing.x4),
+                      content,
+                      const SizedBox(height: DsSpacing.x4),
+                      // Right-aligned; stacks only if the labels cannot
+                      // fit on one line (as AlertDialog's actions do).
+                      OverflowBar(
+                        alignment: MainAxisAlignment.end,
+                        overflowAlignment: OverflowBarAlignment.end,
+                        spacing: DsSpacing.x2,
+                        overflowSpacing: DsSpacing.x2,
+                        children: actions,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

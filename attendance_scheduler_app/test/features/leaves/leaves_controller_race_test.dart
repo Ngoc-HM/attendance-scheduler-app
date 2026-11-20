@@ -14,6 +14,8 @@ import 'package:attendance_scheduler_app/features/leaves/presentation/providers/
 import 'package:attendance_scheduler_app/i18n/locale_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:attendance_scheduler_app/features/schedule/data/datasources/schedule_remote_datasource.dart';
+import 'no_shift_changes.dart';
 
 class _Noop implements AuthRepository {
   @override
@@ -83,6 +85,7 @@ ProviderContainer _container(_GatedLeaves leaves) => ProviderContainer(
   overrides: [
     authControllerProvider.overrideWith((ref) => _SignedIn(_anna)),
     leavesDataSourceProvider.overrideWithValue(leaves),
+    scheduleRemoteDataSourceProvider.overrideWithValue(NoShiftChanges()),
   ],
 );
 

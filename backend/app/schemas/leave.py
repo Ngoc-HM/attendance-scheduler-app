@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 
 from pydantic import BaseModel, Field
 
@@ -34,6 +34,9 @@ class LeaveRead(ORMModel):
     leave_type: LeaveType
     status: LeaveStatus
     note: str | None
+    # When the request was filed: the admin's inbox merges leave, shift
+    # changes and sign-ups newest first (owner 2026-11-20).
+    created_at: datetime | None = None
     # Decision-time notices (e.g. an already-generated month is now stale).
     warnings: list[str] = []
     # Current flight-staffing risk of this leave (role-A requester, pending

@@ -522,6 +522,37 @@ class DsSurface extends StatelessWidget {
   }
 }
 
+/// A light inset block inside a form or card (faint primary tint, thin
+/// border, no shadow, never a grey fill) for read-only facts the person
+/// checks before confirming.
+class DsInset extends StatelessWidget {
+  const DsInset({
+    super.key,
+    required this.child,
+    this.padding = const EdgeInsets.symmetric(
+      horizontal: DsSpacing.x3,
+      vertical: DsSpacing.x1,
+    ),
+  });
+
+  final Widget child;
+  final EdgeInsetsGeometry padding;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: padding,
+      decoration: BoxDecoration(
+        color: DsColors.primarySoft,
+        borderRadius: BorderRadius.circular(DsRadius.medium),
+        border: Border.all(color: DsColors.border),
+      ),
+      child: child,
+    );
+  }
+}
+
 class DsSectionHeader extends StatelessWidget {
   const DsSectionHeader(this.title, {super.key, this.trailing});
 

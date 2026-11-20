@@ -15,6 +15,7 @@ class LeaveModel {
     required this.status,
     this.note,
     this.staffingWarnings = const [],
+    this.createdAt,
   });
 
   final int id;
@@ -30,6 +31,9 @@ class LeaveModel {
   /// shift. Filled only in the admin's list — empty otherwise.
   final List<String> staffingWarnings;
 
+  /// When the request was filed; orders the admin's request table.
+  final DateTime? createdAt;
+
   factory LeaveModel.fromJson(Map<String, dynamic> json) => LeaveModel(
     id: json['id'] as int,
     userId: json['user_id'] as int,
@@ -43,6 +47,7 @@ class LeaveModel {
           in (json['staffing_warnings'] as List<dynamic>? ?? const []))
         line as String,
     ],
+    createdAt: DateTime.tryParse(json['created_at'] as String? ?? ''),
   );
 
   /// Number of calendar days (inclusive both ends).

@@ -1,11 +1,11 @@
 // Review 2026-11-08 fixes on the schedule screen (A3, D3, C2 client side,
 // swap picker and schedule toasts): the grid always belongs to the month on
 // screen, Publish targets that month and shows the rule violations first,
-// the admin shift-change panel names requester and counterpart, approving
-// shows the backend warnings and reloads the grid, and the swap picker
-// offers same-role colleagues only.
-// Three-step swap (customer 2026-11-18): the colleague answers a swap first;
-// the admin panel lists a swap only once it was accepted.
+// and the swap picker offers same-role colleagues only.
+// Three-step swap (customer 2026-11-18): the colleague answers a swap first.
+// The admin decides shift changes on the Approvals screen (owner
+// 2026-11-20, see test/features/leaves/leaves_requests_inbox_test.dart): the
+// schedule page has no request panel for them.
 
 import 'dart:async';
 import 'dart:core';
@@ -31,6 +31,7 @@ import 'package:attendance_scheduler_app/i18n/app_localizations.dart';
 import 'package:attendance_scheduler_app/i18n/locale_provider.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -83,7 +84,6 @@ class _FakeScheduleDataSource extends ScheduleRemoteDataSource {
     this.requests = const [],
     this.incoming = const [],
     this.respondError,
-    this.previewWarnings = const [],
     this.publishError,
     this.fetchError,
     this.violationsError,
@@ -102,8 +102,6 @@ class _FakeScheduleDataSource extends ScheduleRemoteDataSource {
   /// Thrown by [respondToShiftChange].
   final Object? respondError;
 
-  /// Returned by [shiftChangeApprovalPreview]: what approving would break.
-  final List<String> previewWarnings;
   final Object? publishError;
 
   /// Thrown by [fetchViolations] (endpoint missing, 5xx, network).
@@ -220,9 +218,13 @@ class _FakeScheduleDataSource extends ScheduleRemoteDataSource {
     );
   }
 
+  /// Calls of [fetchShiftChanges].
+  int shiftChangeFetches = 0;
+
   @core.override
-  Future<List<ShiftChangeRequest>> fetchShiftChanges({bool all = false}) async =>
-      [
+  Future<List<ShiftChangeRequest>> fetchShiftChanges({bool all = false}) async {
+    shiftChangeFetches++;
+    return [
         // A reload after a decision lists that request as decided.
         for (final r in requests)
           if (decided.where((d) => d.$1 == r.id).firstOrNull case final d?)
@@ -240,7 +242,8 @@ class _FakeScheduleDataSource extends ScheduleRemoteDataSource {
             )
           else
             r,
-      ];
+    ];
+  }
 
   @core.override
   Future<List<ShiftChangeRequest>> fetchIncomingShiftChanges() async => [
@@ -268,10 +271,6 @@ class _FakeScheduleDataSource extends ScheduleRemoteDataSource {
       counterpartStatus: accept ? 'approved' : 'rejected',
     );
   }
-
-  @core.override
-  Future<List<String>> shiftChangeApprovalPreview(int id) async =>
-      previewWarnings;
 
   @core.override
   Future<ShiftChangeRequest> decideShiftChange({
@@ -647,146 +646,29 @@ void main() {
     await _drainToast(tester);
   });
 
-  group('admin shift-change panel', () {
-    final requests = [
-      ShiftChangeRequest(
-        id: 31,
-        requesterId: 7,
-        workDate: DateTime(2026, 6, 5),
-        kind: 'swap_with',
-        status: 'pending',
-        strictReview: false,
-        warnings: const [],
-        counterpartUserId: _t2,
-        counterpartStatus: 'approved', // T2 accepted: the admin decides
-      ),
-      ShiftChangeRequest(
-        id: 32,
-        requesterId: _a1,
-        workDate: DateTime(2026, 6, 9),
-        kind: 'change_code',
-        status: 'pending',
-        strictReview: true,
-        warnings: const [],
-        requestedCode: 'X',
-      ),
-    ];
+  testWidgets('admin: no shift-change request toggle or panel', (
+    tester,
+  ) async {
+    final ds = _FakeScheduleDataSource(
+      requests: [
+        ShiftChangeRequest(
+          id: 32,
+          requesterId: _a1,
+          workDate: DateTime(2026, 6, 9),
+          kind: 'change_code',
+          status: 'pending',
+          strictReview: false,
+          warnings: const [],
+          requestedCode: 'X',
+        ),
+      ],
+    );
+    await _pump(tester, user: _admin, ds: ds);
 
-    Future<void> openPanel(WidgetTester tester) async {
-      await tester.tap(find.text('Shift-change requests'));
-      await tester.pumpAndSettle();
-    }
-
-    testWidgets('pending_panel_shows_requester_and_counterpart_codes', (
-      tester,
-    ) async {
-      final ds = _FakeScheduleDataSource(requests: requests);
-      await _pump(tester, user: _admin, ds: ds);
-      await openPanel(tester);
-
-      expect(
-        find.text('T1 · Swap with colleague · 2026-06-05'),
-        findsOneWidget,
-      );
-      expect(find.text('Swap partner: T2'), findsOneWidget);
-      expect(find.text('A1 · Change code · 2026-06-09'), findsOneWidget);
-      expect(find.text('New shift code: X'), findsOneWidget);
-      expect(find.textContaining('swap_with'), findsNothing);
-    });
-
-    // Customer 2026-11-18: the admin is warned BEFORE the approval.
-    testWidgets('approve_warns_first_then_approves_and_reloads_grid', (
-      tester,
-    ) async {
-      final ds = _FakeScheduleDataSource(
-        requests: requests,
-        previewWarnings: const ['2026-06-05: arrival cover below minimum'],
-      );
-      await _pump(tester, user: _admin, ds: ds);
-      await openPanel(tester);
-      expect(ds.fetchedMonths, [_june]);
-
-      await tester.tap(find.byTooltip('Approve').first);
-      await tester.pumpAndSettle();
-
-      expect(ds.decided, isEmpty, reason: 'nothing approved yet');
-      expect(find.byType(AlertDialog), findsOneWidget);
-      expect(
-        find.text('2026-06-05: arrival cover below minimum'),
-        findsOneWidget,
-      );
-
-      await tester.tap(find.text('Approve anyway'));
-      await tester.pumpAndSettle();
-
-      expect(ds.decided, [(31, 'approved')]);
-      expect(ds.fetchedMonths, [_june, _june], reason: 'grid reloaded');
-      expect(find.text('Request approved.'), findsOneWidget);
-      await _drainToast(tester);
-    });
-
-    testWidgets('approve_warning_cancelled_leaves_the_request_pending', (
-      tester,
-    ) async {
-      final ds = _FakeScheduleDataSource(
-        requests: requests,
-        previewWarnings: const ['2026-06-05: arrival cover below minimum'],
-      );
-      await _pump(tester, user: _admin, ds: ds);
-      await openPanel(tester);
-
-      await tester.tap(find.byTooltip('Approve').first);
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Cancel'));
-      await tester.pumpAndSettle();
-
-      expect(ds.decided, isEmpty);
-      expect(ds.fetchedMonths, [_june], reason: 'no cell changed');
-      expect(find.byTooltip('Approve'), findsNWidgets(2));
-    });
-
-    testWidgets('approve_without_warnings_toasts_and_reloads_grid', (
-      tester,
-    ) async {
-      final ds = _FakeScheduleDataSource(requests: requests);
-      await _pump(tester, user: _admin, ds: ds);
-      await openPanel(tester);
-
-      await tester.tap(find.byTooltip('Approve').first);
-      await tester.pumpAndSettle();
-
-      expect(find.byType(AlertDialog), findsNothing);
-      expect(find.text('Request approved.'), findsOneWidget);
-      expect(ds.fetchedMonths, [_june, _june]);
-      await _drainToast(tester);
-    });
-
-    testWidgets('a swap the colleague has not accepted is not listed', (
-      tester,
-    ) async {
-      final ds = _FakeScheduleDataSource(
-        requests: [
-          for (final status in ['pending', 'rejected'])
-            ShiftChangeRequest(
-              id: status == 'pending' ? 33 : 34,
-              requesterId: 7,
-              workDate: DateTime(2026, 6, 6),
-              kind: 'swap_with',
-              status: status,
-              strictReview: false,
-              warnings: const [],
-              counterpartUserId: _t2,
-              counterpartStatus: status,
-            ),
-        ],
-      );
-      await _pump(tester, user: _admin, ds: ds);
-      await openPanel(tester);
-
-      expect(find.textContaining('2026-06-06'), findsNothing);
-      expect(find.byTooltip('Approve'), findsNothing);
-      expect(find.text('No pending shift-change requests.'), findsOneWidget);
-    });
+    expect(find.text('Shift-change requests'), findsNothing);
+    expect(find.byTooltip('Approve'), findsNothing);
+    expect(find.text('Approve'), findsNothing);
+    expect(ds.shiftChangeFetches, 0, reason: 'decided on Approvals');
   });
 
   group('incoming swap panel (employee)', () {
@@ -800,6 +682,8 @@ void main() {
       warnings: const [],
       counterpartUserId: 7,
       counterpartStatus: 'pending',
+      requesterShift: 'AD',
+      counterpartShift: 'X',
     );
 
     testWidgets('hidden when no colleague asks', (tester) async {
@@ -832,6 +716,47 @@ void main() {
         await _drainToast(tester);
       });
     }
+
+    testWidgets('shows the asker\'s and the own code of that day', (
+      tester,
+    ) async {
+      final noCell = ShiftChangeRequest(
+        id: 52,
+        requesterId: _t2,
+        workDate: DateTime(2026, 6, 13),
+        kind: 'swap_with',
+        status: 'pending',
+        strictReview: false,
+        warnings: const [],
+        counterpartUserId: 7,
+        counterpartStatus: 'pending',
+        requesterShift: 'X',
+      );
+      final ds = _FakeScheduleDataSource(incoming: [asked, noCell]);
+      await _pump(tester, user: _employee, ds: ds);
+
+      Finder inPanel(Finder f) => find.descendant(
+        of: find.byType(IncomingSwapRequestsPanel),
+        matching: f,
+      );
+      expect(inPanel(find.text('Their shift')), findsOneWidget);
+      expect(inPanel(find.text('Your shift')), findsOneWidget);
+      final badges = tester
+          .widgetList<DsShiftBadge>(inPanel(find.byType(DsShiftBadge)))
+          .map((b) => b.code)
+          .toList();
+      // Row 51: T2 gives AD, I give X. Row 52: T2 gives X, I have no cell.
+      expect(badges, [ShiftCode.ad, ShiftCode.x, ShiftCode.x]);
+      expect(inPanel(find.text('—')), findsOneWidget);
+
+      // The two code columns sit between the date and the actions.
+      final dateX = tester.getCenter(find.text('2026-06-12')).dx;
+      final theirX = tester
+          .getCenter(inPanel(find.byType(DsShiftBadge)).first)
+          .dx;
+      final acceptX = tester.getCenter(find.text('Accept').first).dx;
+      expect(dateX < theirX && theirX < acceptX, isTrue);
+    });
 
     testWidgets('a failed answer keeps the row and says why', (tester) async {
       final ds = _FakeScheduleDataSource(
@@ -923,8 +848,8 @@ void main() {
     await tester.tap(find.text('Swap with colleague'));
     await tester.pumpAndSettle();
 
-    final picker = tester.widget<DropdownButton<int>>(
-      find.byType(DropdownButton<int>),
+    final picker = tester.widget<DropdownButton<int?>>(
+      find.byType(DropdownButton<int?>),
     );
     // T colleagues only (no A1, M1, F1, not the requester T1), natural order.
     expect(picker.items!.map((item) => (item.child as Text).data), [
@@ -932,6 +857,177 @@ void main() {
       'T10',
     ]);
     expect(picker.items!.map((item) => item.value), [_t2, 12]);
+  });
+
+  group('shift-change form (owner 2026-11-20: show what a swap exchanges)', () {
+    /// Opens the real corner form over a page, as the roster page does.
+    /// T1 (the employee) has AD that day, T2 has X, T10 has no cell.
+    Future<void> openForm(
+      WidgetTester tester, {
+      Locale locale = const Locale('en'),
+      Map<int, String> codesOnDay = const {7: 'AD', _t2: 'X'},
+    }) async {
+      await tester.binding.setSurfaceSize(const Size(1000, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final people = await _FakeUserDataSource().directory();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            scheduleRemoteDataSourceProvider.overrideWithValue(
+              _FakeScheduleDataSource(),
+            ),
+          ],
+          child: MaterialApp(
+            theme: AppTheme.light,
+            localizationsDelegates: const [
+              AppLocalizations.delegate,
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ],
+            supportedLocales: AppLocalizations.supportedLocales,
+            locale: locale,
+            home: Scaffold(
+              body: Builder(
+                builder: (context) => Center(
+                  child: TextButton(
+                    onPressed: () => showDsCornerDialog<bool>(
+                      context: context,
+                      builder: (_) => ShiftChangeRequestDialog(
+                        workDate: DateTime(2026, 11, 4),
+                        role: _employee.role,
+                        people: people,
+                        currentUserId: _employee.id,
+                        codesOnDay: codesOnDay,
+                      ),
+                    ),
+                    child: const Text('open'),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+    }
+
+    Future<void> pickColleague(WidgetTester tester, String code) async {
+      await tester.tap(find.byType(DropdownButtonFormField<int?>));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(code).last);
+      await tester.pumpAndSettle();
+    }
+
+    bool submitEnabled(WidgetTester tester) => tester
+        .widget<ButtonStyleButton>(
+          find.ancestor(
+            of: find.text('Submit request'),
+            matching: find.byWidgetPredicate((w) => w is ButtonStyleButton),
+          ),
+        )
+        .onPressed !=
+        null;
+
+    /// The row (fixed-height SizedBox) holding [label].
+    Finder rowOf(String label) => find
+        .ancestor(of: find.text(label), matching: find.byType(SizedBox))
+        .first;
+
+    testWidgets('own row first, both rows once a colleague is chosen', (
+      tester,
+    ) async {
+      await openForm(tester);
+      expect(find.text('Wed, 04 Nov 2026'), findsOneWidget);
+      expect(find.text('Your shift'), findsNothing, reason: 'code change');
+
+      await tester.tap(find.text('Swap with colleague'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Your shift'), findsOneWidget);
+      expect(find.textContaining("'s shift"), findsNothing);
+      expect(find.byType(DsShiftBadge), findsOneWidget);
+      expect(submitEnabled(tester), isFalse, reason: 'no colleague yet');
+
+      await pickColleague(tester, 'T2');
+
+      expect(find.text("T2's shift"), findsOneWidget);
+      final badges = tester
+          .widgetList<DsShiftBadge>(find.byType(DsShiftBadge))
+          .toList();
+      expect(badges.map((b) => b.code), [ShiftCode.ad, ShiftCode.x]);
+      expect(submitEnabled(tester), isTrue);
+
+      // Same height; labels share a left edge, badges a right edge.
+      final mine = tester.getRect(rowOf('Your shift'));
+      final theirs = tester.getRect(rowOf("T2's shift"));
+      expect(theirs.height, mine.height);
+      expect(theirs.top, mine.bottom, reason: 'stacked, no gap');
+      expect(
+        tester.getTopLeft(find.text("T2's shift")).dx,
+        tester.getTopLeft(find.text('Your shift')).dx,
+      );
+      final badgeRects = find
+          .byType(DsShiftBadge)
+          .evaluate()
+          .map((e) => tester.getRect(find.byWidget(e.widget)))
+          .toList();
+      expect(badgeRects[1].right, badgeRects[0].right);
+      // The rows sit under the colleague picker.
+      expect(
+        mine.top,
+        greaterThan(
+          tester.getRect(find.byType(DropdownButtonFormField<int?>)).bottom,
+        ),
+      );
+    });
+
+    testWidgets('a colleague without a roster cell shows "—" and blocks '
+        'the submit', (tester) async {
+      await openForm(tester);
+      await tester.tap(find.text('Swap with colleague'));
+      await tester.pumpAndSettle();
+
+      await pickColleague(tester, 'T10');
+
+      expect(find.text("T10's shift"), findsOneWidget);
+      expect(
+        find.descendant(of: rowOf("T10's shift"), matching: find.text('—')),
+        findsOneWidget,
+      );
+      expect(find.byType(DsShiftBadge), findsOneWidget, reason: 'own only');
+      expect(
+        tester.getRect(rowOf("T10's shift")).height,
+        tester.getRect(rowOf('Your shift')).height,
+      );
+      expect(submitEnabled(tester), isFalse);
+
+      await pickColleague(tester, 'T2');
+      expect(submitEnabled(tester), isTrue);
+    });
+
+    for (final locale in const [Locale('en'), Locale('vi')]) {
+      testWidgets('fits 320 wide in both modes without overflow '
+          '(${locale.languageCode})', (tester) async {
+        // Any RenderFlex overflow is reported as a test failure.
+        await openForm(tester, locale: locale);
+        final note = find.byType(TextField);
+        expect(tester.getSize(note).width, 320);
+
+        final swap = AppLocalizations(locale).text('swapWith');
+        await tester.tap(find.text(swap));
+        await tester.pumpAndSettle();
+        await pickColleague(tester, 'T2');
+
+        expect(tester.getSize(note).width, 320);
+        expect(
+          tester.getSize(find.byType(DropdownButtonFormField<int?>)).width,
+          320,
+        );
+        expect(tester.takeException(), isNull);
+      });
+    }
   });
 
   group('ungenerated month (bug: columns read "ID n" after generate)', () {
@@ -1091,88 +1187,6 @@ void main() {
       await tester.tap(find.text('Close'));
       await tester.pumpAndSettle();
       expect(find.text('Next month needs a look'), findsNothing);
-      await _drainToast(tester);
-    });
-  });
-
-  group('deciding the last pending request (bug: no feedback, stale grid)', () {
-    final only = ShiftChangeRequest(
-      id: 41,
-      requesterId: _a1,
-      workDate: DateTime(2026, 6, 9),
-      kind: 'change_code',
-      status: 'pending',
-      strictReview: false,
-      warnings: const [],
-      requestedCode: 'X',
-    );
-
-    Future<void> openPanel(WidgetTester tester) async {
-      await tester.tap(find.text('Shift-change requests'));
-      await tester.pumpAndSettle();
-    }
-
-    /// Taps [tooltip] while the server holds the answer for a few frames.
-    Future<void> decide(
-      WidgetTester tester,
-      _FakeScheduleDataSource ds,
-      String tooltip,
-    ) async {
-      ds.decideGate = Completer<void>();
-      await tester.tap(find.byTooltip(tooltip));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 200));
-      ds.decideGate!.complete();
-      await tester.pumpAndSettle();
-    }
-
-    testWidgets('approving the only shift change toasts and reloads once', (
-      tester,
-    ) async {
-      final ds = _FakeScheduleDataSource(requests: [only]);
-      await _pump(tester, user: _admin, ds: ds);
-      await openPanel(tester);
-
-      await decide(tester, ds, 'Approve');
-
-      expect(ds.decided, [(41, 'approved')]);
-      expect(find.text('Request approved.'), findsOneWidget);
-      expect(ds.fetchedMonths, [_june, _june], reason: 'grid reloaded once');
-      expect(find.text('No pending shift-change requests.'), findsOneWidget);
-      await _drainToast(tester);
-    });
-
-    testWidgets('rejecting the only shift change toasts', (tester) async {
-      final ds = _FakeScheduleDataSource(requests: [only]);
-      await _pump(tester, user: _admin, ds: ds);
-      await openPanel(tester);
-
-      await decide(tester, ds, 'Reject');
-
-      expect(ds.decided, [(41, 'rejected')]);
-      expect(find.text('Request rejected.'), findsOneWidget);
-      expect(ds.fetchedMonths, [_june], reason: 'a rejection changes no cell');
-      await _drainToast(tester);
-    });
-
-    // The row's context is gone before the answer arrives: the feedback and
-    // the reload must not depend on it.
-    testWidgets('closing the panel while a shift change is decided still '
-        'toasts and reloads', (tester) async {
-      final ds = _FakeScheduleDataSource(requests: [only]);
-      await _pump(tester, user: _admin, ds: ds);
-      await openPanel(tester);
-
-      ds.decideGate = Completer<void>();
-      await tester.tap(find.byTooltip('Approve'));
-      await tester.pump();
-      await openPanel(tester); // toggles the panel closed
-      expect(find.byTooltip('Approve'), findsNothing);
-      ds.decideGate!.complete();
-      await tester.pumpAndSettle();
-
-      expect(find.text('Request approved.'), findsOneWidget);
-      expect(ds.fetchedMonths, [_june, _june], reason: 'grid reloaded once');
       await _drainToast(tester);
     });
   });

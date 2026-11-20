@@ -1,19 +1,22 @@
 // Admin navigation badges (owner 2026-11-10): only an admin loads the
-// counts, a failed load shows no badges, and a decision refreshes them.
+// counts, a failed load shows no badges, and a decision on the Approvals
+// screen (owner 2026-11-20) refreshes them.
 
 import 'package:attendance_scheduler_app/core/network/api_exception.dart';
 import 'package:attendance_scheduler_app/core/storage/locale_storage.dart';
+import 'package:attendance_scheduler_app/design_system/view_models.dart';
 import 'package:attendance_scheduler_app/features/auth/data/models/user_model.dart';
 import 'package:attendance_scheduler_app/features/auth/domain/entities/user.dart';
 import 'package:attendance_scheduler_app/features/auth/domain/repositories/auth_repository.dart';
 import 'package:attendance_scheduler_app/features/auth/presentation/providers/auth_provider.dart';
 import 'package:attendance_scheduler_app/features/home/data/pending_counts_datasource.dart';
 import 'package:attendance_scheduler_app/features/home/presentation/providers/pending_counts_provider.dart';
+import 'package:attendance_scheduler_app/features/leaves/data/datasources/leaves_remote_datasource.dart';
+import 'package:attendance_scheduler_app/features/leaves/data/models/leave_model.dart';
+import 'package:attendance_scheduler_app/features/leaves/presentation/providers/leaves_provider.dart';
 import 'package:attendance_scheduler_app/features/schedule/data/datasources/schedule_remote_datasource.dart';
 import 'package:attendance_scheduler_app/features/schedule/domain/entities/schedule_entities.dart';
-import 'package:attendance_scheduler_app/features/schedule/presentation/providers/shift_change_provider.dart';
 import 'package:attendance_scheduler_app/features/users/data/user_management_datasource.dart';
-import 'package:attendance_scheduler_app/features/users/presentation/providers/users_provider.dart';
 import 'package:attendance_scheduler_app/i18n/locale_provider.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -59,6 +62,17 @@ class _FakeCounts extends PendingCountsDataSource {
 class _FakeSchedule extends ScheduleRemoteDataSource {
   _FakeSchedule() : super(Dio());
 
+  /// One code change waiting for the admin.
+  @override
+  Future<List<ShiftChangeRequest>> fetchShiftChanges({bool all = false}) async =>
+      [
+        ShiftChangeRequest(
+          id: 5, requesterId: 7, workDate: DateTime(2026, 11, 2),
+          kind: 'change_code', status: 'pending', strictReview: false,
+          warnings: const [], requestedCode: 'X',
+        ),
+      ];
+
   @override
   Future<ShiftChangeRequest> decideShiftChange({
     required int id,
@@ -73,8 +87,14 @@ class _FakeSchedule extends ScheduleRemoteDataSource {
 class _FakeUsers extends UserManagementDataSource {
   _FakeUsers() : super(Dio());
 
+  /// One sign-up waiting for approval.
   @override
-  Future<List<UserModel>> list() async => const [];
+  Future<List<UserModel>> list() async => const [
+    UserModel(
+      id: 9, username: 'new', fullName: 'New', role: UserRole.t,
+      status: 'pending', code: '',
+    ),
+  ];
 
   @override
   Future<UserModel> approve(int id, {required String role}) async =>
@@ -84,12 +104,22 @@ class _FakeUsers extends UserManagementDataSource {
       );
 }
 
+/// No leave requests: the table holds the shift change and the sign-up.
+class _NoLeaves implements LeavesRemoteDataSource {
+  @override
+  Future<List<LeaveModel>> listAll() async => const [];
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
 ProviderContainer _container(User user, _FakeCounts counts) {
   final c = ProviderContainer(overrides: [
     authControllerProvider.overrideWith((ref) => _SignedIn(user)),
     pendingCountsDataSourceProvider.overrideWithValue(counts),
     scheduleRemoteDataSourceProvider.overrideWithValue(_FakeSchedule()),
     userManagementDataSourceProvider.overrideWithValue(_FakeUsers()),
+    leavesDataSourceProvider.overrideWithValue(_NoLeaves()),
   ]);
   addTearDown(c.dispose);
   return c;
@@ -135,8 +165,16 @@ void main() {
     final c = _container(_admin, counts);
     await c.read(pendingCountsProvider.notifier).refresh();
 
+    final leaves = c.read(leavesControllerProvider.notifier);
+    await leaves.load();
+    final index = c
+        .read(leavesControllerProvider)
+        .entries
+        .requireValue
+        .indexWhere((e) => e.kind == DsRequestKind.shiftChange);
+
     counts.next = const PendingCounts(leaves: 2, shiftChanges: 0, users: 3);
-    await c.read(shiftChangeControllerProvider.notifier).decide(5, 'approved');
+    await leaves.approve(index);
     await pumpEventQueue();
 
     expect(counts.calls, 2);
@@ -147,11 +185,16 @@ void main() {
     final counts = _FakeCounts();
     final c = _container(_admin, counts);
     await c.read(pendingCountsProvider.notifier).refresh();
-    final sub = c.listen(usersControllerProvider, (_, _) {});
-    addTearDown(sub.close);
+    final leaves = c.read(leavesControllerProvider.notifier);
+    await leaves.load();
+    final index = c
+        .read(leavesControllerProvider)
+        .entries
+        .requireValue
+        .indexWhere((e) => e.kind == DsRequestKind.signUp);
 
     counts.next = const PendingCounts(leaves: 2, shiftChanges: 1, users: 2);
-    await c.read(usersControllerProvider.notifier).approve(9, UserRole.t);
+    await leaves.approveAccount(index, UserRole.t);
     await pumpEventQueue();
 
     expect(counts.calls, 2);

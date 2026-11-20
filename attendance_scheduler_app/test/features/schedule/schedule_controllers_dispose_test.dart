@@ -177,22 +177,19 @@ void main() {
     await expectLater(load, completes);
   });
 
-  test('ShiftChangeController: load/submit/decide after dispose throw nothing',
+  test('ShiftChangeController: load/submit after dispose throw nothing',
       () async {
     final gate = _Gate();
     final ctrl = ShiftChangeController(_ScheduleDs(gate));
 
     final load = ctrl.load();
     final submit = ctrl.submit(workDate: DateTime(2026, 11, 2), kind: 'change_code');
-    final decide = ctrl.decide(1, 'approved');
     ctrl.dispose();
     gate
       ..answer([_request])
-      ..answer(_request)
-      ..fail();
+      ..answer(_request);
 
     await expectLater(load, completes);
     await expectLater(submit, completes);
-    await expectLater(decide, completes);
   });
 }

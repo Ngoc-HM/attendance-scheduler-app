@@ -81,19 +81,22 @@ class _HomeShellState extends ConsumerState<HomeShell> {
           path: AppRoute.schedule,
           label: l.navSchedule,
           icon: Icons.calendar_today_outlined,
-          // Shift-change requests are decided on the schedule page.
-          badgeCount: counts?.shiftChanges,
         ),
         DsNavigationDestination(
           path: AppRoute.flights,
           label: l.navFlights,
           icon: Icons.flight_takeoff_outlined,
         ),
+        // Everything the admin approves lives on this one screen (owner
+        // 2026-11-20): leave, shift changes the admin can decide now, and
+        // sign-ups.
         DsNavigationDestination(
           path: AppRoute.leaves,
-          label: l.navLeaves,
+          label: l.text('approvals'),
           icon: Icons.event_available_outlined,
-          badgeCount: counts?.leaves,
+          badgeCount: counts == null
+              ? null
+              : counts.leaves + counts.shiftChanges + counts.users,
         ),
         DsNavigationDestination(
           path: AppRoute.attendance,
@@ -119,7 +122,6 @@ class _HomeShellState extends ConsumerState<HomeShell> {
           path: AppRoute.users,
           label: l.navUsers,
           icon: Icons.people_outline,
-          badgeCount: counts?.users,
         ),
       ];
     }

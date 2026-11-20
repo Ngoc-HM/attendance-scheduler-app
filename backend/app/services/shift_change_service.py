@@ -14,13 +14,13 @@ Handles create / list / approve / reject for ShiftChangeRequest.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.i18n import t
-from app.models.enums import LeaveStatus, SwapKind, UserStatus
+from app.models.enums import AttendanceCode, LeaveStatus, SwapKind, UserStatus
 from app.models.schedule import MonthlySchedule, ShiftAssignment
 from app.models.shift_change_request import ShiftChangeRequest
 from app.models.user import User
@@ -74,9 +74,68 @@ def _validate_counterpart(db: Session, requester: User, counterpart_id: int) -> 
         )
 
 
+def _planned_cell(db: Session, user_id: int, day: date) -> ShiftAssignment | None:
+    """``user_id``'s cell on ``day`` in the schedule of that day's month."""
+    return (
+        db.query(ShiftAssignment)
+        .join(MonthlySchedule, ShiftAssignment.schedule_id == MonthlySchedule.id)
+        .filter(
+            MonthlySchedule.year == day.year,
+            MonthlySchedule.month == day.month,
+            ShiftAssignment.user_id == user_id,
+            ShiftAssignment.work_date == day,
+        )
+        .one_or_none()
+    )
+
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+
+def roster_codes(
+    db: Session, reqs: list[ShiftChangeRequest], viewer: User
+) -> dict[tuple[int, date], AttendanceCode]:
+    """Current roster codes of every requester and swap partner on their
+    request's day, in one query: ``{(user_id, work_date): code}``.
+
+    A cell counts only in the schedule of its own month (the carried days a
+    month's roster plans ahead are cells of the next month's schedule). For a
+    non-admin viewer another person's sickness reads as X (§9.1), exactly like
+    the roster grid.
+    """
+    wanted = {(r.requester_id, r.work_date) for r in reqs} | {
+        (r.counterpart_user_id, r.work_date)
+        for r in reqs
+        if r.kind is SwapKind.swap_with and r.counterpart_user_id is not None
+    }
+    if not wanted:
+        return {}
+    rows = (
+        db.query(
+            ShiftAssignment.user_id,
+            ShiftAssignment.work_date,
+            ShiftAssignment.code,
+            MonthlySchedule.year,
+            MonthlySchedule.month,
+        )
+        .join(MonthlySchedule, ShiftAssignment.schedule_id == MonthlySchedule.id)
+        .filter(
+            ShiftAssignment.user_id.in_({uid for uid, _ in wanted}),
+            ShiftAssignment.work_date.in_({day for _, day in wanted}),
+        )
+        .all()
+    )
+    hide_sick = not viewer.role.is_admin
+    codes: dict[tuple[int, date], AttendanceCode] = {}
+    for uid, day, code, year, month in rows:
+        if (uid, day) not in wanted or (day.year, day.month) != (year, month):
+            continue
+        if hide_sick and code is AttendanceCode.S and uid != viewer.id:
+            code = AttendanceCode.X
+        codes[(uid, day)] = code
+    return codes
+
 
 def create_request(
     db: Session,
@@ -91,7 +150,8 @@ def create_request(
     Raises 400 if kind-specific required fields are missing; 404 for an
     unknown swap partner and 422 for oneself, an inactive partner or one with
     other codes; 409 ``swap.own_cell_only`` when the requester has no planned
-    cell that day; 422 ``swap.cell_locked`` for a code change on a cell that
+    cell that day and 409 ``swap.counterpart_no_cell`` when the swap partner
+    has none; 422 ``swap.cell_locked`` for a code change on a cell that
     is not a regular working/off day (AL, CD, S, A/D, T, B).
     """
     # Validate kind-specific fields.
@@ -113,19 +173,20 @@ def create_request(
 
     # The request is about the requester's own planned cell: no cell (no
     # schedule for that month, or not on it) means nothing to change.
-    cell = (
-        db.query(ShiftAssignment)
-        .join(MonthlySchedule, ShiftAssignment.schedule_id == MonthlySchedule.id)
-        .filter(
-            MonthlySchedule.year == payload.work_date.year,
-            MonthlySchedule.month == payload.work_date.month,
-            ShiftAssignment.user_id == current_user_id,
-            ShiftAssignment.work_date == payload.work_date,
-        )
-        .one_or_none()
-    )
+    cell = _planned_cell(db, current_user_id, payload.work_date)
     if cell is None:
         raise HTTPException(status.HTTP_409_CONFLICT, detail=t("swap.own_cell_only"))
+    # Both people must be on that day's roster: the requester sees what they
+    # give and get before confirming (owner 2026-11-20), and approval needs
+    # the colleague's cell anyway.
+    if (
+        payload.kind is SwapKind.swap_with
+        and payload.counterpart_user_id is not None
+        and _planned_cell(db, payload.counterpart_user_id, payload.work_date) is None
+    ):
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, detail=t("swap.counterpart_no_cell")
+        )
     if (
         payload.kind is SwapKind.change_code
         and cell.code not in role_code_validation.requestable_codes(requester.role)
