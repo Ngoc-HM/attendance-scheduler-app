@@ -1,5 +1,17 @@
 # Project Changelog
 
+## 2026-11-20 — Roster always to the last Sunday; flights first
+
+- **A month's roster always runs to its last Sunday** (decision #74). It
+  did not when the next month had been generated first: the days were then
+  left alone. Now they are re-planned as carried days unless the next month
+  is published, and the month view always shows them.
+- **Flights first** (#75). A month without flights on every day cannot be
+  generated; the app names the missing days. After generating, a notice
+  says when the next month's flights are not entered yet.
+- **Flights page: "Apply last month's flights"** (#76) fills the month by
+  weekday from the last week of the previous month.
+
 ## 2026-11-20 — A swap shows what is exchanged
 
 - **Both shifts on every swap** (decision #69): the request form shows "Ca

@@ -117,6 +117,10 @@ class Settings(BaseSettings):
     APP_RELEASES_DIR: str = "releases"
 
     AUTORUN_ENABLED: bool = True
+    # A roster is generated only for a month whose flights are entered for
+    # every day (owner 2026-11-20). The test-suite turns it off for tests of
+    # other rules, which solve months without flight data.
+    GENERATE_REQUIRES_FLIGHTS: bool = True
     AUTORUN_DAY: int = Field(default=20, ge=1, le=27)
 
     # --- Data retention (§9.3 / §26 BDSG data minimization) ----------------

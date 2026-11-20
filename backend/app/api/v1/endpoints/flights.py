@@ -19,6 +19,8 @@ from app.schemas.flight import (
     FlightDayApplyBatch,
     FlightDayRead,
     FlightDayUpsert,
+    FlightMonthCopyResult,
+    FlightMonthRef,
     FlightPresetRead,
     FlightPresetUpsert,
     FlightRead,
@@ -153,6 +155,31 @@ def apply_presets_batch(db: DbSession, payload: FlightDayApplyBatch, admin: Admi
         )
         for fd in fds
     ]
+
+
+@router.post("/days/apply-previous-month", response_model=FlightMonthCopyResult)
+def apply_previous_month(db: DbSession, payload: FlightMonthRef, admin: AdminUser):
+    """Fill a month with the previous month's flights, weekday by weekday
+    (the last seven days of the previous month are the reference). Admin only.
+    """
+    days, skipped = flight_service.apply_previous_month(db, payload.year, payload.month)
+    audit_service.record(
+        db, admin.id, "flight.month.copy_previous", "FlightDay",
+        detail=f"{payload.year}-{payload.month:02d} skipped_weekdays={skipped}",
+    )
+    flights_map = flight_service.list_flights_for_days(db, [fd.day for fd in days])
+    return FlightMonthCopyResult(
+        days=[
+            FlightDayRead(
+                id=fd.id,
+                day=fd.day,
+                flight_pairs=fd.flight_pairs,
+                flights=[FlightRead.model_validate(f) for f in flights_map.get(fd.day, [])],
+            )
+            for fd in days
+        ],
+        skipped_weekdays=skipped,
+    )
 
 
 # ---------------------------------------------------------------------------

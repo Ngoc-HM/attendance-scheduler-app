@@ -34,7 +34,7 @@ from sqlalchemy.orm import Session
 from app.core.business_time import business_today
 from app.core.config import settings
 from app.core.database import SessionLocal
-from app.models.flight import FlightDay
+from app.scheduler.calendar_utils import month_days
 from app.services import schedule_carry
 
 logger = logging.getLogger(__name__)
@@ -97,22 +97,19 @@ def _draft_if_missing(year: int, month: int) -> bool:
             logger.info("Autorun: schedule %s-%02d already exists, skipping.", year, month)
             return False
 
-        first, after = _month_start_and_next(year, month)
-        has_flights = (
-            db.query(FlightDay.id)
-            .filter(FlightDay.day >= first, FlightDay.day < after)
-            .first()
-            is not None
-        )
-        if not has_flights:
-            logger.warning(
-                "Autorun: no flight days entered for %s-%02d; the draft is planned "
-                "without flights. Enter the flights and regenerate.",
-                year, month,
-            )
-
         # Import here to avoid a service-module import cycle.
-        from app.services import audit_service, schedule_service
+        from app.services import audit_service, flight_service, schedule_service
+
+        # No roster without the month's flights (owner 2026-11-20): the daily
+        # check tries again once every day of the month has them.
+        missing = flight_service.days_without_flights(db, month_days(year, month))
+        if settings.GENERATE_REQUIRES_FLIGHTS and missing:
+            logger.warning(
+                "Autorun: flights of %s-%02d are not entered for %d day(s); no draft "
+                "generated. Enter the flights; the next daily check retries.",
+                year, month, len(missing),
+            )
+            return False
 
         result = schedule_service.generate(db, year, month)
         if not result.feasible:

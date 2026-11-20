@@ -114,18 +114,30 @@ def test_autorun_logs_exception_as_error(
     )
 
 
-def test_autorun_warns_without_flight_data(
-    client: TestClient, autorun_on: None, caplog: pytest.LogCaptureFixture
+def test_autorun_skips_a_month_without_flights(
+    client: TestClient,
+    autorun_on: None,
+    caplog: pytest.LogCaptureFixture,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """No FlightDay rows for the next month means the draft is planned without
-    flights — still generated, but loudly flagged so the admin enters them."""
+    """Owner 2026-11-20: no roster without the month's flights. The autorun
+    generates nothing, says so loudly, and the next daily check retries."""
+    from app.core.config import settings
+    from app.models.schedule import MonthlySchedule
+
+    monkeypatch.setattr(settings, "GENERATE_REQUIRES_FLIGHTS", True)
     with caplog.at_level(logging.INFO, logger=LOGGER):
-        assert maybe_run_autorun(date(2036, 11, 21)) is True
+        assert maybe_run_autorun(date(2036, 11, 21)) is False
     warnings = [
         r for r in caplog.records if r.name == LOGGER and r.levelno == logging.WARNING
     ]
     assert warnings and "2036-12" in warnings[0].getMessage()
     assert "flight" in warnings[0].getMessage().lower()
+    db = SessionLocal()
+    try:
+        assert db.query(MonthlySchedule).filter_by(year=2036, month=12).count() == 0
+    finally:
+        db.close()
 
 
 def test_autorun_quiet_when_flight_data_present(

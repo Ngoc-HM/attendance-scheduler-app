@@ -5,6 +5,7 @@
 
 import 'dart:typed_data';
 
+import 'package:attendance_scheduler_app/core/network/api_exception.dart';
 import 'package:attendance_scheduler_app/core/storage/locale_storage.dart';
 import 'package:attendance_scheduler_app/core/utils/file_download.dart';
 import 'package:attendance_scheduler_app/design_system/design_system.dart';
@@ -78,6 +79,21 @@ class _Flights extends FlightsRemoteDataSource {
   final List<FlightModel> imported;
   final loaded = <(int, int)>[];
   final templateCalls = <(int, int)>[];
+  final copyCalls = <(int, int)>[];
+
+  /// Weekdays (1 = Monday) [applyPreviousMonth] reports as left unchanged.
+  List<int> skippedWeekdays = const [];
+
+  /// Thrown by [applyPreviousMonth] when set.
+  ApiException? copyError;
+
+  @override
+  Future<List<int>> applyPreviousMonth(int year, int month) async {
+    copyCalls.add((year, month));
+    final error = copyError;
+    if (error != null) throw error;
+    return skippedWeekdays;
+  }
 
   @override
   Future<List<FlightDayModel>> listDays(int year, int month) async {
@@ -324,7 +340,7 @@ void main() {
 
   for (final locale in const [Locale('en'), Locale('vi')]) {
     testWidgets(
-      'four header actions fit the minimum window (${locale.languageCode})',
+      'five header actions fit the minimum window (${locale.languageCode})',
       (tester) async {
         await _pumpFlights(
           tester,
@@ -337,7 +353,7 @@ void main() {
 
         // No overflow, and the title keeps a readable width.
         expect(tester.takeException(), isNull);
-        expect(find.byType(DsSecondaryButton), findsNWidgets(3));
+        expect(find.byType(DsSecondaryButton), findsNWidgets(4));
         final title = AppLocalizations(locale).text('flightsTitle');
         Finder inHeader(Finder f) =>
             find.descendant(of: find.byType(DsPageHeader), matching: f);
@@ -353,4 +369,67 @@ void main() {
       },
     );
   }
+
+  // --- owner 2026-11-20: fill the month from the previous one by weekday ----
+
+  testWidgets('admin applies last month and reloads the month', (tester) async {
+    final ds = _Flights(presets: [_preset(active: true)]);
+    await _pumpFlights(tester, user: _admin, ds: ds);
+    final loadsBefore = ds.loaded.length;
+
+    await tester.tap(
+      find.widgetWithText(DsSecondaryButton, "Apply last month's flights"),
+    );
+    await tester.pumpAndSettle();
+
+    final now = DateTime.now();
+    expect(ds.copyCalls, [(now.year, now.month)]);
+    expect(ds.loaded.length, loadsBefore + 1, reason: 'the month reloads');
+    expect(find.text('Flights applied from the previous month.'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 10));
+  });
+
+  testWidgets('weekdays without a reference are named', (tester) async {
+    final ds = _Flights(presets: [_preset(active: true)])
+      ..skippedWeekdays = const [4, 7];
+    await _pumpFlights(tester, user: _admin, ds: ds);
+
+    await tester.tap(
+      find.widgetWithText(DsSecondaryButton, "Apply last month's flights"),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Applied. No flights in the reference week for: Thu, Sun'),
+      findsOneWidget,
+    );
+    await tester.pump(const Duration(seconds: 10));
+  });
+
+  testWidgets('an empty previous month shows the server message', (
+    tester,
+  ) async {
+    final ds = _Flights(presets: [_preset(active: true)])
+      ..copyError = const ApiException(
+        'The last week of the previous month has no flights to copy.',
+        statusCode: 409,
+      );
+    await _pumpFlights(tester, user: _admin, ds: ds);
+
+    await tester.tap(
+      find.widgetWithText(DsSecondaryButton, "Apply last month's flights"),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('The last week of the previous month has no flights to copy.'),
+      findsOneWidget,
+    );
+    await tester.pump(const Duration(seconds: 10));
+  });
+
+  testWidgets('no apply button for a non-admin', (tester) async {
+    await _pumpFlights(tester, user: _employee, ds: _Flights());
+    expect(find.text("Apply last month's flights"), findsNothing);
+  });
 }

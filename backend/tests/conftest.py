@@ -35,6 +35,9 @@ os.environ.setdefault("SECRET_KEY", "test-secret")
 # in a scheduler thread during any test run after AUTORUN_DAY. Autorun tests
 # switch it on explicitly.
 os.environ.setdefault("AUTORUN_ENABLED", "false")
+# Tests of other rules generate months without flight data; the rule itself
+# is tested with the setting switched on (test_generate_needs_flights.py).
+os.environ.setdefault("GENERATE_REQUIRES_FLIGHTS", "false")
 
 from fastapi.testclient import TestClient  # noqa: E402
 

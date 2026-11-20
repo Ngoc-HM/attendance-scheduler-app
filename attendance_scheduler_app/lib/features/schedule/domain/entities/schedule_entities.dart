@@ -120,6 +120,7 @@ class ScheduleResult extends Equatable {
     required this.violations,
     this.schedule,
     this.nextMonthWarnings = const [],
+    this.notices = const [],
   });
 
   final bool feasible;
@@ -130,12 +131,17 @@ class ScheduleResult extends Equatable {
   /// month, which already has a schedule ("YYYY-MM: message").
   final List<String> nextMonthWarnings;
 
+  /// Generate only: follow-ups that are not rule breaches, e.g. the next
+  /// month's flights are not entered yet.
+  final List<String> notices;
+
   @override
   List<Object?> get props => [
     feasible,
     schedule,
     violations,
     nextMonthWarnings,
+    notices,
   ];
 }
 

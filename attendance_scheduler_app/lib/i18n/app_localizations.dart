@@ -98,6 +98,16 @@ class AppLocalizations {
       'flightsTitle': 'Flights',
       'flightsSubtitle': 'STA and STD use Frankfurt local time',
       'importExcel': 'Import Excel',
+      'applyPreviousMonthFlights': 'Apply last month\'s flights',
+      'applyPreviousMonthConfirm':
+          'This month already has flights. Every day gets the flights of the '
+          'same weekday in the last week of the previous month.',
+      'applyPreviousMonthApply': 'Apply',
+      'applyPreviousMonthDone': 'Flights applied from the previous month.',
+      'applyPreviousMonthSkipped':
+          'Applied. No flights in the reference week for:',
+      'scheduleNotGeneratedTitle': 'Roster not generated',
+      'generateNoticeTitle': 'After generating',
       'addFlight': 'Add flight',
       'flightDays': 'Flight days',
       'flightPairs': 'Flight pairs',
@@ -366,12 +376,6 @@ class AppLocalizations {
       'clockMarkMissing': 'No check-in / check-out',
       'clockMarkAdjusted': 'Adjusted by admin',
       // --- Generate guard (owner 2026-07-17) ---
-      'flightsMissingTitle': 'No flight data for this month',
-      'flightsMissingBody':
-          'No flights have been entered for this month yet, so the generated '
-          'roster will contain no flight duties (A/D) and may be wrong. '
-          'Enter flights first, or generate anyway?',
-      'generateAnyway': 'Generate anyway',
       'regenerateConfirmTitle': 'Regenerate schedule?',
       'regenerateConfirmBody':
           'This schedule is published or has manual edits. Regenerating will '
@@ -587,6 +591,16 @@ class AppLocalizations {
       'flightsTitle': 'Chuyến bay',
       'flightsSubtitle': 'STA và STD theo giờ địa phương Frankfurt',
       'importExcel': 'Nhập Excel',
+      'applyPreviousMonthFlights': 'Áp dụng lịch bay tháng trước',
+      'applyPreviousMonthConfirm':
+          'Tháng này đã có chuyến bay. Mỗi ngày sẽ nhận chuyến bay của cùng '
+          'thứ trong tuần cuối tháng trước.',
+      'applyPreviousMonthApply': 'Áp dụng',
+      'applyPreviousMonthDone': 'Đã áp dụng lịch bay tháng trước.',
+      'applyPreviousMonthSkipped':
+          'Đã áp dụng. Tuần chuẩn chưa có chuyến bay cho:',
+      'scheduleNotGeneratedTitle': 'Chưa tạo được lịch',
+      'generateNoticeTitle': 'Lưu ý sau khi tạo lịch',
       'addFlight': 'Thêm chuyến bay',
       'flightDays': 'Ngày bay',
       'flightPairs': 'Cặp chuyến',
@@ -852,12 +866,6 @@ class AppLocalizations {
       'clockMarkMissing': 'Không check-in / check-out',
       'clockMarkAdjusted': 'Admin đã sửa',
       // --- Generate guard (owner 2026-07-17) ---
-      'flightsMissingTitle': 'Tháng này chưa nhập lịch bay',
-      'flightsMissingBody':
-          'Chưa có chuyến bay nào được nhập cho tháng này, nên lịch tạo ra sẽ '
-          'không có ca bay (A/D) và có thể sai sót. Nên nhập lịch bay '
-          'trước, hoặc vẫn tạo lịch?',
-      'generateAnyway': 'Vẫn tạo lịch',
       'regenerateConfirmTitle': 'Tạo lại lịch?',
       'regenerateConfirmBody':
           'Lịch đã công bố hoặc đã chỉnh tay. Tạo lại sẽ xoá chỉnh tay và '
@@ -1184,6 +1192,12 @@ class AppLocalizations {
   String shiftOf(String code) => text('shiftOf').replaceAll('{code}', code);
 
   /// The day with its full weekday: "Thứ 4, 04/11/2026" / "Wed, 04 Nov 2026".
+  /// Short weekday label for 1 = Monday … 7 = Sunday ("T2" … "CN").
+  String weekdayShort(int weekday) {
+    if (isVietnamese) return weekday == 7 ? 'CN' : 'T${weekday + 1}';
+    return const ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][weekday - 1];
+  }
+
   String weekdayDate(DateTime date) {
     if (isVietnamese) {
       final weekday = date.weekday == DateTime.sunday

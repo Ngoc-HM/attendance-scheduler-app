@@ -71,8 +71,72 @@ class FlightsPage extends ConsumerWidget {
         onImportExcel: isAdmin ? () => _importExcel(context, ref, l) : null,
         onDownloadTemplate:
             isAdmin ? () => _downloadTemplate(context, ref, l) : null,
+        onApplyPreviousMonth: isAdmin
+            ? () => _applyPreviousMonth(context, ref, l, rows.isNotEmpty)
+            : null,
       ),
     );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Previous month by weekday (POST /flights/days/apply-previous-month)
+  // ---------------------------------------------------------------------------
+
+  /// Fill the shown month with the flights of the previous month's last
+  /// week, weekday by weekday (owner 2026-11-20). A month that already has
+  /// flights is overwritten, so the admin confirms that first.
+  Future<void> _applyPreviousMonth(
+    BuildContext context,
+    WidgetRef ref,
+    AppLocalizations l,
+    bool monthHasFlights,
+  ) async {
+    if (monthHasFlights) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => DsFormDialog(
+          title: l.text('applyPreviousMonthFlights'),
+          width: 420,
+          content: Text(l.text('applyPreviousMonthConfirm')),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: Text(l.cancel),
+            ),
+            DsPrimaryButton(
+              label: l.text('applyPreviousMonthApply'),
+              onPressed: () => Navigator.of(ctx).pop(true),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true || !context.mounted) return;
+    }
+    try {
+      final skipped = await ref
+          .read(flightsControllerProvider.notifier)
+          .applyPreviousMonth();
+      if (!context.mounted) return;
+      if (skipped.isEmpty) {
+        DsFeedback.show(
+          context,
+          l.text('applyPreviousMonthDone'),
+          tone: DsTone.success,
+        );
+      } else {
+        // Weekdays the reference week had no flights for stay as they were.
+        DsFeedback.show(
+          context,
+          '${l.text('applyPreviousMonthSkipped')} '
+          '${skipped.map(l.weekdayShort).join(', ')}',
+          tone: DsTone.warning,
+        );
+      }
+    } on ApiException catch (e) {
+      if (context.mounted) {
+        DsFeedback.show(context, apiErrorMessage(l, e), tone: DsTone.danger);
+      }
+    }
   }
 
   // ---------------------------------------------------------------------------

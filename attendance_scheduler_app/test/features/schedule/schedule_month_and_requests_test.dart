@@ -619,8 +619,6 @@ void main() {
 
     await tester.tap(find.text('Generate schedule'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Generate anyway')); // no flights this month
-    await tester.pumpAndSettle();
 
     expect(find.text(_serverError), findsOneWidget, reason: 'toast');
     expect(find.text('Solver crashed'), findsNothing);
@@ -1125,8 +1123,6 @@ void main() {
 
       await tester.tap(find.text('Generate schedule'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Generate anyway')); // no flights this month
-      await tester.pumpAndSettle();
 
       expect(find.text('A1'), findsOneWidget, reason: 'column header');
       expect(find.text('T2'), findsOneWidget, reason: 'column header');
@@ -1179,8 +1175,6 @@ void main() {
 
       await tester.tap(find.text('Generate schedule'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Generate anyway')); // no flights this month
-      await tester.pumpAndSettle();
 
       expect(find.text('Next month needs a look'), findsOneWidget);
       expect(find.text(line), findsOneWidget);
@@ -1188,6 +1182,59 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Next month needs a look'), findsNothing);
       await _drainToast(tester);
+    });
+
+    // Owner 2026-11-20: the roster ran into next month's days whose flights
+    // are not entered — the admin is told so.
+    testWidgets('generate shows the follow-up notice it returns', (tester) async {
+      const notice = 'Flights for 08/2026 are not entered yet (01/08, 02/08).';
+      final ds = _FakeScheduleDataSource(
+        generateResult: ScheduleResult(
+          feasible: true,
+          violations: const [],
+          notices: const [notice],
+          schedule: MonthlySchedule(
+            id: _FakeScheduleDataSource.idFor(_july),
+            year: 2026,
+            month: _july,
+            status: ScheduleStatus.draft,
+            assignments: const [],
+          ),
+        ),
+      );
+      await _pump(tester, user: _admin, ds: ds, initialMonth: _july);
+
+      await tester.tap(find.text('Generate schedule'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('After generating'), findsOneWidget);
+      expect(find.text(notice), findsOneWidget);
+      await tester.tap(find.text('Close'));
+      await tester.pumpAndSettle();
+      expect(find.text('After generating'), findsNothing);
+      await _drainToast(tester);
+    });
+
+    // A month whose flights are not all entered is refused (422): the
+    // reason is shown in a dialog and no forced regenerate is offered.
+    testWidgets('generate refused for missing flights explains why', (
+      tester,
+    ) async {
+      const reason = 'Flights for 07/2026 are not entered for 31 day(s).';
+      final ds = _FakeScheduleDataSource(
+        generateError: const ApiException(reason, statusCode: 422),
+      );
+      await _pump(tester, user: _admin, ds: ds, initialMonth: _july);
+
+      await tester.tap(find.text('Generate schedule'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Roster not generated'), findsOneWidget);
+      expect(find.text(reason), findsOneWidget);
+      expect(find.text('Regenerate'), findsNothing);
+      await tester.tap(find.text('Close'));
+      await tester.pumpAndSettle();
+      expect(find.text('Roster not generated'), findsNothing);
     });
   });
 }

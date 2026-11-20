@@ -79,6 +79,22 @@ def carried_cells(db: Session, schedule_id: int) -> list[ShiftAssignment]:
     )
 
 
+def tail_cells(
+    db: Session, schedule_id: int, days: list[date], *, overridden: bool = False
+) -> list[ShiftAssignment]:
+    """The schedule's cells on ``days`` — the days the previous month's
+    roster runs into, whether that month planned them (carried) or the
+    month was generated on its own."""
+    if not days:
+        return []
+    q = db.query(ShiftAssignment).filter(
+        ShiftAssignment.schedule_id == schedule_id, ShiftAssignment.work_date.in_(days)
+    )
+    if overridden:
+        q = q.filter(ShiftAssignment.is_manual_override.is_(True))
+    return q.order_by(ShiftAssignment.work_date, ShiftAssignment.user_id).all()
+
+
 def previous_published(db: Session, year: int, month: int) -> bool:
     """The month before ``year/month`` is published (it planned the carried
     cells of ``year/month``)."""

@@ -6,7 +6,7 @@ from datetime import date, time
 
 from pydantic import BaseModel, Field
 
-from app.schemas.common import ORMModel
+from app.schemas.common import YEAR_MAX, YEAR_MIN, ORMModel
 
 
 class FlightDayUpsert(BaseModel):
@@ -78,6 +78,21 @@ class FlightDayApply(BaseModel):
     day: date
     # 0..2 preset IDs; empty list clears the day (flight_pairs → 0).
     preset_ids: list[int]
+
+
+class FlightMonthRef(BaseModel):
+    """The month an action applies to."""
+
+    year: int = Field(ge=YEAR_MIN, le=YEAR_MAX)
+    month: int = Field(ge=1, le=12)
+
+
+class FlightMonthCopyResult(BaseModel):
+    """The month after it was filled from the previous month by weekday."""
+
+    days: list[FlightDayRead]
+    # Weekdays (0 = Monday) the reference week had no flights for: unchanged.
+    skipped_weekdays: list[int] = []
 
 
 class FlightDayApplyBatch(BaseModel):

@@ -14,13 +14,14 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.business_time import business_today
+from app.core.config import settings
 from app.core.i18n import t
 from app.models.enums import AttendanceCode, ScheduleStatus, SwapKind, UserStatus
 from app.models.schedule import MonthlySchedule, ShiftAssignment
 from app.models.shift_change_request import ShiftChangeRequest
 from app.models.user import User
 from app.scheduler import SchedulerEngine
-from app.scheduler.calendar_utils import month_days
+from app.scheduler.calendar_utils import carry_days, month_days
 from app.scheduler.domain import Violation
 from app.schemas.schedule import (
     ConstraintViolation,
@@ -80,20 +81,28 @@ def get(db: Session, year: int, month: int, include_draft: bool) -> MonthlySched
     return schedule
 
 
-def read(db: Session, schedule: MonthlySchedule) -> MonthlyScheduleRead:
-    """The read model: the month's cells and the next month's carried cells
-    this month's generation planned, so the month reads through the Sunday
-    that ends its last week (owner 2026-11-18)."""
+def read(
+    db: Session, schedule: MonthlySchedule, *, staff_view: bool = False
+) -> MonthlyScheduleRead:
+    """The read model: the month's cells and the next month's cells up to
+    the Sunday that ends this month's last week, so the month always reads
+    through that Sunday (owner 2026-11-18, 2026-11-20) — whether this
+    month's generation planned those days (carried cells) or the next month
+    was generated on its own. ``staff_view``: only what an employee may
+    see there — carried cells (published with this month) or a published
+    next month."""
     out = MonthlyScheduleRead.model_validate(schedule)
     following = schedule_carry.find(
         db, *schedule_carry.following_month(schedule.year, schedule.month)
     )
     if following is None:
         return out
-    carry = [
-        ShiftAssignmentRead.model_validate(a)
-        for a in schedule_carry.carried_cells(db, following.id)
-    ]
+    cells = schedule_carry.tail_cells(
+        db, following.id, carry_days(schedule.year, schedule.month)
+    )
+    if staff_view and following.status is not ScheduleStatus.published:
+        cells = [a for a in cells if a.carried]
+    carry = [ShiftAssignmentRead.model_validate(a) for a in cells]
     return out.model_copy(update={"carry_assignments": carry})
 
 
@@ -109,7 +118,7 @@ def view(db: Session, year: int, month: int, is_admin: bool) -> MonthlyScheduleR
         return read(db, get(db, year, month, include_draft=True))
     schedule = schedule_carry.find(db, year, month)
     if schedule is not None and schedule.status is ScheduleStatus.published:
-        return read(db, schedule)
+        return read(db, schedule, staff_view=True)
     if schedule is not None and schedule_carry.previous_published(db, year, month):
         cells = schedule_carry.carried_cells(db, schedule.id)
         if cells:
@@ -139,15 +148,27 @@ def generate(db: Session, year: int, month: int, force: bool = False) -> Schedul
     2026-11-18). The next month's days up to it are stored in the next
     month's schedule as carried cells (that schedule is created as a draft
     when missing). The month's own carried cells, planned by the previous
-    month, are kept as they are. When the next month is generated already,
-    its cells stay untouched and only this month is planned; breaches that
-    creates there come back as ``next_month_warnings``. A schedule holding
-    only carried cells is not generated yet: it needs no ``force``. Edits on
-    the next month's carried cells block a non-forced run (it re-plans them).
+    month, are kept as they are. A next month that is generated already but
+    still a draft gets those days re-planned too (owner 2026-11-20: a month
+    ALWAYS runs to its last Sunday, in whatever order months were
+    generated): its cells on those days are replaced by carried ones, the
+    rest of it stays, and breaches this creates there come back as
+    ``next_month_warnings`` — the admin regenerates that month, which keeps
+    the carried days. Only a PUBLISHED next month stays untouched (this
+    month is then planned to its last day). A schedule holding only carried
+    cells is not generated yet: it needs no ``force``. Admin edits on the
+    next month's days this run re-plans block a non-forced run.
     """
     existing = schedule_carry.find(db, year, month)
     following = _following_schedule(db, year, month)
     following_generated = schedule_carry.is_generated(db, following)
+    # A published next month is the staff's roster already: not re-planned.
+    plan_tail = not (
+        following is not None
+        and following_generated
+        and following.status is ScheduleStatus.published
+    )
+    tail = carry_days(year, month) if plan_tail else []
     if not force:
         if existing is not None and not schedule_carry.is_carry_only(db, existing):
             if existing.status is ScheduleStatus.published:
@@ -156,14 +177,33 @@ def generate(db: Session, year: int, month: int, force: bool = False) -> Schedul
                 )
             if schedule_carry.has_overrides(db, existing.id, carried=False):
                 raise HTTPException(status.HTTP_409_CONFLICT, detail=t("schedule.has_overrides"))
-        if (
-            following is not None
-            and not following_generated
-            and schedule_carry.has_overrides(db, following.id, carried=True)
+        if following is not None and schedule_carry.tail_cells(
+            db, following.id, tail, overridden=True
         ):
             raise HTTPException(status.HTTP_409_CONFLICT, detail=t("schedule.has_overrides"))
 
-    inp = schedule_input_builder.build(db, year, month, with_carry_days=not following_generated)
+    # No roster without the month's flights (owner 2026-11-20).
+    missing = flight_service.days_without_flights(db, month_days(year, month))
+    if settings.GENERATE_REQUIRES_FLIGHTS and missing:
+        # 422, not 409: the app answers 409 by offering a forced regenerate.
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=t("schedule.flights_missing").format(
+                month=f"{month:02d}/{year}", count=len(missing), days=_day_list(missing)
+            ),
+        )
+    notices: list[str] = []
+    tail_missing = flight_service.days_without_flights(db, tail)
+    if tail_missing:
+        # The roster still runs to its last Sunday; those days took their
+        # flight count by weekday. Tell the admin to enter the flights.
+        notices.append(
+            t("schedule.next_month_flights_missing").format(
+                month=f"{tail[0].month:02d}/{tail[0].year}", days=_day_list(tail_missing)
+            )
+        )
+
+    inp = schedule_input_builder.build(db, year, month, with_carry_days=plan_tail)
     out = SchedulerEngine().solve(inp)
     if not out.feasible:  # only contradictory pins / timeout (§5.6 #12)
         return ScheduleResult(
@@ -203,8 +243,8 @@ def generate(db: Session, year: int, month: int, force: bool = False) -> Schedul
             db.add(following)
             db.flush()
         carry_into = following
-        had_carry = bool(schedule_carry.carried_cells(db, following.id))
-        _delete_cells(db, following, carried=True)
+        had_carry = bool(schedule_carry.tail_cells(db, following.id, tail))
+        _delete_days(db, following, tail)
 
     plan: dict[tuple[int, date], AttendanceCode] = {}
     carry_plan: dict[tuple[int, date], AttendanceCode] = {}
@@ -234,12 +274,15 @@ def generate(db: Session, year: int, month: int, force: bool = False) -> Schedul
         feasible=True,
         schedule=read(db, existing),
         violations=_violations(db, out.violations),
-        # A next month re-planned with this one is checked by this solve.
+        # A generated next month keeps its own days: what this run broke
+        # there (its first days changed, or the join) is reported. A
+        # carry-only next month is checked by this solve itself.
         next_month_warnings=(
             _new_following_warnings(db, following, before_following)
             if following_generated
             else []
         ),
+        notices=notices,
         solver_status=out.status,
         slack_proven_minimal=out.slack_proven_minimal,
         phase_diagnostics=out.phase_diagnostics,
@@ -252,6 +295,23 @@ def _delete_cells(db: Session, schedule: MonthlySchedule, *, carried: bool) -> N
         ShiftAssignment.schedule_id == schedule.id,
         ShiftAssignment.carried.is_(carried),
     ).delete(synchronize_session=False)
+    db.flush()
+    db.expire(schedule, ["assignments"])
+
+
+def _day_list(days: list[date], limit: int = 6) -> str:
+    """Days as "05/12, 06/12" for a message; a long list is cut with "…"."""
+    shown = ", ".join(f"{d.day:02d}/{d.month:02d}" for d in days[:limit])
+    return f"{shown}, …" if len(days) > limit else shown
+
+
+def _delete_days(db: Session, schedule: MonthlySchedule, days: list[date]) -> None:
+    """Delete the schedule's cells on ``days`` (carried or not)."""
+    if days:
+        db.query(ShiftAssignment).filter(
+            ShiftAssignment.schedule_id == schedule.id,
+            ShiftAssignment.work_date.in_(days),
+        ).delete(synchronize_session=False)
     db.flush()
     db.expire(schedule, ["assignments"])
 
@@ -395,9 +455,8 @@ def _cell_schedule(
         return viewed
     following = _following_schedule(db, viewed.year, viewed.month)
     if following is not None and any(
-        a.work_date == day and a.user_id == user_id
-        for a in schedule_carry.carried_cells(db, following.id)
-    ):
+        a.user_id == user_id for a in schedule_carry.tail_cells(db, following.id, [day])
+    ) and day in carry_days(viewed.year, viewed.month):
         return following
     raise HTTPException(
         status.HTTP_422_UNPROCESSABLE_CONTENT,

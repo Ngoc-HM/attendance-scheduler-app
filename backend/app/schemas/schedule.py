@@ -67,6 +67,10 @@ class ScheduleResult(BaseModel):
     # month when that month already has a schedule ("YYYY-MM: message") —
     # weeks and runs cross the month boundary (owner 2026-11-13).
     next_month_warnings: list[str] = []
+    # Generate only: things the admin should follow up that are not rule
+    # breaches — e.g. the next month's flights are not entered, so the days
+    # this roster runs into took their flight count by weekday.
+    notices: list[str] = []
     # Present for generated schedules; manual edits do not run the solver.
     solver_status: str | None = None
     slack_proven_minimal: bool = False

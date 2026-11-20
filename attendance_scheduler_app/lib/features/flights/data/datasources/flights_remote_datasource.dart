@@ -188,6 +188,25 @@ class FlightsRemoteDataSource {
     }
   }
 
+  /// POST /flights/days/apply-previous-month — fill the month from the
+  /// previous month's last week, weekday by weekday. Returns the weekdays
+  /// (1 = Monday … 7 = Sunday) that week had no flights for: left unchanged.
+  Future<List<int>> applyPreviousMonth(int year, int month) async {
+    try {
+      final response = await _dio.post(
+        ApiEndpoints.flightsApplyPreviousMonth,
+        data: {'year': year, 'month': month},
+      );
+      final json = response.data as Map<String, dynamic>;
+      return [
+        for (final w in json['skipped_weekdays'] as List<dynamic>? ?? const [])
+          (w as int) + 1,
+      ];
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e, 'Failed to apply the previous month');
+    }
+  }
+
   /// PUT /flights/days/apply-batch — replace multiple days' flights in one call.
   ///
   /// Each item replaces that day's flights with the chosen preset ids; an empty

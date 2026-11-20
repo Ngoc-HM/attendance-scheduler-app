@@ -90,6 +90,7 @@ class ScheduleResultModel extends ScheduleResult {
     required super.violations,
     super.schedule,
     super.nextMonthWarnings,
+    super.notices,
   });
 
   factory ScheduleResultModel.fromJson(Map<String, dynamic> json) {
@@ -108,6 +109,10 @@ class ScheduleResultModel extends ScheduleResult {
       violations: violations,
       nextMonthWarnings: [
         for (final line in json['next_month_warnings'] as List<dynamic>? ?? [])
+          line as String,
+      ],
+      notices: [
+        for (final line in json['notices'] as List<dynamic>? ?? [])
           line as String,
       ],
     );

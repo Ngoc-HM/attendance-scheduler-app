@@ -1014,6 +1014,7 @@ class DsFlightsView extends StatelessWidget {
     this.onManagePresets,
     this.onImportExcel,
     this.onDownloadTemplate,
+    this.onApplyPreviousMonth,
   });
 
   final DateTime month;
@@ -1032,6 +1033,10 @@ class DsFlightsView extends StatelessWidget {
   /// before "Import Excel": the month's blank plan to fill in and import.
   final VoidCallback? onDownloadTemplate;
 
+  /// Admin: fill the month from the previous month's last week, by weekday
+  /// (owner 2026-11-20). Null → no button.
+  final VoidCallback? onApplyPreviousMonth;
+
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
@@ -1044,6 +1049,12 @@ class DsFlightsView extends StatelessWidget {
       title: l.text('flightsTitle'),
       subtitle: l.text('flightsSubtitle'),
       actions: [
+        if (onApplyPreviousMonth != null)
+          DsSecondaryButton(
+            label: l.text('applyPreviousMonthFlights'),
+            icon: Icons.event_repeat_outlined,
+            onPressed: onApplyPreviousMonth!,
+          ),
         if (onDownloadTemplate != null)
           DsSecondaryButton(
             label: l.text('downloadFlightTemplate'),

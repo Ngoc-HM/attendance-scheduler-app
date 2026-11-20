@@ -8,6 +8,7 @@ See ``flight_excel_parser.py`` for the expected Excel column layout.
 
 from __future__ import annotations
 
+import calendar
 import logging
 from datetime import date, timedelta
 
@@ -168,6 +169,14 @@ def known_flight_pairs(db: Session, days: list[date]) -> dict[date, int]:
         return {}
     rows = db.query(FlightDay).filter(FlightDay.day.in_(days)).all()
     return {row.day: row.flight_pairs for row in rows}
+
+
+def days_without_flights(db: Session, days: list[date]) -> list[date]:
+    """The days of ``days`` with no flight entered (no ``FlightDay`` row, or
+    one with zero pairs), in order. The station has flights every day, so a
+    day without one has not been entered yet (owner 2026-11-20)."""
+    known = known_flight_pairs(db, days)
+    return [d for d in sorted(days) if known.get(d, 0) < 1]
 
 
 # Weeks a carry day without flight data looks back for its weekday's count.
@@ -455,3 +464,38 @@ def apply_presets_batch(db: Session, payload: FlightDayApplyBatch) -> list[Fligh
         db.refresh(fd)
 
     return fds
+
+
+def apply_previous_month(db: Session, year: int, month: int) -> tuple[list[FlightDay], list[int]]:
+    """Fill ``year/month`` from the previous month, weekday by weekday
+    (owner 2026-11-20: the flight plan is fixed by weekday, "lấy tuần gần
+    nhất làm chuẩn").
+
+    The reference week is the last seven days of the previous month — the
+    most recent Monday, Tuesday, … before this month. Every day of this
+    month gets the flight legs (FLT numbers, route, STA/STD) of the reference
+    day of its weekday, replacing what the day had. A weekday whose reference
+    day has no flights is left as it is and returned in the second value
+    (``date.weekday()`` numbers). A reference week without any flight → 409
+    ``flight.previous_month_empty``. One transaction.
+    """
+    first = date(year, month, 1)
+    reference = [first - timedelta(days=n) for n in range(1, 8)]
+    legs = list_flights_for_days(db, reference)
+    by_weekday = {d.weekday(): legs[d] for d in reference if legs[d]}
+    if not by_weekday:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, detail=t("flight.previous_month_empty")
+        )
+    days = [date(year, month, n) for n in range(1, calendar.monthrange(year, month)[1] + 1)]
+    changed = [d for d in days if d.weekday() in by_weekday]
+    db.query(Flight).filter(Flight.day.in_(changed)).delete(synchronize_session=False)
+    db.add_all(
+        Flight(day=d, flt_number=leg.flt_number, route=leg.route, sta=leg.sta, std=leg.std)
+        for d in changed
+        for leg in by_weekday[d.weekday()]
+    )
+    db.flush()
+    _recompute_pairs_for_days(db, set(changed))
+    db.commit()
+    return list_days(db, year, month), sorted(set(range(7)) - set(by_weekday))

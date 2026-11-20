@@ -105,3 +105,12 @@ Owner rule, confirmed 2026-11-18 ("Đúng, làm đi").
 6. The re-check of each month on the persisted cells agrees with the
    generator (no new violation types appear only in the re-check).
 7. Full backend suite, ruff, mypy, flutter analyze and flutter test pass.
+
+## Amendment 2026-11-20 (decision #74)
+
+"Regenerating M … UNLESS M+1 has already been generated — then M+1 is left
+untouched" is replaced: a generated next month that is still a draft gets
+its carried days re-planned by M (the rest of it stays; breaches are
+reported as next-month warnings). Only a published next month is left
+untouched. Reason: with months generated out of order the carried days
+never appeared.

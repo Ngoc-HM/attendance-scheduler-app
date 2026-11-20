@@ -353,6 +353,11 @@ def test_acceptance_2_5_december_keeps_its_carried_days(scenario: Scenario) -> N
     assert {d for _, d in cells} == set(month_days(*DEC))
     jan = _cells(db, *JAN)
     assert {d for _, d in jan} == set(carry_days(*DEC)) and all(c.carried for c in jan.values())
+    # Group A is not over-staffed on the carry days (2026-11-20): 1–3 Jan
+    # need 2 + 3 + 3 of the 12 person-days, so the other 4 are X — otherwise
+    # January, whose spare days equal its X count, comes out short.
+    a_ids = [uid for code, uid in scenario.ids.items() if code[0] == "A"]
+    assert sum(jan[(uid, d)].code is X for uid in a_ids for d in carry_days(*DEC)) == 4
     for code, uid in scenario.ids.items():
         if code[0] in "ATM":
             xs = sum(cells[(uid, d)].code is X for d in month_days(*DEC))
@@ -394,11 +399,64 @@ def test_acceptance_2_5_december_keeps_its_carried_days(scenario: Scenario) -> N
             db, dec_id, ManualOverrideRequest(user_id=t1, work_date=date(2027, 1, 4), code=X))
     assert err.value.status_code == 422
 
-    # Acceptance 5: regenerating November leaves the generated December as
-    # it is, cell for cell.
+    # Owner 2026-11-20: a month ALWAYS runs to its last Sunday. Regenerating
+    # November while December is a generated draft re-plans 1–6 Dec as
+    # carried cells (the admin's edit there needs force) and leaves the rest
+    # of December cell for cell.
+    with pytest.raises(HTTPException) as err:
+        schedule_service.generate(db, *NOV, force=False)
+    assert err.value.status_code == 409  # November itself is a draft; the edit on 1 Dec blocks
     before = {k: (c.code, c.carried, c.is_manual_override) for k, c in _cells(db, *DEC).items()}
     nov = schedule_service.generate(db, *NOV, force=True)
     assert nov.feasible
     assert {a.work_date for a in nov.schedule.assignments} == set(month_days(*NOV))
+    assert {a.work_date for a in nov.schedule.carry_assignments} == set(carry_days(*NOV))
+    after = {k: (c.code, c.carried, c.is_manual_override) for k, c in _cells(db, *DEC).items()}
+    tail = set(carry_days(*NOV))
+    assert {k: v for k, v in after.items() if k[1] not in tail} == {
+        k: v for k, v in before.items() if k[1] not in tail
+    }
+    assert all(v[1] and not v[2] for k, v in after.items() if k[1] in tail)
+    assert {d for _, d in after} == set(month_days(*DEC))
+
+    # A PUBLISHED next month is the staff's roster: untouched, and the
+    # month still reads through its last Sunday from it.
+    schedule_service.publish(db, dec_id)
+    before = {k: (c.code, c.carried, c.is_manual_override) for k, c in _cells(db, *DEC).items()}
+    nov = schedule_service.generate(db, *NOV, force=True)
+    assert nov.feasible
     after = {k: (c.code, c.carried, c.is_manual_override) for k, c in _cells(db, *DEC).items()}
     assert after == before
+    assert {a.work_date for a in nov.schedule.carry_assignments} == tail
+
+
+def test_a_month_generated_before_the_previous_one_still_gets_the_tail(db: Session) -> None:
+    """The owner's case of 2026-11-20: January generated first, then
+    December. December still runs to Sunday 3 January: those days become
+    carried cells and the rest of January stays."""
+    patch = pytest.MonkeyPatch()
+    patch.setattr(settings, "SOLVER_MAX_TIME_SECONDS", 20.0)
+    try:
+        for code, role in [("F1", Role.F), ("F2", Role.F), ("T1", Role.T)]:
+            db.add(User(username=code.lower(), code=code, full_name=code, hashed_password="x",
+                        role=role, status=UserStatus.active))
+        for d in month_days(*DEC) + month_days(*JAN):
+            db.add(FlightDay(day=d, flight_pairs=_usual(d)))
+        db.commit()
+        assert schedule_service.generate(db, *JAN).feasible
+        january = {k: c.code for k, c in _cells(db, *JAN).items()}
+        assert not any(c.carried for c in _cells(db, *JAN).values())
+
+        dec = schedule_service.generate(db, *DEC)
+
+        tail = set(carry_days(*DEC))  # 1–3 January
+        assert dec.feasible and dec.notices == []
+        assert {a.work_date for a in dec.schedule.carry_assignments} == tail
+        cells = _cells(db, *JAN)
+        assert {d for _, d in cells} == set(month_days(*JAN))
+        assert all(c.carried == (d in tail) for (_, d), c in cells.items())
+        assert {k: c.code for k, c in cells.items() if k[1] not in tail} == {
+            k: code for k, code in january.items() if k[1] not in tail
+        }
+    finally:
+        patch.undo()

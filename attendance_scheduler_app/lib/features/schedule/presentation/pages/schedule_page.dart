@@ -326,46 +326,6 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
 
   // ── Admin actions ─────────────────────────────────────────────────────────────
 
-  /// True when the month has at least one day with flight data entered.
-  Future<bool> _monthHasFlights() async {
-    try {
-      final days = await ref
-          .read(flightsDataSourceProvider)
-          .listDays(_month.year, _month.month);
-      return days.any((d) => d.flightPairs > 0 || d.flights.isNotEmpty);
-    } catch (_) {
-      return true; // can't tell → don't block the admin with a false warning
-    }
-  }
-
-  /// Confirm dialog when generating a month with NO flight data (owner
-  /// 2026-07-17): without flights the roster gets zero A/D duties, which
-  /// looks broken — warn first instead of silently producing it.
-  Future<bool> _confirmGenerateWithoutFlights(
-    BuildContext context,
-    AppLocalizations l,
-  ) async {
-    final proceed = await showDialog<bool>(
-      context: context,
-      builder: (context) => DsFormDialog(
-        title: l.text('flightsMissingTitle'),
-        width: 400,
-        content: Text(l.text('flightsMissingBody')),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: Text(l.text('cancel')),
-          ),
-          DsPrimaryButton(
-            label: l.text('generateAnyway'),
-            onPressed: () => Navigator.of(context).pop(true),
-          ),
-        ],
-      ),
-    );
-    return proceed == true;
-  }
-
   /// The backend refuses (409) to regenerate a published or manually edited
   /// month without force: regenerating drops the manual edits and resets the
   /// month to draft, so the admin must confirm that first.
@@ -408,13 +368,6 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
   );
 
   Future<void> _onGenerate(BuildContext context, AppLocalizations l) async {
-    // Months without flight data still solve, but yield zero flight duties —
-    // surface that BEFORE generating so the admin isn't surprised.
-    if (!await _monthHasFlights()) {
-      if (!context.mounted) return;
-      if (!await _confirmGenerateWithoutFlights(context, l)) return;
-    }
-    if (!context.mounted) return;
     try {
       await _runGenerate(context, l);
     } on ApiException catch (e) {
@@ -426,10 +379,20 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
     }
     final state = ref.read(scheduleControllerProvider);
     if (!context.mounted) return;
-    if (state.error != null) {
+    final error = state.error;
+    if (error is ApiException && error.statusCode == 422) {
+      // The month's flights are not all entered (owner 2026-11-20): no
+      // roster is generated; say which days are missing and stay there.
+      await _showNotice(
+        context,
+        l.text('scheduleNotGeneratedTitle'),
+        [apiErrorMessage(l, error)],
+        l,
+      );
+    } else if (error != null) {
       DsFeedback.show(
         context,
-        apiErrorMessage(l, state.error),
+        apiErrorMessage(l, error),
         tone: DsTone.danger,
       );
     } else {
@@ -454,12 +417,44 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
           tone: DsTone.success,
         );
       }
+      final notices = result?.notices ?? const <String>[];
+      if (notices.isNotEmpty) {
+        // E.g. the next month's flights are not entered: the days this
+        // roster runs into were planned by weekday.
+        await _showNotice(context, l.text('generateNoticeTitle'), notices, l);
+        if (!context.mounted) return;
+      }
       final nextMonth = result?.nextMonthWarnings ?? const <String>[];
       if (nextMonth.isNotEmpty) {
         await _showNextMonthWarnings(context, l, nextMonth);
       }
     }
   }
+
+  /// A message the admin must read and close (no decision to take).
+  Future<void> _showNotice(
+    BuildContext context,
+    String title,
+    List<String> lines,
+    AppLocalizations l,
+  ) => showDialog<void>(
+    context: context,
+    builder: (context) => DsFormDialog(
+      title: title,
+      width: 440,
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [for (final line in lines) Text(line)],
+      ),
+      actions: [
+        DsPrimaryButton(
+          label: l.text('close'),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+      ],
+    ),
+  );
 
   /// Regenerating a month can break the first week of the following month
   /// when that one is already generated (owner 2026-11-13): list what broke.

@@ -113,6 +113,16 @@ class FlightsController extends StateNotifier<FlightsState> {
     return flights.length;
   }
 
+  /// Admin: fill the month shown from the previous month's last week, by
+  /// weekday (owner 2026-11-20). Returns the weekdays (1 = Monday … 7 =
+  /// Sunday) that week had no flights for.
+  Future<List<int>> applyPreviousMonth() async {
+    final month = state.month;
+    final skipped = await _ds.applyPreviousMonth(month.year, month.month);
+    await load();
+    return skipped;
+  }
+
   /// Admin: download the blank flight-plan template for the month shown,
   /// save it (downloads folder by default) and return the saved path.
   Future<String> downloadTemplate() async {

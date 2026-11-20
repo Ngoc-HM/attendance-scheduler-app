@@ -36,6 +36,14 @@ MESSAGES: dict[str, dict[str, str]] = {
         "schedule.not_found": "Schedule not found.",
         "schedule.published_locked": "Schedule is published; regenerate requires force.",
         "schedule.has_overrides": "Schedule has manual edits; regenerate requires force.",
+        "schedule.flights_missing": (
+            "Flights for {month} are not entered for {count} day(s) ({days}). "
+            "Enter the month's flights before generating the roster."
+        ),
+        "schedule.next_month_flights_missing": (
+            "Flights for {month} are not entered yet ({days}): these days were "
+            "planned with the usual flights of their weekday. Enter the flights of {month}."
+        ),
         "schedule.override_date_out_of_month": "Override date must belong to the schedule month.",
         "schedule.cell_not_found": (
             "Schedule cell not found; a missing cell can only be added for an active user."
@@ -112,6 +120,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "flight.import_failed": "Excel import failed.",
         "flight.import_bad_file": "Unsupported or unreadable Excel file.",
         "flight.preset_not_found": "Flight preset not found.",
+        "flight.previous_month_empty": "The last week of the previous month has no flights to copy.",
         "flight.import_row_invalid_date": "Row {row}: invalid date \"{value}\" (expected YYYY-MM-DD).",
         "flight.import_row_invalid_flt": "Row {row}: invalid FLT number \"{value}\".",
         "flight.import_row_invalid_time": "Row {row}: invalid time \"{value}\" (expected HH:MM).",
@@ -235,6 +244,14 @@ MESSAGES: dict[str, dict[str, str]] = {
         "schedule.not_found": "Không tìm thấy lịch.",
         "schedule.published_locked": "Lịch đã publish; tạo lại cần force.",
         "schedule.has_overrides": "Lịch có chỉnh tay; tạo lại cần force.",
+        "schedule.flights_missing": (
+            "Tháng {month} chưa nhập chuyến bay cho {count} ngày ({days}). "
+            "Hãy nhập đủ lịch bay của tháng rồi mới tạo lịch."
+        ),
+        "schedule.next_month_flights_missing": (
+            "Tháng {month} chưa nhập chuyến bay ({days}): các ngày này đang xếp "
+            "theo số chuyến thường lệ của thứ đó. Hãy bổ sung lịch bay tháng {month}."
+        ),
         "schedule.override_date_out_of_month": "Ngày chỉnh sửa phải thuộc tháng của lịch.",
         "schedule.cell_not_found": (
             "Không tìm thấy ô lịch; chỉ có thể thêm ô còn thiếu cho người dùng đang hoạt động."
@@ -308,6 +325,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "flight.import_failed": "Import Excel thất bại.",
         "flight.import_bad_file": "File Excel không hợp lệ hoặc không đọc được.",
         "flight.preset_not_found": "Không tìm thấy preset chuyến bay.",
+        "flight.previous_month_empty": "Tuần cuối của tháng trước chưa có chuyến bay nào để áp dụng.",
         "flight.import_row_invalid_date": "Dòng {row}: ngày \"{value}\" không hợp lệ (định dạng YYYY-MM-DD).",
         "flight.import_row_invalid_flt": "Dòng {row}: số hiệu chuyến bay \"{value}\" không hợp lệ.",
         "flight.import_row_invalid_time": "Dòng {row}: giờ \"{value}\" không hợp lệ (định dạng HH:MM).",

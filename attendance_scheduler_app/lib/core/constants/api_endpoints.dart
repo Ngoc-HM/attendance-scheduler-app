@@ -21,6 +21,8 @@ class ApiEndpoints {
   static String flightPresetById(int id) => '/flights/presets/$id';
   static const String flightsApply = '/flights/days/apply';
   static const String flightsApplyBatch = '/flights/days/apply-batch';
+  static const String flightsApplyPreviousMonth =
+      '/flights/days/apply-previous-month';
 
   // Leaves (F-05, F-06)
   static const String leaves = '/leaves';

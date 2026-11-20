@@ -16,6 +16,7 @@ from app.models.enums import AttendanceCode
 from app.scheduler import (
     objective_balance,
     objective_boundary_week,
+    objective_carry_rest,
     objective_group_cover,
     objective_off_pairing,
     objective_pair_points_fair,
@@ -45,6 +46,11 @@ def ordered_terms(
     turns = role_f.rotation_terms(x, inp)
     if turns:
         stages.append(("role_f_rotation", sum(turns)))
+    # Group A must not be over-staffed on the carry days: the next month
+    # needs every spare day for its own X count.
+    carry_rest = objective_carry_rest.terms(x, inp)
+    if carry_rest:
+        stages.append(("carry_days_rest", sum(carry_rest)))
     stages.append(("ordinary_rest_spacing", sum(objective_rest_spacing.terms(model, x, inp))))
     stages += objective_balance.ordered_terms(model, x, inp)
     # Keep every role group operational before maximizing preferred turns.
